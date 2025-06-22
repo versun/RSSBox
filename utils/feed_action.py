@@ -213,7 +213,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
             fe.content(entry.original_content if type == "o" else entry.translated_content, type='html')
         
         if entry.original_summary:
-            fe.summary(entry.original_summary if type == "o" else entry.translated_summary, type='html')
+            fe.summary(entry.original_summary if type == "o" else entry.ai_summary, type='html')
         
         # 处理时间信息
         if entry.pubdate:
