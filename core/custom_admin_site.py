@@ -26,7 +26,7 @@ class CoreAdminSite(AdminSite):
         app_list = super().get_app_list(request, app_label)
         app_list += [
             {
-                "name": _("Engine"),
+                "name": "",
                 "app_label": "engine",
                 "models": [
                     {
