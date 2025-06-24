@@ -144,7 +144,7 @@ def feed_force_update(modeladmin, request, queryset):
     # 清除所有选中Feed的缓存
     all_cache_keys = []
     for instance in queryset:
-        # 构建缓存键 - 使用与dynamic_cache_page相同的逻辑
+        # 构建缓存键 - 使用与cache_rss相同的逻辑
         cache_keys = [
             f'view_cache_rss_{instance.slug}_t',
             f'view_cache_rss_{instance.slug}_o',

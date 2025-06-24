@@ -2,9 +2,10 @@ import logging
 import sys
 from django.core.management.base import BaseCommand
 from core.models import Feed
-from core.tasks import handle_feeds_fetch, handle_feeds_translation, handle_feeds_summary
+from core.tasks import handle_single_feed_fetch, handle_feeds_translation, handle_feeds_summary
 from django.db import close_old_connections
 from utils.task_manager import task_manager
+from core.cache import cache_rss, cache_category
 
 
 class Command(BaseCommand):
@@ -38,37 +39,51 @@ class Command(BaseCommand):
 
 
 def update_single_feed(feed_id):
-        """在后台线程中执行feed更新"""        
+    """在后台线程中执行feed更新"""        
+    try:
+        # 确保在新线程中创建新的数据库连接
+        close_old_connections()
+        need_cache = False
+        
         try:
-            # 确保在新线程中创建新的数据库连接
-            close_old_connections()
-            
-            try:
-                # 尝试获取feed对象
-                feed = Feed.objects.get(id=feed_id)
-                logging.info(f"Starting feed update: {feed.name} (ID: {feed_id})")
+            # 尝试获取feed对象
+            feed = Feed.objects.get(id=feed_id)
+            logging.info(f"Starting feed update: {feed.name} (ID: {feed_id})")
 
-                handle_feeds_fetch([feed])
-                #task_manager.update_progress(feed_id, 50)
-                # 执行更新操作
-                if feed.translate_title:
-                    handle_feeds_translation([feed], target_field="title")
-                if feed.translate_content:
-                    handle_feeds_translation([feed], target_field="content")
-                if feed.summary:
-                    handle_feeds_summary([feed])
-                
-                logging.info(f"Completed feed update: {feed.name} (ID: {feed_id})")
-                return True
-            except Feed.DoesNotExist:
-                logging.error(f"Feed not found: ID {feed_id}")
-                return False
-            except Exception as e:
-                logging.exception(f"Error updating feed ID {feed_id}: {str(e)}")
-                return False
-        finally:
-            # 确保关闭数据库连接
-            close_old_connections()
+            if handle_single_feed_fetch(feed):
+                need_cache = True
+            #task_manager.update_progress(feed_id, 50)
+            # 执行更新操作
+            if feed.translate_title:
+                handle_feeds_translation([feed], target_field="title")
+            if feed.translate_content:
+                handle_feeds_translation([feed], target_field="content")
+            if feed.summary:
+                handle_feeds_summary([feed])
+            
+            logging.info(f"Completed feed update: {feed.name} (ID: {feed_id})")
+            if need_cache:
+                cache_rss(feed.slug, feed_type="o", formate="xml")
+                cache_rss(feed.slug, feed_type="o", formate="json")
+                cache_rss(feed.slug, feed_type="t", formate="xml")
+                cache_rss(feed.slug, feed_type="t", formate="json")
+                if feed.category:
+                    cache_category(feed.category, feed_type="o", formate="xml")
+                    cache_category(feed.category, feed_type="o", formate="json")
+                    cache_category(feed.category, feed_type="t", formate="xml")
+                    cache_category(feed.category, feed_type="t", formate="json")
+
+
+            return True
+        except Feed.DoesNotExist:
+            logging.error(f"Feed not found: ID {feed_id}")
+            return False
+        except Exception as e:
+            logging.exception(f"Error updating feed ID {feed_id}: {str(e)}")
+            return False
+    finally:
+        # 确保关闭数据库连接
+        close_old_connections()
 
 def update_multiple_feeds(feeds: list):
     """并行更新多个Feed"""

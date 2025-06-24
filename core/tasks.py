@@ -11,99 +11,116 @@ from utils import text_handler
 from translator.models import TranslatorEngine
 
 
+def handle_single_feed_fetch(feed: Feed):
+    """
+    Fetch feeds and update entries.
+    """
+    try:
+        feed.fetch_status = None
+        fetch_results = fetch_feed(url=feed.feed_url, etag=feed.etag)
+
+
+        if fetch_results["error"]:
+            raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
+        elif not fetch_results["update"]:
+            raise Exception("Feed is up to date, Skip")
+        
+        latest_feed = fetch_results.get("feed")
+        # Update feed meta
+        feed.name = latest_feed.feed.get("title", "Empty")
+        feed.subtitle = latest_feed.feed.get("subtitle")
+        feed.language = latest_feed.feed.get("language")
+        feed.author = latest_feed.feed.get("author")
+        feed.link = latest_feed.feed.get("link")
+        feed.pubdate = convert_struct_time_to_datetime(latest_feed.feed.get("published_parsed"))
+        feed.updated = convert_struct_time_to_datetime(latest_feed.feed.get("updated_parsed"))
+        feed.last_fetch = timezone.now()
+        feed.etag = latest_feed.get("etag")
+
+        # Update entries
+        if getattr(latest_feed, 'entries', None):
+            entries_to_create = []
+            #entries_to_update = []
+            existing_entries = {
+                entry.guid: entry.id 
+                for entry in Entry.objects.filter(feed=feed).only('id', 'guid')
+            }
+
+            for entry_data in latest_feed.entries[:feed.max_posts]:
+                
+                # 获取内容
+                content = ""
+                if 'content' in entry_data:
+                    content = entry_data.content[0].value if entry_data.content else ""
+                else:
+                    content = entry_data.get('summary')
+                
+                guid = entry_data.get('id') or entry_data.get('link')
+                link = entry_data.get('link')
+                author = entry_data.get('author', feed.author)
+                if not guid:
+                    continue  # 跳过无效条目
+
+                # 判断是否需要创建新条目
+                if guid not in existing_entries:
+                    entry_values = {
+                    'link': link,
+                    'author': author,
+                    'pubdate': convert_struct_time_to_datetime(entry_data.get('published_parsed')),
+                    'updated': convert_struct_time_to_datetime(entry_data.get('updated_parsed')),
+                    'original_title': entry_data.get('title', 'No title'),
+                    'original_content': content,
+                    'original_summary': entry_data.get('summary'),
+                    'enclosures_xml': entry_data.get('enclosures_xml'),
+                    }
+
+                    entries_to_create.append(Entry(
+                        feed=feed,
+                        guid=guid,
+                        **entry_values
+                    ))
+                
+                # if guid in existing_entries:
+                #     # 更新操作
+                #     entry = Entry(
+                #         id=existing_entries[guid],  # 直接设置主键
+                #         feed=feed,
+                #         guid=guid,
+                #         **entry_values
+                #     )
+                #     entries_to_update.append(entry)
+                # else:
+                #     # 创建操作
+                #     entries_to_create.append(Entry(
+                #         feed=feed,
+                #         guid=guid,
+                #         **entry_values
+                #     ))
+                
+            # 批量执行数据库操作
+            if entries_to_create:
+                Entry.objects.bulk_create(entries_to_create)
+            # if entries_to_update:
+            #     update_fields = list(entry_values.keys())
+            #     Entry.objects.bulk_update(entries_to_update, fields=update_fields)
+            
+        feed.fetch_status = True
+        feed.log = f"{timezone.now()} Fetch Completed <br>"
+    except Exception as e:
+        logging.exception("Task handle_feeds_fetch %s: %s", feed.feed_url, str(e))
+        feed.fetch_status = False
+        feed.log = f"{timezone.now()} {str(e)}<br>"
+        return False
+    
+    return True
+    
+
 def handle_feeds_fetch(feeds: list):
     """
     Fetch feeds and update entries.
     """
     for feed in feeds:
-        try:
-            feed.fetch_status = None
-            fetch_results = fetch_feed(url=feed.feed_url, etag=feed.etag)
-
-
-            if fetch_results["error"]:
-                raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
-            elif not fetch_results["update"]:
-                raise Exception("Feed is up to date, Skip")
-            
-            latest_feed = fetch_results.get("feed")
-            # Update feed meta
-            feed.name = latest_feed.feed.get("title", "Empty")
-            feed.subtitle = latest_feed.feed.get("subtitle")
-            feed.language = latest_feed.feed.get("language")
-            feed.author = latest_feed.feed.get("author")
-            feed.link = latest_feed.feed.get("link")
-            feed.pubdate = convert_struct_time_to_datetime(latest_feed.feed.get("published_parsed"))
-            feed.updated = convert_struct_time_to_datetime(latest_feed.feed.get("updated_parsed"))
-            feed.last_fetch = timezone.now()
-            feed.etag = latest_feed.get("etag")
-
-            # Update entries
-            if getattr(latest_feed, 'entries', None):
-                entries_to_create = []
-                entries_to_update = []
-                existing_entries = {
-                    entry.guid: entry.id 
-                    for entry in Entry.objects.filter(feed=feed).only('id', 'guid')
-                }
-
-                for entry_data in latest_feed.entries[:feed.max_posts]:
-                    
-                    # 获取内容
-                    content = ""
-                    if 'content' in entry_data:
-                        content = entry_data.content[0].value if entry_data.content else ""
-                    else:
-                        content = entry_data.get('summary')
-                    
-                    guid = entry_data.get('id') or entry_data.get('link')
-                    link = entry_data.get('link')
-                    author = entry_data.get('author', feed.author)
-                    if not guid:
-                        continue  # 跳过无效条目
-
-                    entry_values = {
-                        'link': link,
-                        'author': author,
-                        'pubdate': convert_struct_time_to_datetime(entry_data.get('published_parsed')),
-                        'updated': convert_struct_time_to_datetime(entry_data.get('updated_parsed')),
-                        'original_title': entry_data.get('title', 'No title'),
-                        'original_content': content,
-                        'original_summary': entry_data.get('summary'),
-                        'enclosures_xml': entry_data.get('enclosures_xml'),
-                    }
-
-                    # 判断是创建新条目还是更新现有条目
-                    if guid in existing_entries:
-                        # 更新操作
-                        entry = Entry(
-                            id=existing_entries[guid],  # 直接设置主键
-                            feed=feed,
-                            guid=guid,
-                            **entry_values
-                        )
-                        entries_to_update.append(entry)
-                    else:
-                        # 创建操作
-                        entries_to_create.append(Entry(
-                            feed=feed,
-                            guid=guid,
-                            **entry_values
-                        ))
-                 
-                # 批量执行数据库操作
-                if entries_to_create:
-                    Entry.objects.bulk_create(entries_to_create)
-                if entries_to_update:
-                    update_fields = list(entry_values.keys())
-                    Entry.objects.bulk_update(entries_to_update, fields=update_fields)
-                
-            feed.fetch_status = True
-            feed.log = f"{timezone.now()} Fetch Completed <br>"
-        except Exception as e:
-            logging.exception("Task handle_feeds_fetch %s: %s", feed.feed_url, str(e))
-            feed.fetch_status = False
-            feed.log = f"{timezone.now()} {str(e)}<br>"
+        handle_single_feed_fetch(feed)
 
     Feed.objects.bulk_update(
             feeds,
