@@ -69,7 +69,6 @@ def update_single_feed(feed_id):
                 cache_rss(feed.slug, feed_type="t", formate="json")
                 if feed.category:
                     cache_category(feed.category, feed_type="o", formate="xml")
-                    cache_category(feed.category, feed_type="o", formate="json")
                     cache_category(feed.category, feed_type="t", formate="xml")
                     cache_category(feed.category, feed_type="t", formate="json")
 
