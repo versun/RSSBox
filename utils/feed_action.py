@@ -221,6 +221,13 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
         if entry.updated:
             fe.updated(entry.updated)
         
+        if not fe.updated():
+                fe.updated(entry.pubdate or timezone.now())
+        if not fe.title():
+            fe.title(entry.updated.strftime("%Y-%m-%d %H:%M:%S"))
+        if not fe.id():
+            fe.id(fe.title())
+        
         # 处理附件
         if entry.enclosures_xml:
             try:
