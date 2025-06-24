@@ -188,7 +188,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
         updated=timezone.now()
     )
     
-    # 收集并排序所有条目
+    # 收集所有条目（限制总数为100）
     all_entries = []
     for feed in feeds:
         # 添加Feed作为分类
@@ -197,22 +197,23 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
             label=feed.name,
             scheme=feed.feed_url
         )
-        # 收集条目
+        # 收集当前feed的条目（已按时间顺序）
         for entry in feed.entries.all():
+            # 如果已经达到100条，则跳出循环
+            if len(all_entries) >= 100:
+                break
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
     
-    # 按时间降序排序
-    all_entries.sort(key=lambda x: x[0], reverse=True)
+    # 更新Feed时间为最新条目时间
+    if all_entries:
+        # 由于条目已按时间顺序添加，第一个就是最新的
+        latest_time = all_entries[0][0]
+        fg.updated(latest_time)
     
     # 添加所有条目
     for _, entry in all_entries:
         _add_atom_entry(fg, entry, type)
-    
-    # 更新Feed时间为最新条目时间
-    if all_entries:
-        latest_time = all_entries[0][0]
-        fg.updated(latest_time)
     
     # 生成最终XML
     return _finalize_atom_feed(fg)
