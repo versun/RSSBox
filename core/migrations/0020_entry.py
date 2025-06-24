@@ -32,7 +32,7 @@ class Migration(migrations.Migration):
             options={
                 'verbose_name': 'Entry',
                 'verbose_name_plural': 'Entries',
-                'constraints': [models.UniqueConstraint(fields=('feed', 'guid'), name='unique_entry_guid')],
+                #'constraints': [models.UniqueConstraint(fields=('feed', 'guid'), name='unique_entry_guid')],
             },
         ),
     ]

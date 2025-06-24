@@ -233,9 +233,9 @@ class Entry(models.Model):
     class Meta:
         verbose_name = _("Entry")
         verbose_name_plural = _("Entries")
-        constraints = [
-            models.UniqueConstraint(
-                fields=["feed", "guid"], name="unique_entry_guid"
-            )
-        ]
+        # constraints = [
+        #     models.UniqueConstraint(
+        #         fields=["feed", "guid"], name="unique_entry_guid"
+        #     )
+        # ]
 
