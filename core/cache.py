@@ -31,7 +31,6 @@ def cache_rss(feed_slug:str, feed_type="t", formate="xml"):
     response = make_response(atom_feed, feed_slug, formate)
     # 缓存
     cache.set(cache_key, response, None)
-    logging.debug(f"Cached response for key: {cache_key}")
 
     return response
 
@@ -48,7 +47,6 @@ def cache_category(category:str, feed_type="t", formate="xml"):
     response = make_response(atom_feed, category, formate)
     # 缓存
     cache.set(cache_key, response, None)
-    logging.debug(f"Cached response for key: {cache_key}")
 
     return response
 
