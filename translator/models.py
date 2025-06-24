@@ -4,6 +4,8 @@ from django.utils.translation import gettext_lazy as _
 from config import settings
 from openai import OpenAI
 from encrypted_model_fields.fields import EncryptedCharField
+from time import sleep
+
 
 
 class TranslatorEngine(models.Model):
