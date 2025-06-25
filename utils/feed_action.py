@@ -65,16 +65,18 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
     summary = entry.original_summary
 
     # 处理标题和内容
-    if feed_type == "o":
-        title = entry.original_title
-        content = entry.original_content
-    else:
-        title = set_translation_display(entry.original_title, entry.translated_title, 
+    title = entry.original_title
+    content = entry.original_content
+
+    if feed_type == "t":
+        if entry.translated_title:
+            title = set_translation_display(entry.original_title, entry.translated_title, 
                                       translation_display or entry.feed.translation_display)
-        content = set_translation_display(entry.original_content, entry.translated_content, 
+        
+        if entry.translated_content:
+            content = set_translation_display(entry.original_content, entry.translated_content, 
                                         translation_display or entry.feed.translation_display)
         
-        # 添加AI摘要
         if entry.ai_summary:
             html_summary = f"<br />🤖:{mistune.html(entry.ai_summary)}<br />---------------<br />"
             content = html_summary + content
