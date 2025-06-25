@@ -5,7 +5,7 @@
             "name": "Python Debug: RSS Translator",
             "type": "debugpy",
             "python": "${workspaceFolder}/.venv/bin/python",
-            "env": {"GEVENT_SUPPORT": "True"},
+            "env": {"GEVENT_SUPPORT": "True","DEBUG":"1","DEMO":"1"},
             "request": "launch",
             "args": [
                 "runserver"
