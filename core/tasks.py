@@ -106,15 +106,13 @@ def handle_single_feed_fetch(feed: Feed):
             
         feed.fetch_status = True
         feed.log = f"{timezone.now()} Fetch Completed <br>"
-        feed.save()
     except Exception as e:
         logging.exception("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
         feed.fetch_status = False
         feed.log = f"{timezone.now()} {str(e)}<br>"
+    finally:
         feed.save()
-        return False
-    
-    return True
+
     
 
 def handle_feeds_fetch(feeds: list):
