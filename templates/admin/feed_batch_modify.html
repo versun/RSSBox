@@ -24,15 +24,6 @@
     <input type="radio" name="max_posts" value="True" required>{% trans " Change to " %}
     <input type="number" name="max_posts_value" value="20" required><br />
 
-    <br /><label>{% trans "Translator" %}</label><br />
-    <input type="radio" name="translator" value="Keep" checked required>{% trans " Keep Original" %}<br />
-    <input type="radio" name="translator" value="True" required>{% trans " Change to " %}
-    <select name="translator_value">
-        {% for id,name in translator_choices %}
-        <option value="{{ id }}">{{ name }}</option>
-        {% endfor %}
-    </select><br />
-
     <br /><label>{% trans "Target Language" %}</label><br />
     <input type="radio" name="target_language" value="Keep" checked required>{% trans " Keep Original" %}<br />
     <input type="radio" name="target_language" value="True" required>{% trans " Change to " %}
@@ -51,11 +42,11 @@
         <option value="2">{% trans "Original | Translation" %}</option>
     </select><br />
 
-    <br /><label>{% trans "Translator" %}</label><br />
+   <br /><label>{% trans "Translator" %}</label><br />
     <input type="radio" name="translator" value="Keep" checked required>{% trans " Keep Original" %}<br />
     <input type="radio" name="translator" value="True" required>{% trans " Change to " %}
     <select name="translator_value">
-        {% for id,name in summary_engine_choices %}
+        {% for id,name in translator_choices %}
         <option value="{{ id }}">{{ name }}</option>
         {% endfor %}
     </select><br />
