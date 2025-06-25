@@ -58,14 +58,14 @@ def _build_atom_feed(feed_id, title, author, link, subtitle, language, updated, 
     
     return fg
 
-def _add_atom_entry(fg, entry, type, translation_display=None):
+def _add_atom_entry(fg, entry, feed_type, translation_display=None):
     """向Atom Feed添加条目"""
     pubdate = entry.pubdate or timezone.now()
     updated = entry.updated or pubdate
     summary = entry.original_summary
 
     # 处理标题和内容
-    if type == "o":
+    if feed_type == "o":
         title = entry.original_title
         content = entry.original_content
     else:
@@ -124,7 +124,7 @@ def _finalize_atom_feed(fg):
         encoding="utf-8"
     ).decode()
 
-def generate_atom_feed(feed: Feed, type="t"):
+def generate_atom_feed(feed: Feed, feed_type="t"):
     """生成单个Feed的Atom格式"""
     if not feed:
         logging.error("generate_atom_feed: feed is None")
@@ -145,7 +145,7 @@ def generate_atom_feed(feed: Feed, type="t"):
         
         # 添加所有条目
         for entry in feed.entries.all():
-            _add_atom_entry(fg, entry, type, feed.translation_display)
+            _add_atom_entry(fg, entry, feed_type, feed.translation_display)
         
         # 生成最终XML
         return _finalize_atom_feed(fg)
@@ -154,9 +154,9 @@ def generate_atom_feed(feed: Feed, type="t"):
         logging.error(f"generate_atom_feed error {feed.feed_url}: {str(e)}")
         return None
 
-def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
+def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
     """合并多个Feeds生成单个Atom Feed"""
-    type_str = "Original" if type == "o" else "Translated"
+    type_str = "Original" if feed_type == "o" else "Translated"
     feed_id = f'urn:merged-category-{category}-{type_str}-feeds'
     feed_title = f'{type_str} Category {category} Feeds'
     
@@ -196,7 +196,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], type="t"):
     
     # 添加所有条目
     for _, entry in all_entries:
-        _add_atom_entry(fg, entry, type)
+        _add_atom_entry(fg, entry, feed_type)
     
     # 生成最终XML
     return _finalize_atom_feed(fg)
