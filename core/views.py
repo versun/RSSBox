@@ -42,6 +42,19 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
         etag = None
     return etag
 
+def _make_response(atom_feed, filename, formate="xml"):
+    if formate == "json":
+        # 如果需要返回 JSON 格式
+        feed_json = feed2json(atom_feed)
+        response = JsonResponse(feed_json)
+    else:
+        # 如果需要返回 XML 格式
+        response = StreamingHttpResponse(
+            atom_feed, content_type="application/xml"
+        )
+        response["Content-Disposition"] = f"inline; filename={filename}.xml"
+    return response
+
 def import_opml(request):
     if request.method == 'POST':
         opml_file = request.FILES.get('opml_file')
@@ -92,13 +105,13 @@ def rss(request, feed_slug, feed_type="t", formate="xml"):
     feed_slug = smart_str(feed_slug)
     try:
         cache_key = f'cache_rss_{feed_slug}_{feed_type}_{formate}'
-        response = cache.get(cache_key)
-        if response is None:
+        content = cache.get(cache_key)
+        if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
-            response = cache_rss(feed_slug, feed_type, formate)
+            content = cache_rss(feed_slug, feed_type, formate)
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
-        return response
+        return _make_response(content, feed_slug, formate)
     except Exception as e:
         logging.error(f"Error generating rss {feed_slug}: {str(e)}")
         return HttpResponse(status=500, content="Internal Server Error")
@@ -112,13 +125,13 @@ def category(request, category: str, feed_type="t", formate="xml"):
 
     try:
         cache_key = f'cache_category_{category}_{feed_type}_{formate}'
-        response = cache.get(cache_key)
-        if response is None:
+        content = cache.get(cache_key)
+        if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
-            response = cache_category(category, feed_type, formate)
+            content = cache_category(category, feed_type, formate)
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
-        return response
+        return _make_response(content, category, formate)
     except Exception as e:
         logging.exception("Failed to read the category feeds: %s / %s", category, str(e))
         return HttpResponse(status=500, content="Internal Server Error")

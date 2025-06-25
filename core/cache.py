@@ -29,11 +29,11 @@ def cache_rss(feed_slug:str, feed_type="t", formate="xml"):
     if not atom_feed:
         return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress")
     
-    response = make_response(atom_feed, feed_slug, formate)
+    # response = make_response(atom_feed, feed_slug, formate)
     # 缓存
-    cache.set(cache_key, response, None)
+    cache.set(cache_key, atom_feed, None)
     logging.debug(f"Cached successfully with key {cache_key}")
-    return response
+    return atom_feed
 
 def cache_category(category:str, feed_type="t", formate="xml"):
     logging.debug(f"Start cache_category for {category} with type {feed_type} and format {formate}")
@@ -46,9 +46,9 @@ def cache_category(category:str, feed_type="t", formate="xml"):
     if not atom_feed:
         return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress")
     
-    response = make_response(atom_feed, category, formate)
+    # response = make_response(atom_feed, category, formate)
     # 缓存
-    cache.set(cache_key, response, None)
+    cache.set(cache_key, atom_feed, None)
     logging.debug(f"Cached successfully with key {cache_key}")
-    return response
+    return atom_feed
 
