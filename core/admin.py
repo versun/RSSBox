@@ -39,7 +39,7 @@ class FeedAdmin(admin.ModelAdmin):
         "total_characters",
         "show_category",
     ]
-    search_fields = ["name", "feed_url", "category__name"]
+    search_fields = ["name", "feed_url", "category__name", "slug", "author", "link"]
     list_filter = ["fetch_status", "translation_status","category","translate_title","translate_content","summary"]
     readonly_fields = [
         "fetch_status",
