@@ -60,8 +60,8 @@ def _build_atom_feed(feed_id, title, author, link, subtitle, language, updated, 
 
 def _add_atom_entry(fg, entry, type, translation_display=None):
     """向Atom Feed添加条目"""
-    pubdate = entry.pubdate
-    updated = entry.updated
+    pubdate = entry.pubdate or timezone.now()
+    updated = entry.updated or pubdate
     summary = entry.original_summary
 
     # 处理标题和内容
@@ -82,16 +82,14 @@ def _add_atom_entry(fg, entry, type, translation_display=None):
 
     # 创建条目
     fe = fg.add_entry()
-    fe.title(title)
+    fe.title(title or updated.strftime("%Y-%m-%d %H:%M:%S"))
     fe.link(href=entry.link)
     fe.author({"name": entry.author})
     fe.id(entry.guid or entry.link)
     fe.content(content, type="html")
     fe.summary(summary, type="html")
-    fe.updated(updated or pubdate or timezone.now())
-    
-    if pubdate:
-        fe.pubDate(pubdate)
+    fe.updated(updated)
+    fe.pubDate(pubdate)
     
     # 处理附件
     if entry.enclosures_xml:
@@ -106,13 +104,6 @@ def _add_atom_entry(fg, entry, type, translation_display=None):
         except Exception as e:
             logging.error(f"Error parsing enclosures for entry {entry.id}: {str(e)}")
     
-    # 确保必要字段有值
-    if not fe.updated():
-        fe.updated(pubdate if pubdate else timezone.now())
-    if not fe.title():
-        fe.title(updated.strftime("%Y-%m-%d %H:%M:%S") if updated else timezone.now().strftime("%Y-%m-%d %H:%M:%S"))
-    if not fe.id():
-        fe.id(fe.title())
     
     return fe
 
