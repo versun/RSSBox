@@ -128,7 +128,7 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         logging.info(log)
         # output to stdout
         print(log)
-        update_multiple_feeds(feeds)
+        update_multiple_feeds(feeds) if feeds else logging.info("No feeds to update for this frequency.")
     except KeyError:
         logging.error(f"Invalid frequency: {simple_update_frequency}")
     except Exception as e:

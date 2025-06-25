@@ -40,7 +40,7 @@ def cache_category(category:str, feed_type="t", formate="xml"):
     # 生成唯一的缓存键
     cache_key = f'cache_category_{category}_{feed_type}_{formate}'
 
-    feeds = Feed.objects.filter(category__name=category)
+    feeds = Feed.objects.filter(category=category)
     atom_feed = merge_feeds_into_one_atom(category, feeds, feed_type)
 
     if not atom_feed:
