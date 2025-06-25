@@ -52,8 +52,6 @@ def update_single_feed(feed_id):
 
             if handle_single_feed_fetch(feed):
                 need_cache = True
-                feed.fetch_status = True
-                feed.save(update_fields=["fetch_status"])
             #task_manager.update_progress(feed_id, 50)
             # 执行更新操作
             if feed.translate_title:
