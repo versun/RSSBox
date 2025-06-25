@@ -1,5 +1,5 @@
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
 from django.core.cache import cache
 from django.views.decorators.http import condition
