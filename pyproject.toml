@@ -24,6 +24,8 @@ dependencies = [
     "tiktoken>=0.9.0",
     "gunicorn>=23.0.0",
     "whitenoise>=6.9.0",
+    "django-debug-toolbar>=5.2.0",
+    "bx_django_utils>=89",
 ]
 
 [tool.uv]
@@ -42,7 +44,5 @@ django-tagulous2 = { git = "https://github.com/versun/django-tagulous2" }
 
 [dependency-groups]
 dev = [
-    "django-debug-toolbar>=5.2.0",
-    "bx_django_utils>=89",
     "ipykernel>=6.29.5",
 ]
