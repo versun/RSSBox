@@ -56,7 +56,7 @@ def handle_single_feed_fetch(feed: Feed):
                     content = entry_data.get('summary')
                 
                 guid = entry_data.get('id') or entry_data.get('link')
-                link = entry_data.get('link')
+                link = entry_data.get('link',"")
                 author = entry_data.get('author', feed.author)
                 if not guid:
                     continue  # 跳过无效条目
