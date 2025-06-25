@@ -43,15 +43,13 @@ def update_single_feed(feed_id):
     try:
         # 确保在新线程中创建新的数据库连接
         close_old_connections()
-        need_cache = False
         
         try:
             # 尝试获取feed对象
             feed = Feed.objects.get(id=feed_id)
             logging.info(f"Starting feed update: {feed.name} (ID: {feed_id})")
 
-            if handle_single_feed_fetch(feed):
-                need_cache = True
+            handle_single_feed_fetch(feed)
             #task_manager.update_progress(feed_id, 50)
             # 执行更新操作
             if feed.translate_title:
@@ -62,16 +60,6 @@ def update_single_feed(feed_id):
                 handle_feeds_summary([feed])
             
             logging.info(f"Completed feed update: {feed.name} (ID: {feed_id})")
-            if need_cache:
-                cache_rss(feed.slug, feed_type="o", formate="xml")
-                cache_rss(feed.slug, feed_type="o", formate="json")
-                cache_rss(feed.slug, feed_type="t", formate="xml")
-                cache_rss(feed.slug, feed_type="t", formate="json")
-                if feed.category:
-                    cache_category(feed.category, feed_type="o", formate="xml")
-                    cache_category(feed.category, feed_type="t", formate="xml")
-                    cache_category(feed.category, feed_type="t", formate="json")
-
 
             return True
         except Feed.DoesNotExist:
@@ -93,6 +81,18 @@ def update_multiple_feeds(feeds: list):
             task_name = f"update_feed_{feed.id}"
             task_id = task_manager.submit_task(task_name, update_single_feed, feed.id)
             task_ids.append(task_id)
+            cache_rss(feed.slug, feed_type="o", formate="xml")
+            cache_rss(feed.slug, feed_type="o", formate="json")
+            cache_rss(feed.slug, feed_type="t", formate="xml")
+            cache_rss(feed.slug, feed_type="t", formate="json")
+        
+        # 获取Feeds的category
+        categories = set(feed.category for feed in feeds if feed.category)
+        for category in categories:
+            cache_category(category, feed_type="o", formate="xml")
+            cache_category(category, feed_type="t", formate="xml")
+            cache_category(category, feed_type="t", formate="json")
+
         
         # 等待所有任务完成（可选，根据需求决定是否阻塞）
         # 实际应用中可能需要更完善的等待/超时机制
