@@ -3,18 +3,25 @@ services:
     image: versun/rsstranslator
     environment:
       - SITE_URL=http://127.0.0.1:8000
+      - REDIS_URL=redis://redis:6379/0
+      - CSRF_TRUSTED_ORIGINS=http://127.0.0.1:8000
       - DEFAULT_TARGET_LANGUAGE=Chinese Simplified
       - PORT=8000
-      - DEBUG=0
-      - DEMO=0
+      - DEBUG=1
+      - DEMO=1
       - USER_MANAGEMENT=0
       - LOG_LEVEL=ERROR
-      - HUEY_WORKERS=10
-      - CSRF_TRUSTED_ORIGINS=http://127.0.0.1:8000
-      - default_update_frequency=30
       - default_max_posts=20
     volumes:
       - ./data:/app/data
     ports:
       - 8000:8000
     restart: always
+  
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    volumes:
+      - ./data:/data
+    restart: always   

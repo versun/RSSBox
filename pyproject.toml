@@ -5,6 +5,7 @@ description = "A Django-based RSS translation service. Compatible with uv/uvicor
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.2.1",
+    "redis>=6.2.0",
     "django-encrypted-model-fields>=0.6.5",
     "django-tagulous2",
     "bs4>=0.0.2",
