@@ -30,8 +30,8 @@ def handle_single_feed_fetch(feed: Feed):
         feed.name = latest_feed.feed.get("title", "Empty")
         feed.subtitle = latest_feed.feed.get("subtitle")
         feed.language = latest_feed.feed.get("language")
-        feed.author = latest_feed.feed.get("author")
-        feed.link = latest_feed.feed.get("link")
+        feed.author = latest_feed.feed.get("author") or "Unknown"
+        feed.link = latest_feed.feed.get("link") or feed.feed_url
         feed.pubdate = convert_struct_time_to_datetime(latest_feed.feed.get("published_parsed"))
         feed.updated = convert_struct_time_to_datetime(latest_feed.feed.get("updated_parsed"))
         feed.last_fetch = timezone.now()
