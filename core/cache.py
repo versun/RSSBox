@@ -1,23 +1,9 @@
 import logging
 from django.core.cache import cache
-from feed2json import feed2json
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from utils.feed_action import merge_feeds_into_one_atom, generate_atom_feed
 
 from .models import Feed
-
-def make_response(atom_feed, filename, formate="xml"):
-    if formate == "json":
-        # 如果需要返回 JSON 格式
-        feed_json = feed2json(atom_feed)
-        response = JsonResponse(feed_json)
-    else:
-        # 如果需要返回 XML 格式
-        response = StreamingHttpResponse(
-            atom_feed, content_type="application/xml"
-        )
-        response["Content-Disposition"] = f"inline; filename={filename}.xml"
-    return response
 
 def cache_rss(feed_slug:str, feed_type="t", formate="xml"):
     logging.debug(f"Start cache_rss for {feed_slug} with type {feed_type} and format {formate}")

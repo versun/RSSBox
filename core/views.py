@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from lxml import etree
 from django.utils.translation import gettext_lazy as _
+from feed2json import feed2json
 
 from .cache import cache_rss, cache_category
 
