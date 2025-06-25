@@ -44,25 +44,17 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
 
 def _build_atom_feed(feed_id, title, author, link, subtitle, language, updated, pubdate=None):
     """构建Atom Feed的基本结构"""
+    updated_time = updated or pubdate or timezone.now()
+    # 确保必要字段有值:updated, title, id
     fg = FeedGenerator()
     fg.id(str(feed_id))
-    fg.title(title)
+    fg.title(title or updated_time.strftime("%Y-%m-%d %H:%M:%S"))
     fg.author({"name": author})
     fg.link(href=link, rel="alternate")
-    fg.subtitle(subtitle)
-    fg.language(language)
-    fg.updated(updated)
-    
-    if pubdate:
-        fg.pubDate(pubdate)
-    
-    # 确保必要字段有值
-    if not fg.updated():
-        fg.updated(pubdate if pubdate else timezone.now())
-    if not fg.title():
-        fg.title(updated.strftime("%Y-%m-%d %H:%M:%S"))
-    if not fg.id():
-        fg.id(fg.title())
+    fg.subtitle(subtitle or "")
+    fg.language(language or "")
+    fg.updated(updated_time)
+    fg.pubDate(pubdate or updated_time)
     
     return fg
 
