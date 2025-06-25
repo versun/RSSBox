@@ -48,9 +48,15 @@ def _make_response(atom_feed, filename, formate="xml"):
         feed_json = feed2json(atom_feed)
         response = JsonResponse(feed_json)
     else:
-        # 如果需要返回 XML 格式
+        # 使用生成器函数实现流式传输
+        def stream_content():
+            chunk_size = 4096  # 每次发送4KB
+            for i in range(0, len(atom_feed), chunk_size):
+                yield atom_feed[i:i+chunk_size]
+        
         response = StreamingHttpResponse(
-            atom_feed, content_type="application/xml"
+            stream_content(),  # 使用生成器
+            content_type="application/xml; charset=utf-8"
         )
         response["Content-Disposition"] = f"inline; filename={filename}.xml"
     return response
