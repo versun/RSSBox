@@ -189,7 +189,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
             all_entries.append((sort_time, entry))
     
     # 按时间升序排序
-    all_entries.sort(key=lambda x: x[0], reverse=False)
+    all_entries.sort(key=lambda x: x[0], reverse=True)
 
     # 更新Feed时间为最新条目时间
     if all_entries:
