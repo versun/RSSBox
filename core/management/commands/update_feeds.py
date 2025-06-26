@@ -26,12 +26,12 @@ class Command(BaseCommand):
         if target_frequency:
             valid_frequencies = ['5 min', '15 min', '30 min', 'hourly', 'daily', 'weekly']
             if target_frequency not in valid_frequencies:
-                self.stderr.write(f"Error: Invalid frequency. Valid options: {', '.join(valid_frequencies)}")
+                self.stderr.write(f"{time.time()}: Error: Invalid frequency. Valid options: {', '.join(valid_frequencies)}")
                 sys.exit(1)
             try:
                 update_feeds_for_frequency(simple_update_frequency=target_frequency)
                 self.stdout.write(self.style.SUCCESS(
-                    f'Successfully updated feeds for frequency: {target_frequency}'
+                    f'{time.time()}: Successfully updated feeds for frequency: {target_frequency}'
                 ))
             except Exception as e:
                 logging.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
@@ -110,7 +110,7 @@ def update_multiple_feeds(feeds: list):
                 cache_rss(feed.slug, feed_type="t", format="xml")
                 cache_rss(feed.slug, feed_type="t", format="json")
             except Exception as e:
-                logging.error(f"Failed to cache RSS for {feed.slug}: {str(e)}")
+                logging.error(f"{time.time()}: Failed to cache RSS for {feed.slug}: {str(e)}")
         
         categories = set(feed.category for feed in feeds if feed.category)
         for category in categories:
@@ -140,7 +140,7 @@ def update_feeds_for_frequency(simple_update_frequency: str):
     try:
         frequency_val = update_frequency_map[simple_update_frequency]
         feeds = list(Feed.objects.filter(update_frequency=frequency_val))
-        log = f"Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds)}"
+        log = f"{time.time()}: Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds)}"
         logging.info(log)
         # output to stdout
         print(log)
@@ -148,7 +148,7 @@ def update_feeds_for_frequency(simple_update_frequency: str):
     except KeyError:
         logging.error(f"Invalid frequency: {simple_update_frequency}")
     except Exception as e:
-        log = f"Command update_feeds_for_frequency {simple_update_frequency}: {str(e)}"
+        log = f"{time.time()}: Command update_feeds_for_frequency {simple_update_frequency}: {str(e)}"
         logging.exception(log)
         print(log)
 
