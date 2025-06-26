@@ -64,7 +64,7 @@ class OpenAITranslator(TranslatorEngine):
     top_p = models.FloatField(default=0.2)
     frequency_penalty = models.FloatField(default=0)
     presence_penalty = models.FloatField(default=0)
-    max_tokens = models.IntegerField(default=2000)
+    max_tokens = models.IntegerField(default=1000000)
 
     summary_prompt = models.TextField(default=settings.default_summary_prompt)
 
