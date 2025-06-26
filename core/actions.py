@@ -13,7 +13,7 @@ from utils.modelAdmin_utils import get_translator_and_summary_choices
 from .custom_admin_site import core_admin_site
 from .models import Feed
 from utils.task_manager import task_manager
-from .management.commands.update_feeds import update_single_feed
+from .management.commands.update_feeds import update_multiple_feeds
 
 
 @admin.display(description=_("Clean translated content"))
@@ -141,22 +141,6 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
 @admin.display(description=_("Force update"))
 def feed_force_update(modeladmin, request, queryset):
     logging.info("Call feed_force_update: %s", queryset)
-    # 清除所有选中Feed的缓存
-    all_cache_keys = []
-    for instance in queryset:
-        # 构建缓存键 - 使用与cache_rss相同的逻辑
-        cache_keys = [
-            f'view_cache_rss_{instance.slug}_t',
-            f'view_cache_rss_{instance.slug}_o',
-            f'view_cache_rss_json_{instance.slug}_t',
-            f'view_cache_rss_json_{instance.slug}_o',
-            f'view_cache_proxy_{instance.slug}_t',
-            f'view_cache_proxy_{instance.slug}_o',
-        ]
-        all_cache_keys.extend(cache_keys)
-
-    if all_cache_keys:
-        cache.delete_many(all_cache_keys)
 
     with transaction.atomic():
         for instance in queryset:
@@ -164,13 +148,12 @@ def feed_force_update(modeladmin, request, queryset):
             instance.translation_status = None
             instance.save()
     
-    for feed_id in queryset.values_list("id", flat=True):
-        task_manager.submit_task(
-            f"Force Update Feed: {feed_id}",
-            update_single_feed,
-            feed_id
+    feeds = queryset
+    task_manager.submit_task( 
+            f"Force Update Feeds",
+            update_multiple_feeds,
+            feeds
         )
-
 
 @admin.display(description=_("Batch modification"))
 def feed_batch_modify(modeladmin, request, queryset):
