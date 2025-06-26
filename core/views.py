@@ -43,8 +43,8 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
         etag = None
     return etag
 
-def _make_response(atom_feed, filename, formate="xml"):
-    if formate == "json":
+def _make_response(atom_feed, filename, format="xml"):
+    if format == "json":
         # 如果需要返回 JSON 格式
         feed_json = feed2json(atom_feed)
         response = JsonResponse(feed_json)
@@ -107,26 +107,26 @@ def import_opml(request):
     return redirect('admin:core_feed_changelist')
 
 @condition(etag_func=_get_etag, last_modified_func=_get_modified)
-def rss(request, feed_slug, feed_type="t", formate="xml"):
+def rss(request, feed_slug, feed_type="t", format="xml"):
     # Sanitize the feed_slug to prevent path traversal attacks
     feed_slug = smart_str(feed_slug)
     try:
-        cache_key = f'cache_rss_{feed_slug}_{feed_type}_{formate}'
+        cache_key = f'cache_rss_{feed_slug}_{feed_type}_{format}'
         content = cache.get(cache_key)
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
-            content = cache_rss(feed_slug, feed_type, formate)
+            content = cache_rss(feed_slug, feed_type, format)
             return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress") if not content else None
 
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
         
-        return _make_response(content, feed_slug, formate)
+        return _make_response(content, feed_slug, format)
     except Exception as e:
         logging.error(f"Error generating rss {feed_slug}: {str(e)}")
         return HttpResponse(status=500, content="Internal Server Error")
 
-def category(request, category: str, feed_type="t", formate="xml"):
+def category(request, category: str, feed_type="t", format="xml"):
     category = smart_str(category)
     all_category = Feed.category.tag_model.objects.all()
 
@@ -134,15 +134,15 @@ def category(request, category: str, feed_type="t", formate="xml"):
         return HttpResponse(status=404)
 
     try:
-        cache_key = f'cache_category_{category}_{feed_type}_{formate}'
+        cache_key = f'cache_category_{category}_{feed_type}_{format}'
         content = cache.get(cache_key)
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
-            content = cache_category(category, feed_type, formate)
+            content = cache_category(category, feed_type, format)
             return HttpResponse(status=500, content="Category not found, Maybe it's still in progress") if not content else None
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
-        return _make_response(content, category, formate)
+        return _make_response(content, category, format)
     except Exception as e:
         logging.error("Error generating category rss: %s / %s", category, str(e))
         return HttpResponse(status=500, content="Internal Server Error")
