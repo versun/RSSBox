@@ -3,12 +3,12 @@ services:
     image: versun/rsstranslator
     environment:
       - SITE_URL=http://127.0.0.1:8000
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://rsstranslator_redis:6379/0
       - CSRF_TRUSTED_ORIGINS=http://127.0.0.1:8000
-      - DEFAULT_TARGET_LANGUAGE=Chinese Simplified
+      - DEFAULT_TARGET_LANGUAGE=Chinese Simplified # See https://github.com/versun/RSS-Translator/blob/main/config/settings.py#L199 for optional values
       - PORT=8000
-      - DEBUG=1
-      - DEMO=1
+      - DEBUG=0
+      - DEMO=0
       - USER_MANAGEMENT=0
       - LOG_LEVEL=ERROR
       - default_max_posts=20
@@ -17,11 +17,13 @@ services:
     ports:
       - 8000:8000
     restart: always
+    depends_on:
+      - rsstranslator_redis
   
-  redis:
+  rsstranslator_redis:
     image: redis:latest
     ports:
       - 6379:6379
     volumes:
       - ./data:/data
-    restart: always   
+    restart: always
