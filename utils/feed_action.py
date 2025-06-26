@@ -76,7 +76,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
         
         if entry.translated_content:
             content = set_translation_display(entry.original_content, entry.translated_content, 
-                                        translation_display or entry.feed.translation_display)
+                                        translation_display or entry.feed.translation_display,"<br />---------------<br />")
         
         if entry.ai_summary:
             html_summary = f"<br />🤖:{mistune.html(entry.ai_summary)}<br />---------------<br />"
