@@ -1,5 +1,6 @@
 import logging
 import sys
+import time
 from django.core.management.base import BaseCommand
 from core.models import Feed
 from core.tasks import handle_single_feed_fetch, handle_feeds_translation, handle_feeds_summary
@@ -74,36 +75,52 @@ def update_single_feed(feed:Feed):
 def update_multiple_feeds(feeds: list):
     """并行更新多个Feed"""
     try:
-        # 为每个feed创建并行任务
+        # 先执行所有feed更新任务
         task_ids = []
         for feed in feeds:
             task_name = f"update_feed_{feed.name}"
             task_id = task_manager.submit_task(task_name, update_single_feed, feed)
             task_ids.append(task_id)
-            cache_rss(feed.slug, feed_type="o", formate="xml")
-            cache_rss(feed.slug, feed_type="o", formate="json")
-            cache_rss(feed.slug, feed_type="t", formate="xml")
-            cache_rss(feed.slug, feed_type="t", formate="json")
         
-        # 获取Feeds的category
+        # 等待所有任务完成（最多30分钟）
+        timeout = 1800  # 30分钟（秒）
+        start_time = time.time()
+        
+        while True:
+            # 检查所有任务状态
+            all_done = True
+            for task_id in task_ids:
+                status_info = task_manager.get_task_status(task_id)
+                if status_info.get('status') in ['pending', 'running']:
+                    all_done = False
+                    break
+            
+            # 如果所有任务完成或超时则退出循环
+            if all_done or (time.time() - start_time > timeout):
+                break
+            
+            # 等待1秒后再次检查
+            time.sleep(3)
+        
+        # 所有任务完成后执行缓存操作
+        for feed in feeds:
+            try:
+                cache_rss(feed.slug, feed_type="o", format="xml")
+                cache_rss(feed.slug, feed_type="o", format="json")
+                cache_rss(feed.slug, feed_type="t", format="xml")
+                cache_rss(feed.slug, feed_type="t", format="json")
+            except Exception as e:
+                logging.error(f"Failed to cache RSS for {feed.slug}: {str(e)}")
+        
         categories = set(feed.category for feed in feeds if feed.category)
         for category in categories:
-            cache_category(category, feed_type="o", formate="xml")
-            cache_category(category, feed_type="t", formate="xml")
-            cache_category(category, feed_type="t", formate="json")
-
-        
-        # 等待所有任务完成（可选，根据需求决定是否阻塞）
-        # 实际应用中可能需要更完善的等待/超时机制
-        # while True:
-        #     completed = all(
-        #         task_manager.get_task_status(tid)['status'] in ['completed', 'failed']
-        #         for tid in task_ids
-        #     )
-        #     if completed:
-        #         break
-        #     time.sleep(3)  # 避免CPU忙等待
-            
+            try:
+                cache_category(category, feed_type="o", format="xml")
+                cache_category(category, feed_type="t", format="xml")
+                cache_category(category, feed_type="t", format="json")
+            except Exception as e:
+                logging.error(f"Failed to cache category {category}: {str(e)}")
+                
     except Exception as e:
         logging.exception("Command update_multiple_feeds failed: %s", str(e))
 
