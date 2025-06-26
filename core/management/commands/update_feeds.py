@@ -152,11 +152,11 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         logging.exception(log)
         print(log)
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        target_frequency = sys.argv[1]
-    else:
-        print("Error: Please specify a valid update frequency ('5 min', '15 min', '30 min', 'hourly', 'daily', 'weekly')")
-        sys.exit(1)
+# if __name__ == "__main__":
+#     if len(sys.argv) > 1:
+#         target_frequency = sys.argv[1]
+#     else:
+#         print("Error: Please specify a valid update frequency ('5 min', '15 min', '30 min', 'hourly', 'daily', 'weekly')")
+#         sys.exit(1)
     
-    update_feeds_for_frequency(simple_update_frequency=target_frequency)
+#     update_feeds_for_frequency(simple_update_frequency=target_frequency)
