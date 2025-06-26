@@ -116,7 +116,7 @@ def rss(request, feed_slug, feed_type="t", formate="xml"):
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_rss(feed_slug, feed_type, formate)
-            return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress") if not content
+            return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress") if not content else None
 
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
@@ -139,7 +139,7 @@ def category(request, category: str, feed_type="t", formate="xml"):
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_category(category, feed_type, formate)
-            return HttpResponse(status=500, content="Category not found, Maybe it's still in progress") if not content
+            return HttpResponse(status=500, content="Category not found, Maybe it's still in progress") if not content else None
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
         return _make_response(content, category, formate)
