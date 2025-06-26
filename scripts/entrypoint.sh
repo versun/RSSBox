@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# 将环境变量写入cron可以访问的文件
+echo "Exporting environment variables for cron..."
+printenv | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' >> /etc/environment
+
 echo "Running initialization script..."
 gosu rsstranslator /opt/venv/bin/python $DockerHOME/scripts/init.py
 
