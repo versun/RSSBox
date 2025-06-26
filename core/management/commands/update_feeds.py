@@ -38,16 +38,15 @@ class Command(BaseCommand):
                 sys.exit(1)
 
 
-def update_single_feed(feed_id):
+def update_single_feed(feed:Feed):
     """在后台线程中执行feed更新"""        
     try:
         # 确保在新线程中创建新的数据库连接
         close_old_connections()
         
         try:
-            # 尝试获取feed对象
-            feed = Feed.objects.get(id=feed_id)
-            logging.info(f"Starting feed update: {feed.name} (ID: {feed_id})")
+            
+            logging.info(f"Starting feed update: {feed.name}")
 
             handle_single_feed_fetch(feed)
             #task_manager.update_progress(feed_id, 50)
@@ -59,14 +58,14 @@ def update_single_feed(feed_id):
             if feed.summary:
                 handle_feeds_summary([feed])
             
-            logging.info(f"Completed feed update: {feed.name} (ID: {feed_id})")
+            logging.info(f"Completed feed update: {feed.name}")
 
             return True
         except Feed.DoesNotExist:
-            logging.error(f"Feed not found: ID {feed_id}")
+            logging.error(f"Feed not found: ID {feed.name}")
             return False
         except Exception as e:
-            logging.exception(f"Error updating feed ID {feed_id}: {str(e)}")
+            logging.exception(f"Error updating feed ID {feed.name}: {str(e)}")
             return False
     finally:
         # 确保关闭数据库连接
@@ -78,8 +77,8 @@ def update_multiple_feeds(feeds: list):
         # 为每个feed创建并行任务
         task_ids = []
         for feed in feeds:
-            task_name = f"update_feed_{feed.id}"
-            task_id = task_manager.submit_task(task_name, update_single_feed, feed.id)
+            task_name = f"update_feed_{feed.name}"
+            task_id = task_manager.submit_task(task_name, update_single_feed, feed)
             task_ids.append(task_id)
             cache_rss(feed.slug, feed_type="o", formate="xml")
             cache_rss(feed.slug, feed_type="o", formate="json")

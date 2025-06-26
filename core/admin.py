@@ -94,16 +94,15 @@ class FeedAdmin(admin.ModelAdmin):
         transaction.on_commit(
             partial(
                 self._submit_feed_update_task, 
-                obj.name, 
-                obj.id
+                obj
             )
         )
 
-    def _submit_feed_update_task(self, feed_name, feed_id):
+    def _submit_feed_update_task(self, feed):
         task_id = task_manager.submit_task(
-            f"Update Feed: {feed_name}",
+            f"Update Feed: {feed.name}",
             update_single_feed,
-            feed_id
+            feed
         )
         logging.info(f"Submitted feed update task after commit: {task_id}")
 
