@@ -144,6 +144,6 @@ def category(request, category: str, feed_type="t", formate="xml"):
             logging.debug(f"Cache HIT for key: {cache_key}")
         return _make_response(content, category, formate)
     except Exception as e:
-        logging.exception("Failed to read the category feeds: %s / %s", category, str(e))
+        logging.error("Error generating category rss: %s / %s", category, str(e))
         return HttpResponse(status=500, content="Internal Server Error")
 

@@ -107,7 +107,7 @@ def handle_single_feed_fetch(feed: Feed):
         feed.fetch_status = True
         feed.log = f"{timezone.now()} Fetch Completed <br>"
     except Exception as e:
-        logging.exception("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
+        logging.error("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
         feed.fetch_status = False
         feed.log = f"{timezone.now()} {str(e)}<br>"
     finally:
@@ -144,7 +144,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             feed.translation_status = True
             feed.log += f"{timezone.now()} Translate Completed <br>"
         except Exception as e:
-            logging.exception(
+            logging.error(
                 "Task handle_feeds_translation (%s)%s: %s",
                 feed.target_language,
                 feed.feed_url,
@@ -168,7 +168,7 @@ def handle_feeds_summary(feeds: list):
             feed.translation_status = True
             feed.log += f"{timezone.now()} Summary Completed <br>"
         except Exception as e:
-            logging.exception(
+            logging.error(
                 "Task handle_feeds_summary (%s)%s: %s",
                 feed.target_language,
                 feed.feed_url,
@@ -229,7 +229,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                 entries_to_save.append(entry)
 
         except Exception as e:
-            logging.exception(f"Error processing entry {entry.link}: {str(e)}")
+            logging.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             continue
 
@@ -383,7 +383,7 @@ def summarize_feed(
             if entry_needs_save:
                 entries_to_save.append(entry)
     except Exception as e:
-        logging.exception(f"Error summarizing feed {feed.feed_url}: {str(e)}")
+        logging.error(f"Error summarizing feed {feed.feed_url}: {str(e)}")
         feed.log += f"{timezone.now()} Error summarizing feed {feed.feed_url}: {str(e)}<br>"
     finally:
         if entries_to_save:
@@ -405,7 +405,7 @@ def _auto_retry(
         try:
             return func(**kwargs)
         except Exception as e:
-            logging.exception(f"Translation attempt {attempt+1} failed: {str(e)}")
+            logging.error(f"Translation attempt {attempt+1} failed: {str(e)}")
         time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
     logging.error(f"All {max_retries} attempts failed for translation")
     return {}
@@ -417,5 +417,5 @@ def _fetch_article_content(link: str) -> str:
         article = newspaper.article(link)
         return mistune.html(article.text)
     except Exception as e:
-        logging.exception(f"Article fetch failed: {str(e)}")
+        logging.error(f"Article fetch failed: {str(e)}")
     return ""

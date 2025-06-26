@@ -36,6 +36,7 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
                 "error": None,
             }
     except Exception as e:
+        # logging.warning(f"Failed to fetch feed {url}: {str(e)}")
         return {
             "feed": None,
             "update": False,
@@ -153,7 +154,6 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         return _finalize_atom_feed(fg)
     
     except Exception as e:
-
         logging.exception(f"generate_atom_feed error {feed.feed_url}: {str(e)}")
         return None
 
