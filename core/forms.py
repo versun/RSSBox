@@ -32,7 +32,7 @@ class FeedForm(forms.ModelForm):
         label=_("Update Frequency"),
         initial=60,
     )
-    translate_options = forms.MultipleChoiceField(
+    translation_options = forms.MultipleChoiceField(
             choices=(
                 ("title", _("Title")),
                 ("content", _("Content")),
@@ -53,7 +53,7 @@ class FeedForm(forms.ModelForm):
             "slug",
             "max_posts",
             "simple_update_frequency", # 自定义字段
-            "translate_options",
+            "translation_options",
             "target_language",
             "translator_option",  # 自定义字段
             "summary_engine_option",  # 自定义字段
@@ -94,12 +94,16 @@ class FeedForm(forms.ModelForm):
             self.fields["summary_engine_option"].initial = f"{instance.summarizer_content_type.id}:{instance.summarizer_object_id}"
         if instance.update_frequency:
             self.fields["simple_update_frequency"].initial = instance.update_frequency
+        
+        # 修改后的翻译选项初始化逻辑
+        initial_options = []
         if instance.translate_title:
-            self.fields["translate_options"].initial.append("title")
+            initial_options.append("title")
         if instance.translate_content:
-            self.fields["translate_options"].initial.append("content")
+            initial_options.append("content")
         if instance.summary:
-            self.fields["translate_options"].initial.append("summary")
+            initial_options.append("summary")
+        self.fields["translation_options"].initial = initial_options
 
     def _process_translator(self, instance):
         if self.cleaned_data["translator_option"]:
@@ -125,21 +129,14 @@ class FeedForm(forms.ModelForm):
         else:
             instance.update_frequency = 60
 
-    def _process_translate_options(self, instance):
-        if self.cleaned_data["translate_options"]:
-            translate_options = self.cleaned_data["translate_options"]
-            if "title" in translate_options:
-                instance.translate_title = True
-            else:
-                instance.translate_title = False
-            if "content" in translate_options:
-                instance.translate_content = True
-            else:
-                instance.translate_content = False
-            if "summary" in translate_options:
-                instance.summary = True
-            else:
-                instance.summary = False
+    def _process_translation_options(self, instance):
+        # 确保获取翻译选项数据，默认为空列表
+        translation_options = self.cleaned_data.get("translation_options", [])
+        
+        # 明确设置每个选项的状态：勾选则为True，否则为False
+        instance.translate_title = "title" in translation_options
+        instance.translate_content = "content" in translation_options
+        instance.summary = "summary" in translation_options
 
     # 重写save方法，以处理自定义字段的数据
     @transaction.atomic
@@ -149,7 +146,7 @@ class FeedForm(forms.ModelForm):
         self._process_translator(instance)
         self._process_summary_engine(instance)
         self._process_update_frequency(instance)
-        self._process_translate_options(instance)
+        self._process_translation_options(instance)
 
         if commit:
             instance.save()
