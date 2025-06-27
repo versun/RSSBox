@@ -20,15 +20,73 @@ def convert_struct_time_to_datetime(time_str):
         return None
     return timezone.datetime.fromtimestamp(time.mktime(time_str), tz=timezone.get_default_timezone())
 
+def manual_fetch_feed(url: str, etag: str = "") -> Dict:
+    import httpx
+    from fake_useragent import UserAgent
+
+    update = False
+    feed = {}
+    error = None
+    response = None
+    ua = UserAgent()
+    headers = {
+        "If-None-Match": etag,
+        #'If-Modified-Since': modified,
+        "User-Agent": ua.random.strip(),
+        "Accept":
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+
+    client = httpx.Client()
+
+    try:
+        response = client.get(url,
+                              headers=headers,
+                              timeout=30,
+                              follow_redirects=True)
+
+        if response.status_code == 200:
+            feed = feedparser.parse(response.text)
+            update = True
+        elif response.status_code == 304:
+            update = False
+        else:
+            response.raise_for_status()
+
+    except httpx.HTTPStatusError as exc:
+        error = f"HTTP status error while requesting {url}: {exc.response.status_code} {exc.response.reason_phrase}"
+    except httpx.TimeoutException:
+        error = f"Timeout while requesting {url}"
+    except Exception as e:
+        error = f"Error while requesting {url}: {str(e)}"
+
+    if feed:
+        if feed.bozo and not feed.entries:
+            logging.warning("Get feed %s %s", url, feed.get("bozo_exception"))
+            error = feed.get("bozo_exception")
+
+    return {
+        "feed": feed,
+        "update": update,
+        "error": error,
+    }
+
 def fetch_feed(url: str, etag: str = "") -> Dict:
     try:
         feed = feedparser.parse(url)
         if feed.bozo and not feed.entries:
-            return {
-                "feed": feed,
-                "update": False,
-                "error": feed.get("bozo_exception"),
-            }
+            logging.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
+            results = manual_fetch_feed(url, etag)
+            return results
         else:
             return {
                 "feed": feed,

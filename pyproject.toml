@@ -27,6 +27,8 @@ dependencies = [
     "whitenoise>=6.9.0",
     "django-debug-toolbar>=5.2.0",
     "bx_django_utils>=89",
+    "fake-useragent>=2.2.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv]
