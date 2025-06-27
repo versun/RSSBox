@@ -28,13 +28,13 @@ with open(BASE_DIR / "pyproject.toml", "rb") as f:
     pyproject = tomllib.load(f)
     VERSION = pyproject["project"]["version"]
 
-X_FRAME_OPTIONS = os.environ.get('X_FRAME_OPTIONS', 'DENY')
+X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY",get_random_secret_key())
+SECRET_KEY = os.environ.get("SECRET_KEY", get_random_secret_key())
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG") == "1"
 

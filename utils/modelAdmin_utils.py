@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 # if settings.DEBUG:
 #    from huey_monitor.models import TaskModel
 
+
 # def get_all_subclasses(cls):
 #     subclasses = set()
 #     for subclass in cls.__subclasses__():
@@ -51,6 +52,7 @@ def get_translator_and_summary_choices():
         ).values_list("id", "name")
     ]
     return translator_choices, summary_engine_choices
+
 
 def status_icon(status):
     match status:

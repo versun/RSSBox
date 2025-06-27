@@ -43,6 +43,7 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
         etag = None
     return etag
 
+
 def _make_response(atom_feed, filename, format="xml"):
     if format == "json":
         # 如果需要返回 JSON 格式
@@ -53,78 +54,89 @@ def _make_response(atom_feed, filename, format="xml"):
         def stream_content():
             chunk_size = 4096  # 每次发送4KB
             for i in range(0, len(atom_feed), chunk_size):
-                yield atom_feed[i:i+chunk_size]
-        
+                yield atom_feed[i : i + chunk_size]
+
         response = StreamingHttpResponse(
             stream_content(),  # 使用生成器
-            content_type="application/xml; charset=utf-8"
+            content_type="application/xml; charset=utf-8",
         )
         response["Content-Disposition"] = f"inline; filename={filename}.xml"
     return response
 
+
 def import_opml(request):
-    if request.method == 'POST':
-        opml_file = request.FILES.get('opml_file')
+    if request.method == "POST":
+        opml_file = request.FILES.get("opml_file")
         if opml_file and isinstance(opml_file, InMemoryUploadedFile):
             try:
                 # 直接读取字节数据（lxml 支持二进制解析）
                 opml_content = opml_file.read()
-                
+
                 # 使用 lxml 解析 OPML
                 root = etree.fromstring(opml_content)
-                body = root.find('body')
-                
+                body = root.find("body")
+
                 if body is None:
                     messages.error(request, _("Invalid OPML: Missing body element"))
-                    return redirect('admin:core_feed_changelist')
-                
+                    return redirect("admin:core_feed_changelist")
+
                 # 递归处理所有 outline 节点
-                def process_outlines(outlines, category:str=None):
+                def process_outlines(outlines, category: str = None):
                     for outline in outlines:
                         # 检查是否为 feed（有 xmlUrl 属性）
-                        if 'xmlUrl' in outline.attrib:
+                        if "xmlUrl" in outline.attrib:
                             Feed.objects.get_or_create(
-                                name=outline.get('title') or outline.get('text'),
-                                feed_url=outline.get('xmlUrl'),
+                                name=outline.get("title") or outline.get("text"),
+                                feed_url=outline.get("xmlUrl"),
                                 category=category,
                             )
                         # 处理嵌套结构（新类别）
-                        elif outline.find('outline') is not None:
-                            new_category = outline.get('text') or outline.get('title')
-                            process_outlines(outline.findall('outline'), new_category)
-                
+                        elif outline.find("outline") is not None:
+                            new_category = outline.get("text") or outline.get("title")
+                            process_outlines(outline.findall("outline"), new_category)
+
                 # 从 body 开始处理顶级 outline
-                process_outlines(body.findall('outline'))
-                
+                process_outlines(body.findall("outline"))
+
                 messages.success(request, _("OPML file imported successfully."))
             except etree.XMLSyntaxError as e:
                 messages.error(request, _("XML syntax error: {}").format(str(e)))
             except Exception as e:
-                messages.error(request, _("Error importing OPML file: {}").format(str(e)))
+                messages.error(
+                    request, _("Error importing OPML file: {}").format(str(e))
+                )
         else:
             messages.error(request, _("Please upload a valid OPML file."))
-    
-    return redirect('admin:core_feed_changelist')
+
+    return redirect("admin:core_feed_changelist")
+
 
 @condition(etag_func=_get_etag, last_modified_func=_get_modified)
 def rss(request, feed_slug, feed_type="t", format="xml"):
     # Sanitize the feed_slug to prevent path traversal attacks
     feed_slug = smart_str(feed_slug)
     try:
-        cache_key = f'cache_rss_{feed_slug}_{feed_type}_{format}'
+        cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
         content = cache.get(cache_key)
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_rss(feed_slug, feed_type, format)
-            return HttpResponse(status=500, content="Feed not found, Maybe it's still in progress") if not content else None
+            return (
+                HttpResponse(
+                    status=500, content="Feed not found, Maybe it's still in progress"
+                )
+                if not content
+                else None
+            )
 
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
-        
+
         return _make_response(content, feed_slug, format)
     except Exception as e:
         logging.error(f"Error generating rss {feed_slug}: {str(e)}")
         return HttpResponse(status=500, content="Internal Server Error")
+
 
 def category(request, category: str, feed_type="t", format="xml"):
     category = smart_str(category)
@@ -134,16 +146,22 @@ def category(request, category: str, feed_type="t", format="xml"):
         return HttpResponse(status=404)
 
     try:
-        cache_key = f'cache_category_{category}_{feed_type}_{format}'
+        cache_key = f"cache_category_{category}_{feed_type}_{format}"
         content = cache.get(cache_key)
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_category(category, feed_type, format)
-            return HttpResponse(status=500, content="Category not found, Maybe it's still in progress") if not content else None
+            return (
+                HttpResponse(
+                    status=500,
+                    content="Category not found, Maybe it's still in progress",
+                )
+                if not content
+                else None
+            )
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
         return _make_response(content, category, format)
     except Exception as e:
         logging.error("Error generating category rss: %s / %s", category, str(e))
         return HttpResponse(status=500, content="Internal Server Error")
-

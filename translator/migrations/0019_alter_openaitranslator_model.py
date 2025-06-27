@@ -4,15 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0018_alter_claudetranslator_model'),
+        ("translator", "0018_alter_claudetranslator_model"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='openaitranslator',
-            name='model',
-            field=models.CharField(choices=[('gpt-3.5-turbo', 'gpt-3.5-turbo'), ('gpt-4-turbo-preview', 'gpt-4-turbo-preview')], default='gpt-3.5-turbo', max_length=100),
+            model_name="openaitranslator",
+            name="model",
+            field=models.CharField(
+                choices=[
+                    ("gpt-3.5-turbo", "gpt-3.5-turbo"),
+                    ("gpt-4-turbo-preview", "gpt-4-turbo-preview"),
+                ],
+                default="gpt-3.5-turbo",
+                max_length=100,
+            ),
         ),
     ]

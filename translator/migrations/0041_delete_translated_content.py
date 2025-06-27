@@ -4,13 +4,12 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0040_alter_kagitranslator_summarization_engine_and_more'),
+        ("translator", "0040_alter_kagitranslator_summarization_engine_and_more"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='Translated_Content',
+            name="Translated_Content",
         ),
     ]

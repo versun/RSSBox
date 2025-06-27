@@ -8,7 +8,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("contenttypes", "0002_remove_content_type_name"),
         ("core", "0016_alter_t_feed_translate_title"),
@@ -73,27 +72,39 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
-                ("name", models.CharField(
-                blank=True, max_length=255, null=True, verbose_name="Name"
-                )),
-                ("author", models.CharField(
-                blank=True, max_length=255, null=True, verbose_name="Author"
-                )),
-                ("language", models.CharField(
-                blank=True, max_length=255, null=True, verbose_name="Language"
-                )),
-                ("link", models.URLField(
-                blank=True, null=True, verbose_name="Link"
-                )),
-                ("pubdate", models.DateTimeField(
-                blank=True, null=True, verbose_name="Pubdate"
-                )),
-                ("subtitle", models.CharField(
-                blank=True, max_length=255, null=True, verbose_name="Subtitle"
-                )),
-                ("updated", models.DateTimeField(
-                blank=True, null=True, verbose_name="Updated"
-                )),
+                (
+                    "name",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Name"
+                    ),
+                ),
+                (
+                    "author",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Author"
+                    ),
+                ),
+                (
+                    "language",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Language"
+                    ),
+                ),
+                ("link", models.URLField(blank=True, null=True, verbose_name="Link")),
+                (
+                    "pubdate",
+                    models.DateTimeField(blank=True, null=True, verbose_name="Pubdate"),
+                ),
+                (
+                    "subtitle",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Subtitle"
+                    ),
+                ),
+                (
+                    "updated",
+                    models.DateTimeField(blank=True, null=True, verbose_name="Updated"),
+                ),
                 (
                     "slug",
                     models.SlugField(
@@ -117,7 +128,16 @@ class Migration(migrations.Migration):
                         verbose_name="Translation Display",
                     ),
                 ),
-                ("etag", models.CharField(default="", editable=False, max_length=255, null=True, blank=True)),
+                (
+                    "etag",
+                    models.CharField(
+                        default="",
+                        editable=False,
+                        max_length=255,
+                        null=True,
+                        blank=True,
+                    ),
+                ),
                 (
                     "fetch_status",
                     models.BooleanField(
@@ -154,8 +174,14 @@ class Migration(migrations.Migration):
                         verbose_name="Fetch Original Article",
                     ),
                 ),
-                ("translator_object_id", models.PositiveIntegerField(null=True, blank=True, default=None)),
-                ("summarizer_object_id", models.PositiveIntegerField(null=True, blank=True, default=None)),
+                (
+                    "translator_object_id",
+                    models.PositiveIntegerField(null=True, blank=True, default=None),
+                ),
+                (
+                    "summarizer_object_id",
+                    models.PositiveIntegerField(null=True, blank=True, default=None),
+                ),
                 (
                     "summary_detail",
                     models.FloatField(

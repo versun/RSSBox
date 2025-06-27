@@ -20,34 +20,39 @@ from .management.commands.update_feeds import update_multiple_feeds
 def clean_translated_content(modeladmin, request, queryset):
     pass
 
+
 @admin.display(description=_("Export selected original feeds as OPML"))
 def export_original_feed_as_opml(modeladmin, request, queryset):
     try:
         # 创建根元素 <opml> 并设置版本
         root = etree.Element("opml", version="2.0")
-        
+
         # 创建头部 <head>
         head = etree.SubElement(root, "head")
         etree.SubElement(head, "title").text = "Original Feeds | RSS Translator"
-        etree.SubElement(head, "dateCreated").text = datetime.now().strftime("%a, %d %b %Y %H:%M:%S %z")
+        etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
+            "%a, %d %b %Y %H:%M:%S %z"
+        )
         etree.SubElement(head, "ownerName").text = "RSS Translator"
-        
+
         # 创建主体 <body>
         body = etree.SubElement(root, "body")
-        
+
         # 按分类组织订阅源
         categories = {}
         for item in queryset:
             category_name = item.category.name if item.category else "default"
-            
+
             # 获取或创建分类大纲
             if category_name not in categories:
-                category_outline = etree.Element("outline", text=category_name, title=category_name)
+                category_outline = etree.Element(
+                    "outline", text=category_name, title=category_name
+                )
                 categories[category_name] = category_outline
                 body.append(category_outline)
             else:
                 category_outline = categories[category_name]
-            
+
             # 添加订阅源条目
             etree.SubElement(
                 category_outline,
@@ -57,57 +62,61 @@ def export_original_feed_as_opml(modeladmin, request, queryset):
                     "text": item.name,
                     "type": "rss",
                     "xmlUrl": item.feed_url,
-                    "htmlUrl": item.feed_url
-                }
+                    "htmlUrl": item.feed_url,
+                },
             )
-        
+
         # 生成 XML 内容
         xml_content = etree.tostring(
-            root,
-            encoding="utf-8",
-            xml_declaration=True,
-            pretty_print=True
+            root, encoding="utf-8", xml_declaration=True, pretty_print=True
         )
-        
+
         # 创建 HTTP 响应
         response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = 'attachment; filename="original_feeds_from_rsstranslator.opml"'
+        response["Content-Disposition"] = (
+            'attachment; filename="original_feeds_from_rsstranslator.opml"'
+        )
         return response
-        
+
     except Exception as e:
         logging.error("export_original_feed_as_opml: %s", str(e))
         return HttpResponse("An error occurred", status=500)
+
 
 @admin.display(description=_("Export selected translated feeds as OPML"))
 def export_translated_feed_as_opml(modeladmin, request, queryset):
     try:
         # 创建根元素 <opml> 并设置版本
         root = etree.Element("opml", version="2.0")
-        
+
         # 创建头部 <head>
         head = etree.SubElement(root, "head")
         etree.SubElement(head, "title").text = "Translated Feeds | RSS Translator"
-        etree.SubElement(head, "dateCreated").text = datetime.now().strftime("%a, %d %b %Y %H:%M:%S %z")
+        etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
+            "%a, %d %b %Y %H:%M:%S %z"
+        )
         etree.SubElement(head, "ownerName").text = "RSS Translator"
-        
+
         # 创建主体 <body>
         body = etree.SubElement(root, "body")
-        
+
         # 按分类组织订阅源
         categories = {}
         for item in queryset:
             category_name = item.category.name if item.category else "default"
-            
+
             # 获取或创建分类大纲
             if category_name not in categories:
-                category_outline = etree.Element("outline", text=category_name, title=category_name)
+                category_outline = etree.Element(
+                    "outline", text=category_name, title=category_name
+                )
                 categories[category_name] = category_outline
                 body.append(category_outline)
             else:
                 category_outline = categories[category_name]
-            
+
             translated_feed_url = f"{settings.SITE_URL}/feed/rss/{item.slug}"
-            
+
             # 添加订阅源条目
             etree.SubElement(
                 category_outline,
@@ -117,26 +126,26 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
                     "text": item.name,
                     "type": "rss",
                     "xmlUrl": translated_feed_url,
-                    "htmlUrl": translated_feed_url
-                }
+                    "htmlUrl": translated_feed_url,
+                },
             )
-        
+
         # 生成 XML 内容
         xml_content = etree.tostring(
-            root,
-            encoding="utf-8",
-            xml_declaration=True,
-            pretty_print=True
+            root, encoding="utf-8", xml_declaration=True, pretty_print=True
         )
-        
+
         # 创建 HTTP 响应
         response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = 'attachment; filename="translated_feeds_from_rsstranslator.opml"'
+        response["Content-Disposition"] = (
+            'attachment; filename="translated_feeds_from_rsstranslator.opml"'
+        )
         return response
-        
+
     except Exception as e:
         logging.error("export_original_feed_as_opml: %s", str(e))
         return HttpResponse("An error occurred", status=500)
+
 
 @admin.display(description=_("Force update"))
 def feed_force_update(modeladmin, request, queryset):
@@ -147,13 +156,10 @@ def feed_force_update(modeladmin, request, queryset):
             instance.fetch_status = None
             instance.translation_status = None
             instance.save()
-    
+
     feeds = queryset
-    task_manager.submit_task( 
-            f"Force Update Feeds",
-            update_multiple_feeds,
-            feeds
-        )
+    task_manager.submit_task(f"Force Update Feeds", update_multiple_feeds, feeds)
+
 
 @admin.display(description=_("Batch modification"))
 def feed_batch_modify(modeladmin, request, queryset):
@@ -230,7 +236,9 @@ def feed_batch_modify(modeladmin, request, queryset):
                         content_type_summary_id, object_id_summary = map(
                             int, value.split(":")
                         )
-                        queryset.update(summarizer_content_type_id=content_type_summary_id)
+                        queryset.update(
+                            summarizer_content_type_id=content_type_summary_id
+                        )
                         queryset.update(summarizer_object_id=object_id_summary)
                     case "category":
                         tag_model = Feed.category.tag_model

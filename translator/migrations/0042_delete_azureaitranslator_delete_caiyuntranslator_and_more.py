@@ -4,46 +4,45 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0041_delete_translated_content'),
+        ("translator", "0041_delete_translated_content"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='AzureAITranslator',
+            name="AzureAITranslator",
         ),
         migrations.DeleteModel(
-            name='CaiYunTranslator',
+            name="CaiYunTranslator",
         ),
         migrations.DeleteModel(
-            name='ClaudeTranslator',
+            name="ClaudeTranslator",
         ),
         migrations.DeleteModel(
-            name='DeepLWebTranslator',
+            name="DeepLWebTranslator",
         ),
         migrations.DeleteModel(
-            name='DeepLXTranslator',
+            name="DeepLXTranslator",
         ),
         migrations.DeleteModel(
-            name='DoubaoTranslator',
+            name="DoubaoTranslator",
         ),
         migrations.DeleteModel(
-            name='FreeTranslators',
+            name="FreeTranslators",
         ),
         migrations.DeleteModel(
-            name='GeminiTranslator',
+            name="GeminiTranslator",
         ),
         migrations.DeleteModel(
-            name='GoogleTranslateWebTranslator',
+            name="GoogleTranslateWebTranslator",
         ),
         migrations.DeleteModel(
-            name='KagiTranslator',
+            name="KagiTranslator",
         ),
         migrations.DeleteModel(
-            name='MicrosoftTranslator',
+            name="MicrosoftTranslator",
         ),
         migrations.DeleteModel(
-            name='OpenlTranslator',
+            name="OpenlTranslator",
         ),
     ]

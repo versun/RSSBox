@@ -74,7 +74,6 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
     ]
 
 
-
 class DeepLTranslatorAdmin(BaseTranslatorAdmin):
     fields = ["name", "api_key", "server_url", "proxy", "max_characters"]
     list_display = [
@@ -85,6 +84,7 @@ class DeepLTranslatorAdmin(BaseTranslatorAdmin):
         "proxy",
         "max_characters",
     ]
+
 
 class TestTranslatorAdmin(BaseTranslatorAdmin):
     fields = ["name", "translated_text", "max_characters", "interval"]

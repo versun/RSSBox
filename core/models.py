@@ -10,9 +10,14 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from tagulous.models import SingleTagField
 
+
 class Feed(models.Model):
-    name = models.CharField( max_length=255, blank=True, null=True, verbose_name=_("Name"))
-    subtitle = models.CharField( max_length=255, blank=True, null=True, verbose_name=_("Subtitle"))
+    name = models.CharField(
+        max_length=255, blank=True, null=True, verbose_name=_("Name")
+    )
+    subtitle = models.CharField(
+        max_length=255, blank=True, null=True, verbose_name=_("Subtitle")
+    )
     slug = models.SlugField(
         _("URL Slug"),
         max_length=255,
@@ -47,9 +52,7 @@ class Feed(models.Model):
         blank=True,
         null=True,
     )
-    feed_url = models.URLField(
-        _("Feed URL")
-    )
+    feed_url = models.URLField(_("Feed URL"))
     fetch_status = models.BooleanField(
         _("Fetch Status"),
         null=True,
@@ -89,7 +92,10 @@ class Feed(models.Model):
     )  # 0: Only Translation, 1: Translation || Original, 2: Original || Translation
 
     target_language = models.CharField(
-        _("Language"), choices=settings.TRANSLATION_LANGUAGES, max_length=50, default=settings.DEFAULT_TARGET_LANGUAGE
+        _("Language"),
+        choices=settings.TRANSLATION_LANGUAGES,
+        max_length=50,
+        default=settings.DEFAULT_TARGET_LANGUAGE,
     )
     translate_title = models.BooleanField(_("Translate Title"), default=False)
     translate_content = models.BooleanField(_("Translate Content"), default=False)
@@ -102,16 +108,29 @@ class Feed(models.Model):
     )
 
     translator_content_type = models.ForeignKey(
-        ContentType, on_delete=models.SET_NULL, null=True, blank=True, default=None, related_name="translator"
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="translator",
     )
-    translator_object_id = models.PositiveIntegerField(null=True, blank=True, default=None)
+    translator_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
     translator = GenericForeignKey("translator_content_type", "translator_object_id")
 
-
     summarizer_content_type = models.ForeignKey(
-        ContentType, on_delete=models.SET_NULL, null=True, blank=True, default=None, related_name="summarizer"
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="summarizer",
     )
-    summarizer_object_id = models.PositiveIntegerField(null=True, blank=True, default=None)
+    summarizer_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
     summarizer = GenericForeignKey("summarizer_content_type", "summarizer_object_id")
 
     summary_detail = models.FloatField(
@@ -146,7 +165,7 @@ class Feed(models.Model):
         editable=False,
         help_text=_("Last time the feed was translated"),
     )
-    
+
     last_fetch = models.DateTimeField(
         _("Last Fetch(UTC)"),
         default=None,
@@ -162,7 +181,7 @@ class Feed(models.Model):
         null=True,
         blank=True,
     )
-    
+
     log = models.TextField(
         _("Log"),
         default="",
@@ -170,7 +189,6 @@ class Feed(models.Model):
         null=True,
         help_text=_("Log for the feed, useful for debugging"),
     )
-
 
     def __str__(self):
         return self.feed_url
@@ -187,7 +205,8 @@ class Feed(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = uuid.uuid5(
-                uuid.NAMESPACE_URL, f"{self.feed_url}:{self.target_language}:{settings.SECRET_KEY}"
+                uuid.NAMESPACE_URL,
+                f"{self.feed_url}:{self.target_language}:{settings.SECRET_KEY}",
             ).hex
 
         thresholds = [5, 15, 30, 60, 1440, 10080]
@@ -195,10 +214,10 @@ class Feed(models.Model):
             if self.update_frequency <= threshold:
                 self.update_frequency = threshold
                 break
-        
-        if len(self.log.encode('utf-8')) > 2048:
+
+        if len(self.log.encode("utf-8")) > 2048:
             self.log = self.log[-2048:]
-        
+
         if not self.translator_content_type_id:
             self.translator_content_type_id = None
             self.translator_object_id = None
@@ -211,6 +230,7 @@ class Feed(models.Model):
     def get_translation_display(self):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
+
 class Entry(models.Model):
     feed = models.ForeignKey(Feed, on_delete=models.CASCADE, related_name="entries")
     link = models.URLField(null=False)
@@ -219,16 +239,16 @@ class Entry(models.Model):
     updated = models.DateTimeField(null=True, blank=True)
     guid = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     enclosures_xml = models.TextField(null=True, blank=True)
-    
+
     original_title = models.CharField(max_length=255, null=True, blank=True)
     translated_title = models.CharField(max_length=255, null=True, blank=True)
     original_content = models.TextField(null=True, blank=True)
     translated_content = models.TextField(null=True, blank=True)
     original_summary = models.TextField(null=True, blank=True)
     ai_summary = models.TextField(null=True, blank=True)
-    
+
     def __str__(self):
-        return self.original_title  
+        return self.original_title
 
     class Meta:
         verbose_name = _("Entry")
@@ -238,4 +258,3 @@ class Entry(models.Model):
         #         fields=["feed", "guid"], name="unique_entry_guid"
         #     )
         # ]
-

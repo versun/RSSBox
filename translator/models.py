@@ -7,13 +7,14 @@ from encrypted_model_fields.fields import EncryptedCharField
 from time import sleep
 
 
-
 class TranslatorEngine(models.Model):
     name = models.CharField(_("Name"), max_length=100, unique=True)
     valid = models.BooleanField(_("Valid"), null=True)
     is_ai = models.BooleanField(default=False, editable=False)
 
-    def translate(self, text: str, target_language: str, source_language:str="auto", **kwargs) -> dict:
+    def translate(
+        self, text: str, target_language: str, source_language: str = "auto", **kwargs
+    ) -> dict:
         raise NotImplementedError(
             "subclasses of TranslatorEngine must provide a translate() method"
         )
@@ -42,6 +43,7 @@ class TranslatorEngine(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class OpenAITranslator(TranslatorEngine):
     # https://platform.openai.com/docs/api-reference/chat
@@ -104,7 +106,7 @@ class OpenAITranslator(TranslatorEngine):
         system_prompt: str = None,
         user_prompt: str = None,
         text_type: str = "title",
-        **kwargs
+        **kwargs,
     ) -> dict:
         logging.info(">>> Translate [%s]: %s", target_language, text)
         client = self._init()
@@ -123,7 +125,7 @@ class OpenAITranslator(TranslatorEngine):
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers={
                     "HTTP-Referer": "https://www.rsstranslator.com",
-                    "X-Title": "RSS Translator"
+                    "X-Title": "RSS Translator",
                 },
                 model=self.model,
                 messages=[
@@ -136,10 +138,14 @@ class OpenAITranslator(TranslatorEngine):
                 presence_penalty=self.presence_penalty,
                 max_tokens=self.max_tokens,
             )
-            #if res.choices[0].finish_reason.lower() == "stop" or res.choices[0].message.content:
+            # if res.choices[0].finish_reason.lower() == "stop" or res.choices[0].message.content:
             if res.choices and res.choices[0].message.content:
                 translated_text = res.choices[0].message.content
-                logging.info("OpenAITranslator->%s: %s", res.choices[0].finish_reason, translated_text)
+                logging.info(
+                    "OpenAITranslator->%s: %s",
+                    res.choices[0].finish_reason,
+                    translated_text,
+                )
             # else:
             #     translated_text = ''
             #     logging.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
@@ -152,7 +158,6 @@ class OpenAITranslator(TranslatorEngine):
     def summarize(self, text: str, target_language: str) -> dict:
         logging.info(">>> Summarize [%s]: %s", target_language, text)
         return self.translate(text, target_language, system_prompt=self.summary_prompt)
-
 
 
 class DeepLTranslator(TranslatorEngine):
@@ -224,7 +229,6 @@ class DeepLTranslator(TranslatorEngine):
         return {"text": translated_text, "characters": len(text)}
 
 
-
 class TestTranslator(TranslatorEngine):
     translated_text = models.TextField(default="@@Translated Text@@")
     max_characters = models.IntegerField(default=50000)
@@ -246,4 +250,3 @@ class TestTranslator(TranslatorEngine):
     def summarize(self, text: str, target_language: str) -> dict:
         logging.info(">>> Test Summarize [%s]: %s", target_language, text)
         return self.translate(text, target_language)
-

@@ -4,168 +4,199 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0024_alter_claudetranslator_model_and_more'),
+        ("translator", "0024_alter_claudetranslator_model_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='azureaitranslator',
-            name='deloyment_name',
+            model_name="azureaitranslator",
+            name="deloyment_name",
         ),
         migrations.RemoveField(
-            model_name='azureaitranslator',
-            name='endpoint',
+            model_name="azureaitranslator",
+            name="endpoint",
         ),
         migrations.RemoveField(
-            model_name='azureaitranslator',
-            name='prompt',
+            model_name="azureaitranslator",
+            name="prompt",
         ),
         migrations.RemoveField(
-            model_name='claudetranslator',
-            name='prompt',
+            model_name="claudetranslator",
+            name="prompt",
         ),
         migrations.RemoveField(
-            model_name='geminitranslator',
-            name='prompt',
+            model_name="geminitranslator",
+            name="prompt",
         ),
         migrations.RemoveField(
-            model_name='moonshotaitranslator',
-            name='prompt',
+            model_name="moonshotaitranslator",
+            name="prompt",
         ),
         migrations.RemoveField(
-            model_name='openaitranslator',
-            name='prompt',
+            model_name="openaitranslator",
+            name="prompt",
         ),
         migrations.AddField(
-            model_name='azureaitranslator',
-            name='base_url',
-            field=models.URLField(default='https://api.openai.com/v1', verbose_name='API URL'),
+            model_name="azureaitranslator",
+            name="base_url",
+            field=models.URLField(
+                default="https://api.openai.com/v1", verbose_name="API URL"
+            ),
         ),
         migrations.AddField(
-            model_name='azureaitranslator',
-            name='is_ai',
+            model_name="azureaitranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AddField(
-            model_name='azureaitranslator',
-            name='model',
-            field=models.CharField(default='Your Deployment Name', max_length=100, verbose_name='Deloyment Name'),
+            model_name="azureaitranslator",
+            name="model",
+            field=models.CharField(
+                default="Your Deployment Name",
+                max_length=100,
+                verbose_name="Deloyment Name",
+            ),
         ),
         migrations.AddField(
-            model_name='azureaitranslator',
-            name='translate_prompt',
-            field=models.TextField(default='Translate only the text into {target_language},only returns translations.'),
+            model_name="azureaitranslator",
+            name="translate_prompt",
+            field=models.TextField(
+                default="Translate only the text into {target_language},only returns translations."
+            ),
         ),
         migrations.AddField(
-            model_name='caiyuntranslator',
-            name='is_ai',
+            model_name="caiyuntranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='claudetranslator',
-            name='is_ai',
+            model_name="claudetranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AddField(
-            model_name='claudetranslator',
-            name='translate_prompt',
-            field=models.TextField(default='Translate only the text into {target_language},only returns translations.'),
+            model_name="claudetranslator",
+            name="translate_prompt",
+            field=models.TextField(
+                default="Translate only the text into {target_language},only returns translations."
+            ),
         ),
         migrations.AddField(
-            model_name='deepltranslator',
-            name='is_ai',
+            model_name="deepltranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='deeplwebtranslator',
-            name='is_ai',
+            model_name="deeplwebtranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='deeplxtranslator',
-            name='is_ai',
+            model_name="deeplxtranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='geminitranslator',
-            name='is_ai',
+            model_name="geminitranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AddField(
-            model_name='geminitranslator',
-            name='translate_prompt',
-            field=models.TextField(default='Translate only the text from the following into {target_language},only returns translations.'),
+            model_name="geminitranslator",
+            name="translate_prompt",
+            field=models.TextField(
+                default="Translate only the text from the following into {target_language},only returns translations."
+            ),
         ),
         migrations.AddField(
-            model_name='googletranslatewebtranslator',
-            name='is_ai',
+            model_name="googletranslatewebtranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='microsofttranslator',
-            name='is_ai',
+            model_name="microsofttranslator",
+            name="is_ai",
             field=models.BooleanField(default=False, editable=False),
         ),
         migrations.AddField(
-            model_name='moonshotaitranslator',
-            name='is_ai',
+            model_name="moonshotaitranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AddField(
-            model_name='moonshotaitranslator',
-            name='translate_prompt',
-            field=models.TextField(default='Translate only the text into {target_language},only returns translations.'),
+            model_name="moonshotaitranslator",
+            name="translate_prompt",
+            field=models.TextField(
+                default="Translate only the text into {target_language},only returns translations."
+            ),
         ),
         migrations.AddField(
-            model_name='openaitranslator',
-            name='is_ai',
+            model_name="openaitranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AddField(
-            model_name='openaitranslator',
-            name='translate_prompt',
-            field=models.TextField(default='Translate only the text into {target_language},only returns translations.'),
+            model_name="openaitranslator",
+            name="translate_prompt",
+            field=models.TextField(
+                default="Translate only the text into {target_language},only returns translations."
+            ),
         ),
         migrations.AddField(
-            model_name='testtranslator',
-            name='is_ai',
+            model_name="testtranslator",
+            name="is_ai",
             field=models.BooleanField(default=True, editable=False),
         ),
         migrations.AlterField(
-            model_name='azureaitranslator',
-            name='api_key',
-            field=models.URLField(default='https://example.openai.azure.com/', verbose_name='Endpoint'),
+            model_name="azureaitranslator",
+            name="api_key",
+            field=models.URLField(
+                default="https://example.openai.azure.com/", verbose_name="Endpoint"
+            ),
         ),
         migrations.AlterField(
-            model_name='azureaitranslator',
-            name='summary_prompt',
-            field=models.TextField(default='Summarize the following text in {target_language}.'),
+            model_name="azureaitranslator",
+            name="summary_prompt",
+            field=models.TextField(
+                default="Summarize the following text in {target_language}."
+            ),
         ),
         migrations.AlterField(
-            model_name='claudetranslator',
-            name='summary_prompt',
-            field=models.TextField(default='Summarize the following text in {target_language}.'),
+            model_name="claudetranslator",
+            name="summary_prompt",
+            field=models.TextField(
+                default="Summarize the following text in {target_language}."
+            ),
         ),
         migrations.AlterField(
-            model_name='geminitranslator',
-            name='model',
-            field=models.CharField(default='gemini-pro', help_text='e.g. gemini-pro, gemini-1.5-pro-latest', max_length=100),
+            model_name="geminitranslator",
+            name="model",
+            field=models.CharField(
+                default="gemini-pro",
+                help_text="e.g. gemini-pro, gemini-1.5-pro-latest",
+                max_length=100,
+            ),
         ),
         migrations.AlterField(
-            model_name='geminitranslator',
-            name='summary_prompt',
-            field=models.TextField(default='Summarize the following text in {target_language}.'),
+            model_name="geminitranslator",
+            name="summary_prompt",
+            field=models.TextField(
+                default="Summarize the following text in {target_language}."
+            ),
         ),
         migrations.AlterField(
-            model_name='moonshotaitranslator',
-            name='summary_prompt',
-            field=models.TextField(default='Summarize the following text in {target_language}.'),
+            model_name="moonshotaitranslator",
+            name="summary_prompt",
+            field=models.TextField(
+                default="Summarize the following text in {target_language}."
+            ),
         ),
         migrations.AlterField(
-            model_name='openaitranslator',
-            name='summary_prompt',
-            field=models.TextField(default='Summarize the following text in {target_language}.'),
+            model_name="openaitranslator",
+            name="summary_prompt",
+            field=models.TextField(
+                default="Summarize the following text in {target_language}."
+            ),
         ),
     ]

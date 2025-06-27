@@ -5,13 +5,13 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('core', '0003_alter_o_feed_options_alter_t_feed_options_and_more'),
+        ("core", "0003_alter_o_feed_options_alter_t_feed_options_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='o_feed',
-            name='max_posts',
-            field=models.IntegerField(default=20, verbose_name='Max Posts'),
+            model_name="o_feed",
+            name="max_posts",
+            field=models.IntegerField(default=20, verbose_name="Max Posts"),
         ),
     ]

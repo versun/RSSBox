@@ -5,23 +5,23 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0015_googletranslatewebtranslator_max_characters'),
+        ("translator", "0015_googletranslatewebtranslator_max_characters"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='deeplwebtranslator',
-            name='max_characters',
+            model_name="deeplwebtranslator",
+            name="max_characters",
             field=models.IntegerField(default=5000),
         ),
         migrations.AlterField(
-            model_name='deeplxtranslator',
-            name='max_characters',
+            model_name="deeplxtranslator",
+            name="max_characters",
             field=models.IntegerField(default=5000),
         ),
         migrations.AlterField(
-            model_name='googletranslatewebtranslator',
-            name='max_characters',
+            model_name="googletranslatewebtranslator",
+            name="max_characters",
             field=models.IntegerField(default=1000),
         ),
     ]

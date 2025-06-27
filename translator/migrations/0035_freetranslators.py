@@ -4,26 +4,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0034_rename_new_hash_translated_content_hash'),
+        ("translator", "0034_rename_new_hash_translated_content_hash"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FreeTranslators',
+            name="FreeTranslators",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True, verbose_name='Name')),
-                ('valid', models.BooleanField(null=True, verbose_name='Valid')),
-                ('is_ai', models.BooleanField(default=False, editable=False)),
-                ('translators', models.TextField(blank=True, default='', null=True)),
-                ('proxies', models.URLField(blank=True, default=None, help_text='e.g. http://127.0.0.1:7890, https://127.0.0.1:1080', null=True, verbose_name='Proxy(optional)')),
-                ('max_characters', models.IntegerField(default=5000)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(max_length=100, unique=True, verbose_name="Name"),
+                ),
+                ("valid", models.BooleanField(null=True, verbose_name="Valid")),
+                ("is_ai", models.BooleanField(default=False, editable=False)),
+                ("translators", models.TextField(blank=True, default="", null=True)),
+                (
+                    "proxies",
+                    models.URLField(
+                        blank=True,
+                        default=None,
+                        help_text="e.g. http://127.0.0.1:7890, https://127.0.0.1:1080",
+                        null=True,
+                        verbose_name="Proxy(optional)",
+                    ),
+                ),
+                ("max_characters", models.IntegerField(default=5000)),
             ],
             options={
-                'verbose_name': 'Free Translators',
-                'verbose_name_plural': 'Free Translators',
+                "verbose_name": "Free Translators",
+                "verbose_name_plural": "Free Translators",
             },
         ),
     ]

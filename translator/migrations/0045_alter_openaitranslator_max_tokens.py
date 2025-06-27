@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0044_delete_groqtranslator_delete_moonshotaitranslator_and_more'),
+        (
+            "translator",
+            "0044_delete_groqtranslator_delete_moonshotaitranslator_and_more",
+        ),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='openaitranslator',
-            name='max_tokens',
+            model_name="openaitranslator",
+            name="max_tokens",
             field=models.IntegerField(default=1000000),
         ),
     ]

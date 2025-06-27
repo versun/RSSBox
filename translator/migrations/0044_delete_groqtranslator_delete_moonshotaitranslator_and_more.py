@@ -4,22 +4,21 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0043_merge_openai_models'),
+        ("translator", "0043_merge_openai_models"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='GroqTranslator',
+            name="GroqTranslator",
         ),
         migrations.DeleteModel(
-            name='MoonshotAITranslator',
+            name="MoonshotAITranslator",
         ),
         migrations.DeleteModel(
-            name='OpenRouterAITranslator',
+            name="OpenRouterAITranslator",
         ),
         migrations.DeleteModel(
-            name='TogetherAITranslator',
+            name="TogetherAITranslator",
         ),
     ]

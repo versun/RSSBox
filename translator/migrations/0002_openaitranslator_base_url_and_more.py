@@ -6,35 +6,50 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0001_initial'),
+        ("translator", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='openaitranslator',
-            name='base_url',
-            field=models.URLField(default='https://api.openai.com/v1', verbose_name='API URL'),
+            model_name="openaitranslator",
+            name="base_url",
+            field=models.URLField(
+                default="https://api.openai.com/v1", verbose_name="API URL"
+            ),
         ),
         migrations.AlterField(
-            model_name='deepltranslator',
-            name='api_key',
-            field=encrypted_model_fields.fields.EncryptedCharField(verbose_name='API Key'),
+            model_name="deepltranslator",
+            name="api_key",
+            field=encrypted_model_fields.fields.EncryptedCharField(
+                verbose_name="API Key"
+            ),
         ),
         migrations.AlterField(
-            model_name='microsofttranslator',
-            name='api_key',
-            field=encrypted_model_fields.fields.EncryptedCharField(verbose_name='API Key'),
+            model_name="microsofttranslator",
+            name="api_key",
+            field=encrypted_model_fields.fields.EncryptedCharField(
+                verbose_name="API Key"
+            ),
         ),
         migrations.AlterField(
-            model_name='openaitranslator',
-            name='api_key',
-            field=encrypted_model_fields.fields.EncryptedCharField(verbose_name='API Key'),
+            model_name="openaitranslator",
+            name="api_key",
+            field=encrypted_model_fields.fields.EncryptedCharField(
+                verbose_name="API Key"
+            ),
         ),
         migrations.AlterField(
-            model_name='openaitranslator',
-            name='model',
+            model_name="openaitranslator",
+            name="model",
             field=models.CharField(
-                choices=[('gpt-4', 'gpt-4'), ('gpt-4-32k', 'gpt-4-32k'), ('gpt-3.5-turbo', 'gpt-3.5-turbo'),
-                         ('gpt-3.5-turbo-16k', 'gpt-3.5-turbo-16k')], default='gpt-3.5-turbo', max_length=100),
+                choices=[
+                    ("gpt-4", "gpt-4"),
+                    ("gpt-4-32k", "gpt-4-32k"),
+                    ("gpt-3.5-turbo", "gpt-3.5-turbo"),
+                    ("gpt-3.5-turbo-16k", "gpt-3.5-turbo-16k"),
+                ],
+                default="gpt-3.5-turbo",
+                max_length=100,
+            ),
         ),
     ]

@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0015_rename_tagulous_o_feed_tags_tagulous_o_feed_category_and_more'),
+        ("core", "0015_rename_tagulous_o_feed_tags_tagulous_o_feed_category_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='t_feed',
-            name='translate_title',
-            field=models.BooleanField(default=False, verbose_name='Translate Title'),
+            model_name="t_feed",
+            name="translate_title",
+            field=models.BooleanField(default=False, verbose_name="Translate Title"),
         ),
     ]

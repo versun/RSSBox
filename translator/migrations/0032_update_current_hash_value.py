@@ -4,15 +4,15 @@ from django.db import migrations
 
 
 def update_new_hash(apps, schema_editor):
-    MyModel = apps.get_model('translator', 'translated_content')
+    MyModel = apps.get_model("translator", "translated_content")
     for obj in MyModel.objects.all():
         new_hash = f"{obj.original_content}{obj.translated_language}"
         MyModel.objects.filter(hash=obj.hash).update(new_hash=new_hash)
 
-class Migration(migrations.Migration):
 
+class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0031_translated_content_new_hash'),
+        ("translator", "0031_translated_content_new_hash"),
     ]
 
     operations = [

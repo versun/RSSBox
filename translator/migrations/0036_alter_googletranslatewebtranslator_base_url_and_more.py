@@ -4,20 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0035_freetranslators'),
+        ("translator", "0035_freetranslators"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='googletranslatewebtranslator',
-            name='base_url',
-            field=models.URLField(blank=True, help_text='It is recommended to leave this blank in order to automatically select the best server', null=True, verbose_name='URL'),
+            model_name="googletranslatewebtranslator",
+            name="base_url",
+            field=models.URLField(
+                blank=True,
+                help_text="It is recommended to leave this blank in order to automatically select the best server",
+                null=True,
+                verbose_name="URL",
+            ),
         ),
         migrations.AlterField(
-            model_name='googletranslatewebtranslator',
-            name='interval',
-            field=models.IntegerField(default=1, verbose_name='Request Interval(s)'),
+            model_name="googletranslatewebtranslator",
+            name="interval",
+            field=models.IntegerField(default=1, verbose_name="Request Interval(s)"),
         ),
     ]

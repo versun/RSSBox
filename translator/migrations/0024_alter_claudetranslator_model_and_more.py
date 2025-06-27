@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("translator", "0023_azureaitranslator_summary_prompt_and_more"),
     ]

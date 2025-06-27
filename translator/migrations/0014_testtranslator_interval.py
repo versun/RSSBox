@@ -5,13 +5,13 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0013_deeplwebtranslator'),
+        ("translator", "0013_deeplwebtranslator"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='testtranslator',
-            name='interval',
-            field=models.IntegerField(default=3, verbose_name='Request Interval(s)'),
+            model_name="testtranslator",
+            name="interval",
+            field=models.IntegerField(default=3, verbose_name="Request Interval(s)"),
         ),
     ]

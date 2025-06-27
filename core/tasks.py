@@ -19,12 +19,11 @@ def handle_single_feed_fetch(feed: Feed):
         feed.fetch_status = None
         fetch_results = fetch_feed(url=feed.feed_url, etag=feed.etag)
 
-
         if fetch_results["error"]:
             raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
         elif not fetch_results["update"]:
             raise Exception("Feed is up to date, Skip")
-        
+
         latest_feed = fetch_results.get("feed")
         # Update feed meta
         feed.name = latest_feed.feed.get("title", "Empty")
@@ -32,54 +31,59 @@ def handle_single_feed_fetch(feed: Feed):
         feed.language = latest_feed.feed.get("language")
         feed.author = latest_feed.feed.get("author") or "Unknown"
         feed.link = latest_feed.feed.get("link") or feed.feed_url
-        feed.pubdate = convert_struct_time_to_datetime(latest_feed.feed.get("published_parsed"))
-        feed.updated = convert_struct_time_to_datetime(latest_feed.feed.get("updated_parsed"))
+        feed.pubdate = convert_struct_time_to_datetime(
+            latest_feed.feed.get("published_parsed")
+        )
+        feed.updated = convert_struct_time_to_datetime(
+            latest_feed.feed.get("updated_parsed")
+        )
         feed.last_fetch = timezone.now()
         feed.etag = latest_feed.get("etag")
 
         # Update entries
-        if getattr(latest_feed, 'entries', None):
+        if getattr(latest_feed, "entries", None):
             entries_to_create = []
-            #entries_to_update = []
+            # entries_to_update = []
             existing_entries = {
-                entry.guid: entry.id 
-                for entry in Entry.objects.filter(feed=feed).only('id', 'guid')
+                entry.guid: entry.id
+                for entry in Entry.objects.filter(feed=feed).only("id", "guid")
             }
 
-            for entry_data in latest_feed.entries[:feed.max_posts]:
-                
+            for entry_data in latest_feed.entries[: feed.max_posts]:
                 # 获取内容
                 content = ""
-                if 'content' in entry_data:
+                if "content" in entry_data:
                     content = entry_data.content[0].value if entry_data.content else ""
                 else:
-                    content = entry_data.get('summary')
-                
-                guid = entry_data.get('id') or entry_data.get('link')
-                link = entry_data.get('link',"")
-                author = entry_data.get('author', feed.author)
+                    content = entry_data.get("summary")
+
+                guid = entry_data.get("id") or entry_data.get("link")
+                link = entry_data.get("link", "")
+                author = entry_data.get("author", feed.author)
                 if not guid:
                     continue  # 跳过无效条目
 
                 # 判断是否需要创建新条目
                 if guid not in existing_entries:
                     entry_values = {
-                    'link': link,
-                    'author': author,
-                    'pubdate': convert_struct_time_to_datetime(entry_data.get('published_parsed')),
-                    'updated': convert_struct_time_to_datetime(entry_data.get('updated_parsed')),
-                    'original_title': entry_data.get('title', 'No title'),
-                    'original_content': content,
-                    'original_summary': entry_data.get('summary'),
-                    'enclosures_xml': entry_data.get('enclosures_xml'),
+                        "link": link,
+                        "author": author,
+                        "pubdate": convert_struct_time_to_datetime(
+                            entry_data.get("published_parsed")
+                        ),
+                        "updated": convert_struct_time_to_datetime(
+                            entry_data.get("updated_parsed")
+                        ),
+                        "original_title": entry_data.get("title", "No title"),
+                        "original_content": content,
+                        "original_summary": entry_data.get("summary"),
+                        "enclosures_xml": entry_data.get("enclosures_xml"),
                     }
 
-                    entries_to_create.append(Entry(
-                        feed=feed,
-                        guid=guid,
-                        **entry_values
-                    ))
-                
+                    entries_to_create.append(
+                        Entry(feed=feed, guid=guid, **entry_values)
+                    )
+
                 # if guid in existing_entries:
                 #     # 更新操作
                 #     entry = Entry(
@@ -96,14 +100,14 @@ def handle_single_feed_fetch(feed: Feed):
                 #         guid=guid,
                 #         **entry_values
                 #     ))
-                
+
             # 批量执行数据库操作
             if entries_to_create:
                 Entry.objects.bulk_create(entries_to_create)
             # if entries_to_update:
             #     update_fields = list(entry_values.keys())
             #     Entry.objects.bulk_update(entries_to_update, fields=update_fields)
-            
+
         feed.fetch_status = True
         feed.log = f"{timezone.now()} Fetch Completed <br>"
     except Exception as e:
@@ -113,7 +117,6 @@ def handle_single_feed_fetch(feed: Feed):
     finally:
         feed.save()
 
-    
 
 def handle_feeds_fetch(feeds: list):
     """
@@ -125,7 +128,7 @@ def handle_feeds_fetch(feeds: list):
     # Feed.objects.bulk_update(
     #         feeds,
     #         fields=[
-    #             "fetch_status", "last_fetch", "etag", "log", "name", 
+    #             "fetch_status", "last_fetch", "etag", "log", "name",
     #             "subtitle", "language", "author", "link", "pubdate", "updated"
     #         ]
     #     )
@@ -136,9 +139,14 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
         try:
             if not feed.entries.exists():
                 continue
-            
+
             feed.translation_status = None
-            logging.info("Start translate %s of feed %s to %s", target_field,feed.feed_url, feed.target_language)
+            logging.info(
+                "Start translate %s of feed %s to %s",
+                target_field,
+                feed.feed_url,
+                feed.target_language,
+            )
 
             translate_feed(feed, target_field=target_field)
             feed.translation_status = True
@@ -152,17 +160,22 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)} <br>"
-        
-    Feed.objects.bulk_update(feeds,fields=["translation_status", "log", "total_tokens", "total_characters"])
+
+    Feed.objects.bulk_update(
+        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+    )
+
 
 def handle_feeds_summary(feeds: list):
     for feed in feeds:
         try:
             if not feed.entries.exists():
                 continue
-            
+
             feed.translation_status = None
-            logging.info("Start summary feed %s to %s", feed.feed_url, feed.target_language)
+            logging.info(
+                "Start summary feed %s to %s", feed.feed_url, feed.target_language
+            )
 
             summarize_feed(feed)
             feed.translation_status = True
@@ -176,8 +189,11 @@ def handle_feeds_summary(feeds: list):
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)}<br>"
-        
-    Feed.objects.bulk_update(feeds,fields=["translation_status", "log", "total_tokens", "total_characters"])
+
+    Feed.objects.bulk_update(
+        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+    )
+
 
 def translate_feed(feed: Feed, target_field: str = "title"):
     """Translate and summarize feed entries with enhanced error handling and caching"""
@@ -193,7 +209,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
             logging.debug(f"Processing entry {entry}")
             if not feed.translator:
                 raise Exception("Translate Engine Not Set")
-            
+
             entry_needs_save = False
 
             # Process title translation
@@ -203,26 +219,30 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     target_language=feed.target_language,
                     engine=feed.translator,
                 )
-                total_tokens += metrics['tokens']
-                total_characters += metrics['characters']
+                total_tokens += metrics["tokens"]
+                total_characters += metrics["characters"]
                 entry_needs_save = True
-            
+
             # Process content translation
-            if target_field == "content" and feed.translate_content and entry.original_content:
+            if (
+                target_field == "content"
+                and feed.translate_content
+                and entry.original_content
+            ):
                 if feed.fetch_article:
                     article_content = _fetch_article_content(entry.link)
                     if article_content:
                         entry.original_content = article_content
                         entry_needs_save = True
-                
+
                 metrics = _translate_content(
                     entry=entry,
                     target_language=feed.target_language,
                     engine=feed.translator,
                     quality=feed.quality,
                 )
-                total_tokens += metrics['tokens']
-                total_characters += metrics['characters']
+                total_tokens += metrics["tokens"]
+                total_characters += metrics["characters"]
                 entry_needs_save = True
 
             if entry_needs_save:
@@ -230,31 +250,32 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
         except Exception as e:
             logging.error(f"Error processing entry {entry.link}: {str(e)}")
-            feed.log += f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
+            feed.log += (
+                f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
+            )
             continue
 
     # 批量保存所有修改过的entry
     if entries_to_save:
         Entry.objects.bulk_update(
             entries_to_save,
-            fields=[
-                "translated_title", 
-                "translated_content", 
-                "original_content"
-            ]
+            fields=["translated_title", "translated_content", "original_content"],
         )
-    
+
     # 更新feed的统计信息（将在外层批量更新中保存）
     feed.total_tokens += total_tokens
     feed.total_characters += total_characters
 
-    logging.info(f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}")
+    logging.info(
+        f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}"
+    )
+
 
 def _translate_title(
     entry: Entry,
     target_language: str,
     engine: TranslatorEngine,
-)->dict:
+) -> dict:
     """Translate entry title with caching and retry logic"""
     total_tokens = 0
     total_characters = 0
@@ -269,11 +290,13 @@ def _translate_title(
         max_retries=3,
         text=entry.original_title,
         target_language=target_language,
-        text_type="title"
+        text_type="title",
     )
     if result:
         translated_title = result.get("text")
-        entry.translated_title = translated_title if translated_title else entry.original_title
+        entry.translated_title = (
+            translated_title if translated_title else entry.original_title
+        )
         total_tokens = result.get("tokens", 0)
         total_characters = result.get("characters", 0)
     return {"tokens": total_tokens, "characters": total_characters}
@@ -284,7 +307,7 @@ def _translate_content(
     target_language: str,
     engine: TranslatorEngine,
     quality: bool = False,
-)->dict:
+) -> dict:
     """Translate entry content with optimized caching"""
     total_tokens = 0
     total_characters = 0
@@ -292,7 +315,7 @@ def _translate_content(
     if entry.translated_content:
         logging.debug(f"[Content] Content already translated: {entry.original_title}")
         return {"tokens": 0, "characters": 0}
-    
+
     soup = BeautifulSoup(entry.original_content, "lxml")
     # if quality:
     #     soup = BeautifulSoup(text_handler.unwrap_tags(soup), "lxml")
@@ -305,10 +328,9 @@ def _translate_content(
             logging.debug("[Content] Skipping element %s", element.parent)
             # 标记父元素不翻译
             parent = element.parent
-            parent.attrs.update({
-                'class': parent.get('class', []) + ['notranslate'],
-                'translate': 'no'
-            })
+            parent.attrs.update(
+                {"class": parent.get("class", []) + ["notranslate"], "translate": "no"}
+            )
 
     # TODO 如果文字长度大于最大长度，就分段翻译
     processed_html = str(soup)
@@ -319,14 +341,17 @@ def _translate_content(
         max_retries=3,
         text=processed_html,
         target_language=target_language,
-        text_type="content"
+        text_type="content",
     )
     translated_content = result.get("text")
-    entry.translated_content = translated_content if translated_content else processed_html
+    entry.translated_content = (
+        translated_content if translated_content else processed_html
+    )
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
 
     return {"tokens": total_tokens, "characters": total_characters}
+
 
 def summarize_feed(
     feed: Feed,
@@ -343,16 +368,20 @@ def summarize_feed(
             entry_needs_save = False
             # Check cache first
             if entry.ai_summary:
-                logging.debug(f"[Summary] Summary already generated: {entry.original_title}")
+                logging.debug(
+                    f"[Summary] Summary already generated: {entry.original_title}"
+                )
             else:
                 logging.debug(f"[Summary] Generating summary: {entry.original_title}")
                 max_chunks = len(
-                        text_handler.chunk_on_delimiter(
-                            entry.original_content, minimum_chunk_size, chunk_delimiter
-                        )
+                    text_handler.chunk_on_delimiter(
+                        entry.original_content, minimum_chunk_size, chunk_delimiter
+                    )
                 )
                 min_chunks = 1
-                num_chunks = int(min_chunks + feed.summary_detail * (max_chunks - min_chunks))
+                num_chunks = int(
+                    min_chunks + feed.summary_detail * (max_chunks - min_chunks)
+                )
 
                 # adjust chunk_size based on interpolated number of chunks
                 document_length = len(text_handler.tokenize(entry.original_content))
@@ -363,7 +392,9 @@ def summarize_feed(
                 accumulated_summaries = []
                 for chunk in text_chunks:
                     if summarize_recursively and accumulated_summaries:
-                        accumulated_summaries_string = "\n\n".join(accumulated_summaries)
+                        accumulated_summaries_string = "\n\n".join(
+                            accumulated_summaries
+                        )
                         user_message_content = f"Previous summaries:\n\n{accumulated_summaries_string}\n\nText to summarize next:\n\n{chunk}"
                     else:
                         user_message_content = chunk
@@ -384,29 +415,22 @@ def summarize_feed(
                 entries_to_save.append(entry)
     except Exception as e:
         logging.error(f"Error summarizing feed {feed.feed_url}: {str(e)}")
-        feed.log += f"{timezone.now()} Error summarizing feed {feed.feed_url}: {str(e)}<br>"
+        feed.log += (
+            f"{timezone.now()} Error summarizing feed {feed.feed_url}: {str(e)}<br>"
+        )
     finally:
         if entries_to_save:
-            Entry.objects.bulk_update(
-                entries_to_save,
-                fields=[
-                    "ai_summary"
-                ]
-            )
+            Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
 
 
-def _auto_retry(
-    func: callable, 
-    max_retries: int = 3, 
-    **kwargs
-) -> dict:
+def _auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
     """Retry translation function with exponential backoff"""
     for attempt in range(max_retries):
         try:
             return func(**kwargs)
         except Exception as e:
-            logging.error(f"Translation attempt {attempt+1} failed: {str(e)}")
-        time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
+            logging.error(f"Translation attempt {attempt + 1} failed: {str(e)}")
+        time.sleep(0.5 * (2**attempt))  # Exponential backoff
     logging.error(f"All {max_retries} attempts failed for translation")
     return {}
 

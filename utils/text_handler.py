@@ -4,7 +4,7 @@ from typing import List, Tuple, Optional
 from bs4 import Comment
 import tiktoken
 import html2text
-#from langdetect import detect
+# from langdetect import detect
 
 # def detect_language(entry):
 #     title = entry.get("title")
@@ -20,7 +20,7 @@ import html2text
 #         source_language = detect(text)
 #     except Exception as e:
 #         logging.warning("Cannot detect source language:%s,%s", e, text)
-    
+
 #     return source_language
 
 

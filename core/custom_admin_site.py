@@ -9,6 +9,8 @@ from utils.modelAdmin_utils import (
     get_all_app_models,
     status_icon,
 )
+
+
 class CoreAdminSite(AdminSite):
     site_header = _("RSS Translator Admin")
     site_title = _("RSS Translator")

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0007_remove_o_feed_modified_o_feed_last_pull_and_more"),
     ]
