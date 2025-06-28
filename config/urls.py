@@ -44,7 +44,7 @@ if settings.DEMO:
 urlpatterns = [
     path("favicon.ico", favicon_view),
     # path("log/", log, name="log"),
-    path("feed/", include("core.urls")),
+    path("rss/", include("core.urls")),
     path("", core_admin_site.urls),
 ]
 
