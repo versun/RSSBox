@@ -125,10 +125,7 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
                 HttpResponse(
                     status=500, content="Feed not found, Maybe it's still in progress"
                 )
-                if not content
-                else None
             )
-
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
 
@@ -156,8 +153,6 @@ def category(request, category: str, feed_type="t", format="xml"):
                     status=500,
                     content="Category not found, Maybe it's still in progress",
                 )
-                if not content
-                else None
             )
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
