@@ -123,7 +123,7 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
             content = cache_rss(feed_slug, feed_type, format)
             return (
                 HttpResponse(
-                    status=500, content="Feed not found, Maybe it's still in progress"
+                    status=500, content="Feed not found, Maybe it's still in progress, Please try again later."
                 )
             )
         else:
@@ -151,7 +151,7 @@ def category(request, category: str, feed_type="t", format="xml"):
             return (
                 HttpResponse(
                     status=500,
-                    content="Category not found, Maybe it's still in progress",
+                    content="Category not found, Maybe it's still in progress, Please try again later.",
                 )
             )
         else:
