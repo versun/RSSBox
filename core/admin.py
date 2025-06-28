@@ -207,7 +207,7 @@ class FeedAdmin(admin.ModelAdmin):
             "<a href='{0}' target='_blank'>{1}</a><br><a href='{2}' target='_blank'>rss</a> | <a href='{3}' target='_blank'>json</a>",
             f"/rss/category/proxy/{obj.category.name}",
             obj.category.name,
-            f"/rss/category/rss/{obj.category.name}",
+            f"/rss/category/{obj.category.name}",
             f"/rss/category/json/{obj.category.name}",
         )
 
