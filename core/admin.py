@@ -149,9 +149,9 @@ class FeedAdmin(admin.ModelAdmin):
         return format_html(
             "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
             status_icon(obj.translation_status),  # 0
-            f"/feed/rss/{obj.slug}",  # 1
+            f"/rss/{obj.slug}",  # 1
             "rss",  # 2
-            f"/feed/json/{obj.slug}",  # 3
+            f"/rss/json/{obj.slug}",  # 3
             "json",  # 4
         )
 
@@ -162,7 +162,7 @@ class FeedAdmin(admin.ModelAdmin):
             status_icon(obj.fetch_status),  # 0
             obj.feed_url,  # 1
             "url",  # 2
-            f"/feed/proxy/{obj.slug}",  # 3
+            f"/rss/proxy/{obj.slug}",  # 3
             "proxy",  # 4
         )
 
@@ -205,10 +205,10 @@ class FeedAdmin(admin.ModelAdmin):
             return ""
         return format_html(
             "<a href='{0}' target='_blank'>{1}</a><br><a href='{2}' target='_blank'>rss</a> | <a href='{3}' target='_blank'>json</a>",
-            f"/feed/category/proxy/{obj.category.name}",
+            f"/rss/category/proxy/{obj.category.name}",
             obj.category.name,
-            f"/feed/category/rss/{obj.category.name}",
-            f"/feed/category/json/{obj.category.name}",
+            f"/rss/category/rss/{obj.category.name}",
+            f"/rss/category/json/{obj.category.name}",
         )
 
 
