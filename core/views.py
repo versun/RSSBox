@@ -72,8 +72,9 @@ def import_opml(request):
                 # 直接读取字节数据（lxml 支持二进制解析）
                 opml_content = opml_file.read()
 
-                # 使用 lxml 解析 OPML
-                root = etree.fromstring(opml_content)
+                # 使用安全的 lxml 解析器解析 OPML
+                parser = etree.XMLParser(resolve_entities=False)
+                root = etree.fromstring(opml_content, parser=parser)
                 body = root.find("body")
 
                 if body is None:
