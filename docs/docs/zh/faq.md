@@ -2,17 +2,21 @@
 
 所有的元数据都在`data/db.sqlite3`数据库中，可自行备份该文件。
 
+## 报错:CSRF验证失败
+
+如果在登录后出现403 CSRF验证失败的错误，则需要设置环境变量CSRF_TRUSTED_ORIGINS，值为域名或IP地址:https://example.com:port,http://example.com:port
+
 ## Server 500报错
 如果是部署在Railway上，则稍等5分钟再试一试。
 
 如果是其它方式部署，等待5分钟后依旧无法解决，则重启实例或服务试一试。
 
-## 原始源 验证 失败
+## 获取源状态 失败
 1. 检查你的源地址是否正确且可访问
 2. 检查你的服务器是否正常可以访问网络
 3. 如果是本地部署，请检查你的代理设置，最好全局代理
 
-## 翻译源 状态 错误
+## 翻译状态 错误
 1. 检查翻译引擎是否有效
 2. 检查服务器网络是否可以访问翻译引擎的服务器
 
@@ -25,10 +29,6 @@
 1. 在RSS翻译器中，检查翻译状态是否完成
 2. 使用浏览器访问该地址是否正常
 3. 可能是你的阅读器无法访问RSS翻译器，检查你的 RSS翻译器 是否设置了 对外开放服务
-
-## 报错:CSRF验证失败
-
-如果在登录后出现403 CSRF验证失败的错误，则需要设置环境变量CSRF_TRUSTED_ORIGINS，值为域名或IP地址:https://example.com:port,http://example.com:port
 
 ### IPv6
 目前无法同时支持IPv4和IPv6；
@@ -43,4 +43,4 @@ HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
 ### 依旧无法解决？
-请 [提交Issue](https://github.com/rss-translator/RSS-Translator/issues) 或者在 [Telegram群组](https://t.me/rsstranslator) 中反馈
+请 [提交Issue](https://github.com/versun/RSS-Translator/issues) 或者在 [Telegram群组](https://t.me/rsstranslator) 中反馈
