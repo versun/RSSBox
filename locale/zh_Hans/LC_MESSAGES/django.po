@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-06 15:13+0800\n"
+"POT-Creation-Date: 2025-06-29 09:01+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,25 +17,33 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: core/actions.py:20 core/actions.py:61
-msgid "Export selected feeds as OPML"
-msgstr "导出为 OPML"
+#: core/actions.py:19
+msgid "Clean translated content"
+msgstr "清除已翻译的内容"
 
-#: core/actions.py:103
+#: core/actions.py:24
+msgid "Export selected original feeds as OPML"
+msgstr "导出原始源为 OPML 文件"
+
+#: core/actions.py:86
+msgid "Export selected translated feeds as OPML"
+msgstr "导出翻译源为 OPML 文件"
+
+#: core/actions.py:150
 msgid "Force update"
 msgstr "强制更新"
 
-#: core/actions.py:114
+#: core/actions.py:164
 msgid "Batch modification"
 msgstr "批量修改"
 
-#: core/admin.py:126 core/forms.py:32 core/models.py:32
+#: core/admin.py:126 core/forms.py:35 core/models.py:63
 #: templates/admin/feed_batch_modify.html:13
 msgid "Update Frequency"
 msgstr "更新频率(分钟)"
 
-#: core/admin.py:141 core/custom_admin_site.py:30 core/forms.py:13
-#: templates/admin/feed_batch_modify.html:23
+#: core/admin.py:141 core/custom_admin_site.py:35 core/forms.py:14
+#: templates/admin/feed_batch_modify.html:45
 msgid "Translator"
 msgstr "翻译器"
 
@@ -43,243 +51,268 @@ msgstr "翻译器"
 msgid "Translated Feed"
 msgstr "翻译源"
 
-#: core/admin.py:157
+#: core/admin.py:158
 msgid "Fetch Feed"
 msgstr "获取源"
 
-#: core/admin.py:170
+#: core/admin.py:169
 msgid "Options"
 msgstr "选项"
 
-#: core/admin.py:175 core/forms.py:37
+#: core/admin.py:174 core/forms.py:40
 msgid "Title"
 msgstr "标题"
 
-#: core/admin.py:176 core/forms.py:38
+#: core/admin.py:175 core/forms.py:41
 msgid "Content"
 msgstr "内容"
 
-#: core/admin.py:177 core/forms.py:39 core/models.py:68
-#: templates/admin/feed_batch_modify.html:60
-#: templates/admin/t_feed_batch_modify.html:23
+#: core/admin.py:176 core/forms.py:42 core/models.py:102
+#: templates/admin/feed_batch_modify.html:73
 msgid "Summary"
 msgstr "摘要"
 
-#: core/admin.py:186 core/models.py:137
+#: core/admin.py:188 core/models.py:186
 msgid "Log"
 msgstr "日志"
 
-#: core/custom_admin_site.py:13
+#: core/admin.py:202
+msgid "Category"
+msgstr "类别"
+
+#: core/custom_admin_site.py:15
 msgid "RSS Translator Admin"
 msgstr "RSS翻译器管理后台"
 
-#: core/custom_admin_site.py:14
+#: core/custom_admin_site.py:16
 msgid "RSS Translator"
 msgstr "RSS翻译器"
 
-#: core/custom_admin_site.py:15
+#: core/custom_admin_site.py:17
 msgid "Dashboard"
 msgstr "仪表盘"
 
-#: core/forms.py:12
+#: core/forms.py:13
 msgid "Select a valid translator"
 msgstr "选择一个有效的翻译器"
 
-#: core/forms.py:18
+#: core/forms.py:19
 msgid "Select a valid AI engine"
 msgstr "选择一个有效的AI引擎"
 
-#: core/forms.py:19 templates/admin/feed_batch_modify.html:41
+#: core/forms.py:20
 msgid "Summary Engine"
 msgstr "摘要器"
 
-#: core/forms.py:26
+#: core/forms.py:28
 msgid "hourly"
 msgstr "每小时"
 
-#: core/forms.py:27
+#: core/forms.py:29
 msgid "daily"
 msgstr "每天"
 
-#: core/forms.py:28
+#: core/forms.py:30
 msgid "weekly"
 msgstr "每周"
 
-#: core/forms.py:31
-#, fuzzy
-#| msgid "Select a valid AI engine"
+#: core/forms.py:34
 msgid "Select a valid update frequency"
-msgstr "选择一个有效的AI引擎"
+msgstr "选择更新频率"
 
-#: core/forms.py:42
-#, fuzzy
-#| msgid "Translation Status"
+#: core/forms.py:45
 msgid "Translation Options"
-msgstr "翻译状态"
+msgstr "翻译选项"
 
-#: core/forms.py:77
+#: core/forms.py:82
 msgid "Optonal, default use the feed title"
 msgstr "可选，默认使用源标题"
 
-#: core/forms.py:81
+#: core/forms.py:88
 msgid "Optional, default use the random slug"
 msgstr "可选，默认随机生成"
 
-#: core/models.py:14 translator/models/base.py:10
+#: core/models.py:16 translator/models.py:11
 msgid "Name"
 msgstr "名称"
 
-#: core/models.py:16
+#: core/models.py:19
+msgid "Subtitle"
+msgstr "子标题"
+
+#: core/models.py:22
 msgid "URL Slug"
 msgstr "URL别名"
 
-#: core/models.py:23
+#: core/models.py:29
+msgid "Link"
+msgstr "链接"
+
+#: core/models.py:34
+msgid "Author"
+msgstr "作者"
+
+#: core/models.py:40 core/models.py:95
+msgid "Language"
+msgstr "语言"
+
+#: core/models.py:46
+msgid "Pubdate"
+msgstr "发布日期"
+
+#: core/models.py:51
+msgid "Updated"
+msgstr "更新日期"
+
+#: core/models.py:55
 msgid "Feed URL"
 msgstr "订阅链接"
 
-#: core/models.py:26
+#: core/models.py:57
 msgid "Fetch Status"
 msgstr "订阅状态"
 
-#: core/models.py:34
+#: core/models.py:65
 msgid "Minutes"
 msgstr "分钟"
 
-#: core/models.py:37 templates/admin/feed_batch_modify.html:18
+#: core/models.py:68 templates/admin/feed_batch_modify.html:22
 msgid "Max Posts"
 msgstr "最大条目"
 
-#: core/models.py:39
+#: core/models.py:70
 msgid "Max number of posts to be fetched"
 msgstr "要获取的最大条目数"
 
-#: core/models.py:42 templates/admin/feed_batch_modify.html:81
+#: core/models.py:73 templates/admin/feed_batch_modify.html:94
 msgid "Best Quality"
 msgstr "最佳质量"
 
-#: core/models.py:45
+#: core/models.py:76
 msgid ""
 "Formatting such as hyperlinks, bold, italics, etc. will be lost for optimal "
 "translation quality."
 msgstr "获取最佳翻译质量，将会丢失超链接、加粗、斜体等格式"
 
-#: core/models.py:49 templates/admin/feed_batch_modify.html:76
+#: core/models.py:80 templates/admin/feed_batch_modify.html:89
 msgid "Fetch Original Article"
 msgstr "获取全文"
 
-#: core/models.py:51
+#: core/models.py:82
 msgid "Fetch original article from the website."
 msgstr "从原网站获取全文"
 
-#: core/models.py:55 templates/admin/feed_batch_modify.html:36
+#: core/models.py:86 templates/admin/feed_batch_modify.html:40
 msgid "Only Translation"
 msgstr "仅译文"
 
-#: core/models.py:56 templates/admin/feed_batch_modify.html:37
+#: core/models.py:87 templates/admin/feed_batch_modify.html:41
 msgid "Translation | Original"
 msgstr "译文 | 原文"
 
-#: core/models.py:57 templates/admin/feed_batch_modify.html:38
+#: core/models.py:88 templates/admin/feed_batch_modify.html:42
 msgid "Original | Translation"
 msgstr "原文 | 译文"
 
-#: core/models.py:60 templates/admin/feed_batch_modify.html:32
+#: core/models.py:91 templates/admin/feed_batch_modify.html:36
 msgid "Translation Display"
 msgstr "译文显示"
 
-#: core/models.py:64
-msgid "Language"
-msgstr "语言"
-
-#: core/models.py:66 templates/admin/feed_batch_modify.html:50
-#: templates/admin/t_feed_batch_modify.html:13
+#: core/models.py:100 templates/admin/feed_batch_modify.html:63
 msgid "Translate Title"
 msgstr "翻译标题"
 
-#: core/models.py:67 templates/admin/feed_batch_modify.html:55
-#: templates/admin/t_feed_batch_modify.html:18
+#: core/models.py:101 templates/admin/feed_batch_modify.html:68
 msgid "Translate Content"
 msgstr "翻译内容"
 
-#: core/models.py:71
+#: core/models.py:105
 msgid "Translation Status"
 msgstr "翻译状态"
 
-#: core/models.py:90 templates/admin/feed_batch_modify.html:65
+#: core/models.py:137 templates/admin/feed_batch_modify.html:78
 msgid "Summary Detail"
 msgstr "摘要细粒度"
 
-#: core/models.py:96
+#: core/models.py:143
 msgid ""
 "Level of detail of summaries of longer articles. 0: Normal, 1: Most detailed "
 "(cost more tokens)"
 msgstr "较长文章摘要的详细程度。0：正常，1：最详细(花费更多token)"
 
-#: core/models.py:101 templates/admin/feed_batch_modify.html:70
+#: core/models.py:148 templates/admin/feed_batch_modify.html:83
 msgid "Addtional Prompt"
 msgstr "额外的提示词"
 
-#: core/models.py:105
+#: core/models.py:152
 msgid "Addtional Prompt for translation and summary"
 msgstr "用于AI翻译和摘要"
 
-#: core/models.py:108
+#: core/models.py:155
 msgid "Enter a category string"
 msgstr "输入类别"
 
-#: core/models.py:111
+#: core/models.py:158
 msgid "Tokens Cost"
 msgstr "花费Token数"
 
-#: core/models.py:112
+#: core/models.py:159
 msgid "Characters Cost"
 msgstr "花费字符数"
 
-#: core/models.py:115
+#: core/models.py:162
 msgid "Last translate"
 msgstr "最后翻译"
 
-#: core/models.py:119
+#: core/models.py:166
 msgid "Last time the feed was translated"
 msgstr "最后翻译的时间"
 
-#: core/models.py:123
+#: core/models.py:170
 msgid "Last Fetch(UTC)"
 msgstr "最后获取(UTC)"
 
-#: core/models.py:128
+#: core/models.py:175
 msgid "Last time the feed was fetched"
 msgstr "最后获取订阅源的时间"
 
-#: core/models.py:141
+#: core/models.py:190
 msgid "Log for the feed, useful for debugging"
 msgstr "日志，用于调试"
 
-#: core/models.py:149
+#: core/models.py:197
 msgid "Feed"
 msgstr "源"
 
-#: core/models.py:150
+#: core/models.py:198
 msgid "Feeds"
 msgstr "源"
 
-#: core/models.py:194
+#: core/models.py:254
 msgid "Entry"
-msgstr ""
+msgstr "条目"
 
-#: core/models.py:195
+#: core/models.py:255
 msgid "Entries"
-msgstr ""
+msgstr "条目"
 
-#: core/views.py:38
+#: core/views.py:81
+msgid "Invalid OPML: Missing body element"
+msgstr "无效的 OPML 文件：缺失 body 元素"
+
+#: core/views.py:102
 msgid "OPML file imported successfully."
 msgstr "OPML文件导入成功"
 
-#: core/views.py:40
+#: core/views.py:104
+msgid "XML syntax error: {}"
+msgstr ""
+
+#: core/views.py:107
 msgid "Error importing OPML file: {}"
 msgstr "OPML导入失败"
 
-#: core/views.py:42
+#: core/views.py:110
 msgid "Please upload a valid OPML file."
 msgstr "请上传有效的OPML文件"
 
@@ -292,58 +325,59 @@ msgid "Import"
 msgstr "导入"
 
 #: templates/admin/feed_batch_modify.html:14
-#: templates/admin/feed_batch_modify.html:19
-#: templates/admin/feed_batch_modify.html:24
-#: templates/admin/feed_batch_modify.html:33
-#: templates/admin/feed_batch_modify.html:42
-#: templates/admin/feed_batch_modify.html:51
-#: templates/admin/feed_batch_modify.html:56
-#: templates/admin/feed_batch_modify.html:61
-#: templates/admin/feed_batch_modify.html:66
-#: templates/admin/feed_batch_modify.html:71
-#: templates/admin/feed_batch_modify.html:77
-#: templates/admin/feed_batch_modify.html:82
-#: templates/admin/feed_batch_modify.html:87
-#: templates/admin/t_feed_batch_modify.html:14
-#: templates/admin/t_feed_batch_modify.html:19
-#: templates/admin/t_feed_batch_modify.html:24
+#: templates/admin/feed_batch_modify.html:23
+#: templates/admin/feed_batch_modify.html:28
+#: templates/admin/feed_batch_modify.html:37
+#: templates/admin/feed_batch_modify.html:46
+#: templates/admin/feed_batch_modify.html:55
+#: templates/admin/feed_batch_modify.html:64
+#: templates/admin/feed_batch_modify.html:69
+#: templates/admin/feed_batch_modify.html:74
+#: templates/admin/feed_batch_modify.html:79
+#: templates/admin/feed_batch_modify.html:84
+#: templates/admin/feed_batch_modify.html:90
+#: templates/admin/feed_batch_modify.html:95
+#: templates/admin/feed_batch_modify.html:100
 msgid " Keep Original"
 msgstr " 保持原设置"
 
 #: templates/admin/feed_batch_modify.html:15
-#: templates/admin/feed_batch_modify.html:20
-#: templates/admin/feed_batch_modify.html:25
-#: templates/admin/feed_batch_modify.html:34
-#: templates/admin/feed_batch_modify.html:43
-#: templates/admin/feed_batch_modify.html:67
-#: templates/admin/feed_batch_modify.html:72
-#: templates/admin/feed_batch_modify.html:88
+#: templates/admin/feed_batch_modify.html:24
+#: templates/admin/feed_batch_modify.html:29
+#: templates/admin/feed_batch_modify.html:38
+#: templates/admin/feed_batch_modify.html:47
+#: templates/admin/feed_batch_modify.html:56
+#: templates/admin/feed_batch_modify.html:80
+#: templates/admin/feed_batch_modify.html:85
+#: templates/admin/feed_batch_modify.html:101
 msgid " Change to "
 msgstr "修改为"
 
-#: templates/admin/feed_batch_modify.html:52
-#: templates/admin/feed_batch_modify.html:57
-#: templates/admin/feed_batch_modify.html:62
-#: templates/admin/feed_batch_modify.html:78
-#: templates/admin/feed_batch_modify.html:83
-#: templates/admin/t_feed_batch_modify.html:15
-#: templates/admin/t_feed_batch_modify.html:20
-#: templates/admin/t_feed_batch_modify.html:25
+#: templates/admin/feed_batch_modify.html:27
+msgid "Target Language"
+msgstr "翻译语言"
+
+#: templates/admin/feed_batch_modify.html:54
+msgid "Summarizer"
+msgstr "摘要器"
+
+#: templates/admin/feed_batch_modify.html:65
+#: templates/admin/feed_batch_modify.html:70
+#: templates/admin/feed_batch_modify.html:75
+#: templates/admin/feed_batch_modify.html:91
+#: templates/admin/feed_batch_modify.html:96
 msgid " Enable"
 msgstr " 启用"
 
-#: templates/admin/feed_batch_modify.html:53
-#: templates/admin/feed_batch_modify.html:58
-#: templates/admin/feed_batch_modify.html:63
-#: templates/admin/feed_batch_modify.html:79
-#: templates/admin/feed_batch_modify.html:84
-#: templates/admin/t_feed_batch_modify.html:16
-#: templates/admin/t_feed_batch_modify.html:21
-#: templates/admin/t_feed_batch_modify.html:26
+#: templates/admin/feed_batch_modify.html:66
+#: templates/admin/feed_batch_modify.html:71
+#: templates/admin/feed_batch_modify.html:76
+#: templates/admin/feed_batch_modify.html:92
+#: templates/admin/feed_batch_modify.html:97
 msgid " Disable"
 msgstr " 禁用"
 
-#: templates/admin/feed_batch_modify.html:86
+#: templates/admin/feed_batch_modify.html:99
 msgid "category"
 msgstr "类别"
 
@@ -351,88 +385,34 @@ msgstr "类别"
 msgid "Which service provider you want to add?"
 msgstr "您想添加哪个服务提供商？"
 
-#: translator/models/base.py:11
+#: translator/models.py:12
 msgid "Valid"
 msgstr "验证"
 
-#: translator/models/base.py:47 translator/models/deepl.py:11
+#: translator/models.py:51 translator/models.py:165
 msgid "API Key"
 msgstr ""
 
-#: translator/models/base.py:48
+#: translator/models.py:52
 msgid "API URL"
 msgstr ""
 
-#: translator/models/base.py:55
+#: translator/models.py:59
 msgid "Title Translate Prompt"
 msgstr "标题翻译提示词"
 
-#: translator/models/base.py:58
+#: translator/models.py:62
 msgid "Content Translate Prompt"
 msgstr "内容翻译提示词"
 
-#: translator/models/deepl.py:13
+#: translator/models.py:167
 msgid "API URL(optional)"
 msgstr ""
 
-#: translator/models/deepl.py:14
+#: translator/models.py:168
 msgid "Proxy(optional)"
 msgstr ""
 
-#: translator/models/dev.py:11
+#: translator/models.py:235
 msgid "Request Interval(s)"
 msgstr "请求间隔"
-
-#~ msgid "Size(KB)"
-#~ msgstr "文件大小(KB)"
-
-#~ msgid "Size"
-#~ msgstr "文件大小"
-
-#~ msgid ""
-#~ "It is recommended to leave this blank in order to automatically select "
-#~ "the best server"
-#~ msgstr "建议留空，以自动选择最佳服务器"
-
-#~ msgid "Translate Service Name"
-#~ msgstr "翻译服务代码名"
-
-#~ msgid ""
-#~ "Please get it from https://docs.openl.club/#/API/format?"
-#~ "id=%e7%bf%bb%e8%af%91%e6%9c%8d%e5%8a%a1%e4%bb%a3%e7%a0%81%e5%90%8d"
-#~ msgstr ""
-#~ "请从官网中获取: https://docs.openl.club/#/API/format?"
-#~ "id=%e7%bf%bb%e8%af%91%e6%9c%8d%e5%8a%a1%e4%bb%a3%e7%a0%81%e5%90%8d"
-
-#~ msgid "Engine"
-#~ msgstr "引擎"
-
-#~ msgid "Translated Feed URL"
-#~ msgstr "翻译源地址"
-
-#~ msgid "Translated Language"
-#~ msgstr "翻译语言"
-
-#~ msgid "Last Updated(UTC)"
-#~ msgstr "最后更新(UTC)"
-
-#~ msgid "Last updated from the original feed"
-#~ msgstr "原始源的最后更新的时间"
-
-#~ msgid "Original Feed"
-#~ msgstr "原始源"
-
-#~ msgid "Original Feeds"
-#~ msgstr "原始源"
-
-#~ msgid "Last Modified"
-#~ msgstr "最后更新"
-
-#~ msgid "Translated Feeds"
-#~ msgstr "翻译源"
-
-#~ msgid "Change"
-#~ msgstr "修改"
-
-#~ msgid "Tags"
-#~ msgstr "标签"
