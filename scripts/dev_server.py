@@ -3,7 +3,6 @@
 import os
 import subprocess
 import sys
-import signal
 from pathlib import Path
 from .init import init_server
 
@@ -25,70 +24,15 @@ def setup_environment():
     for origin in os.environ["CSRF_TRUSTED_ORIGINS"].split(","):
         print(f"  - {origin}")
 
-
-def install_dependencies():
-    """安装开发依赖"""
-    pyproject_file = Path("pyproject.toml")
-
-    if pyproject_file.exists():
-        print("📦 安装<开发>依赖...")
-
-        # 首先尝试使用uv sync安装dev group
-        try:
-            subprocess.run(["uv", "sync", "--group", "dev"], check=True)
-            print("✓ <开发>依赖安装完成")
-            return
-        except subprocess.CalledProcessError:
-            print("⚠️  uv sync失败，尝试使用uv pip install方式")
-
-        # 如果sync失败，尝试使用pip install方式
-        try:
-            subprocess.run(["uv", "pip", "install", "-e", ".[dev]"], check=True)
-            print("✓ <开发>依赖安装完成")
-            return
-        except subprocess.CalledProcessError:
-            print("⚠️  无法安装<开发>依赖")
-            sys.exit(1)
-
-
-def prepare_django():
-    try:
-        init_server()
-        print("✓ Django初始化完成")
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️  Django初始化失败: {e}")
-        return False
-    return True
-
-
-def start_huey_worker():
-    """启动Huey后台任务处理器"""
-    print("🚀 启动Huey任务处理器...")
-    process = subprocess.Popen(["uv", "run", "python", "manage.py", "run_huey", "-f"])
-
-    def cleanup():
-        """清理函数"""
-        if process.poll() is None:
-            print("\n🛑 正在停止Huey任务处理器...")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-
-    return process, cleanup
-
-
 def start_development_server():
     """启动开发服务器"""
     print("🌐 启动Django开发服务器...")
     try:
         subprocess.run(["uv", "run", "python", "manage.py", "runserver"], check=True)
     except KeyboardInterrupt:
-        print("\n🛑 服务器已停止")
+        print("\n🛑 服务已停止")
     except subprocess.CalledProcessError as e:
-        print(f"❌ 开发服务器启动失败: {e}")
+        print(f"❌ 开发服务启动失败: {e}")
 
 
 def main():
@@ -104,23 +48,13 @@ def main():
             print("请确保在Django项目根目录中运行此脚本")
             sys.exit(1)
 
-        # 1. 安装依赖
-        install_dependencies()
-
-        # 2. 设置环境变量
+        # 1. 设置环境变量
         setup_environment()
 
-        # 3. 准备Django环境
-        prepare_django()
+        # 2. 初始化
+        init_server()
 
-        # 4. 启动Huey任务处理器
-        huey_process, cleanup_func = start_huey_worker()
-
-        try:
-            # 5. 启动开发服务器
-            start_development_server()
-        finally:
-            cleanup_func()
+        start_development_server()
 
     except Exception as e:
         print(f"❌ 发生错误: {e}")
