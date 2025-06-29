@@ -372,10 +372,11 @@ def summarize_feed(
                     f"[Summary] Summary already generated: {entry.original_title}"
                 )
             else:
+                content_text = text_handler.clean_content(entry.original_content)
                 logging.debug(f"[Summary] Generating summary: {entry.original_title}")
                 max_chunks = len(
                     text_handler.chunk_on_delimiter(
-                        entry.original_content, minimum_chunk_size, chunk_delimiter
+                        content_text, minimum_chunk_size, chunk_delimiter
                     )
                 )
                 min_chunks = 1
@@ -384,10 +385,10 @@ def summarize_feed(
                 )
 
                 # adjust chunk_size based on interpolated number of chunks
-                document_length = len(text_handler.tokenize(entry.original_content))
+                document_length = len(text_handler.tokenize(content_text))
                 chunk_size = max(minimum_chunk_size, document_length // num_chunks)
                 text_chunks = text_handler.chunk_on_delimiter(
-                    entry.original_content, chunk_size, chunk_delimiter
+                    content_text, chunk_size, chunk_delimiter
                 )
                 accumulated_summaries = []
                 for chunk in text_chunks:
