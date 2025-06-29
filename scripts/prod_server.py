@@ -25,11 +25,10 @@ def setup_environment():
     for origin in os.environ["CSRF_TRUSTED_ORIGINS"].split(","):
         print(f"  - {origin}")
 
-
 def start_production_server():
     """启动生产服务器"""
     print("🌐 准备Django生产服务器...")
-    workers = os.environ.get("UVICORN_WORKERS", "4")
+    workers = os.environ.get("WORKERS", "1")
     host = os.environ.get("HOST", "0.0.0.0")
     port = os.environ.get("PORT", "8000")
     # 检查可用的ASGI/WSGI服务器
@@ -182,6 +181,7 @@ def main():
         init_server()
 
         start_production_server()
+
     except Exception as e:
         print(f"❌ 发生错误: {e}")
         sys.exit(1)
