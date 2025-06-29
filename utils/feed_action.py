@@ -146,6 +146,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
                 translation_display or entry.feed.translation_display,
                 "<br />---------------<br />",
             )
+            summary = content[:100] + "..." if len(content) > 100 else content
 
         if entry.ai_summary:
             html_summary = (
