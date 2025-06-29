@@ -22,24 +22,8 @@
 9. Full-text fetching
    
 Supported translation engines:
-
-- Free Translators (aggregates all mainstream free translation services)
 - DeepL
-- DeepLX
-- OpenAI
-- ClaudeAI
-- Azure OpenAI
-- Google Gemini
-- Google Translate (Web)
-- Microsoft Translate API
-- Caiyun API
-- Moonshot AI
-- Together AI
-- OpenRouter AI
-- Groq
-- Doubao
-- OpenL
-- Kagi API
+- OpenAI 
 
 More engines coming soon.
 
@@ -90,8 +74,7 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
 
     Recommended to use the uv tool:
     ```
-    uv run init # Automatically installs dependencies and initializes
-    uv run dev # Installs dev dependencies and starts the dev server
+    uv run dev # Automatically installs dependencies and starts the dev server
     ```
 5. **Submit a Pull Request**
 
