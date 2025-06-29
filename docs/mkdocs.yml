@@ -96,7 +96,6 @@ nav:
   - 安装:
       - Docker安装: install/docker.md
       - 一键部署: install/one-click.md
-  - 升级: upgrade.md
   - 开启SSL: ssl.md
   - 使用说明: guide.md
   - 翻译服务: translator.md
