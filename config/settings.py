@@ -131,12 +131,14 @@ DATABASES = {
         "NAME": DATA_FOLDER / "db.sqlite3",
     }
 }
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/"),
+
+if not DEBUG and not os.environ.get("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/"),
+        }
     }
-}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
