@@ -1,594 +1,543 @@
-import json
-from datetime import datetime, timezone
 import logging
-import os
-from pathlib import Path
-from time import mktime
-
-import feedparser
-import cityhash
-from django.conf import settings
-from django.db import IntegrityError
-
-from huey.contrib.djhuey import HUEY as huey
-from huey.contrib.djhuey import on_startup, db_task, on_shutdown
-
-from .models import O_Feed, T_Feed
-from translator.models import TranslatorEngine, Translated_Content
-
-from utils.feed_action import fetch_feed, generate_atom_feed
-from utils import text_handler
-from feed2json import feed2json
+import time
+from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
 import newspaper
-from typing import Optional
+from typing import Optional, Tuple
+from .models import Feed, Entry
+from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
+from utils import text_handler
+from translator.models import TranslatorEngine
 
 
-# from huey_monitor.models import TaskModel
-unique_tasks = set()
+def handle_single_feed_fetch(feed: Feed):
+    """
+    Fetch feeds and update entries.
+    """
+    try:
+        feed.fetch_status = None
+        fetch_results = fetch_feed(url=feed.feed_url, etag=feed.etag)
 
-def revoke_tasks_by_arg(arg_to_match):
-    for task in huey.scheduled() + huey.pending():
-        # Assuming the first argument is the one we're interested in (e.g., obj.pk)
-        if task.args and task.args[0] == arg_to_match:
-            logging.info("Revoke task: %s", task)
-            huey.revoke_by_id(task)
+        if fetch_results["error"]:
+            raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
+        elif not fetch_results["update"]:
+            raise Exception("Feed is up to date, Skip")
 
-# @periodic_task(crontab( minute='*/1'))
-@on_startup()
-def schedule_update():
-    feeds = O_Feed.objects.all()
-    tasks = huey.scheduled() + huey.pending()
-    task_feeds = {task.args[0] for task in tasks if task.args}
+        latest_feed = fetch_results.get("feed")
+        # Update feed meta
+        feed.name = latest_feed.feed.get("title", "Empty")
+        feed.subtitle = latest_feed.feed.get("subtitle")
+        feed.language = latest_feed.feed.get("language")
+        feed.author = latest_feed.feed.get("author") or "Unknown"
+        feed.link = latest_feed.feed.get("link") or feed.feed_url
+        feed.pubdate = convert_struct_time_to_datetime(
+            latest_feed.feed.get("published_parsed")
+        )
+        feed.updated = convert_struct_time_to_datetime(
+            latest_feed.feed.get("updated_parsed")
+        )
+        feed.last_fetch = timezone.now()
+        feed.etag = latest_feed.get("etag")
 
+        # Update entries
+        if getattr(latest_feed, "entries", None):
+            entries_to_create = []
+            # entries_to_update = []
+            existing_entries = {
+                entry.guid: entry.id
+                for entry in Entry.objects.filter(feed=feed).only("id", "guid")
+            }
+
+            for entry_data in latest_feed.entries[: feed.max_posts]:
+                # 获取内容
+                content = ""
+                if "content" in entry_data:
+                    content = entry_data.content[0].value if entry_data.content else ""
+                else:
+                    content = entry_data.get("summary")
+
+                guid = entry_data.get("id") or entry_data.get("link")
+                link = entry_data.get("link", "")
+                author = entry_data.get("author", feed.author)
+                if not guid:
+                    continue  # 跳过无效条目
+
+                # 判断是否需要创建新条目
+                if guid not in existing_entries:
+                    entry_values = {
+                        "link": link,
+                        "author": author,
+                        "pubdate": convert_struct_time_to_datetime(
+                            entry_data.get("published_parsed")
+                        ),
+                        "updated": convert_struct_time_to_datetime(
+                            entry_data.get("updated_parsed")
+                        ),
+                        "original_title": entry_data.get("title", "No title"),
+                        "original_content": content,
+                        "original_summary": entry_data.get("summary"),
+                        "enclosures_xml": entry_data.get("enclosures_xml"),
+                    }
+
+                    entries_to_create.append(
+                        Entry(feed=feed, guid=guid, **entry_values)
+                    )
+
+                # if guid in existing_entries:
+                #     # 更新操作
+                #     entry = Entry(
+                #         id=existing_entries[guid],  # 直接设置主键
+                #         feed=feed,
+                #         guid=guid,
+                #         **entry_values
+                #     )
+                #     entries_to_update.append(entry)
+                # else:
+                #     # 创建操作
+                #     entries_to_create.append(Entry(
+                #         feed=feed,
+                #         guid=guid,
+                #         **entry_values
+                #     ))
+
+            # 批量执行数据库操作
+            if entries_to_create:
+                Entry.objects.bulk_create(entries_to_create)
+            # if entries_to_update:
+            #     update_fields = list(entry_values.keys())
+            #     Entry.objects.bulk_update(entries_to_update, fields=update_fields)
+
+        feed.fetch_status = True
+        feed.log = f"{timezone.now()} Fetch Completed <br>"
+    except Exception as e:
+        logging.error("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
+        feed.fetch_status = False
+        feed.log = f"{timezone.now()} {str(e)}<br>"
+    finally:
+        feed.save()
+
+
+def handle_feeds_fetch(feeds: list):
+    """
+    Fetch feeds and update entries.
+    """
     for feed in feeds:
-        if feed.sid not in task_feeds:
-            update_original_feed.schedule(
-                args=(feed.sid,), delay=feed.update_frequency * 60
-            )
+        handle_single_feed_fetch(feed)
 
-@on_shutdown()
-def cleanup_tasks():
-    huey.storage.flush_all()
-
-
-@db_task(retries=3)
-def update_original_feed(sid: str, force:bool = False):
-    if sid in unique_tasks: # 如果判断force的话，是没法停止正在执行的task
-        logging.warning("(skip)This task update_original_feed is executing: %s",sid)
-        return
-    else:
-        unique_tasks.add(sid)
-
-    try:
-        # obj = O_Feed.objects.get(sid=sid)
-        obj = O_Feed.objects.prefetch_related("t_feed_set").get(sid=sid)
-    except O_Feed.DoesNotExist:
-        return False
-
-    revoke_tasks_by_arg(sid)
-    logging.info("Call task update_original_feed: %s", obj.feed_url)
-    
-    feed_dir_path = Path(settings.DATA_FOLDER) / "feeds"
-
-    if not os.path.exists(feed_dir_path):
-        os.makedirs(feed_dir_path)
-
-    original_feed_file_path = feed_dir_path / f"{obj.sid}.xml"
-    try:
-        obj.valid = False
-        fetch_feed_results = fetch_feed(url=obj.feed_url, etag=obj.etag)
-        error = fetch_feed_results["error"]
-        update = fetch_feed_results.get("update")
-        xml = fetch_feed_results.get("xml")
-        feed = fetch_feed_results.get("feed")
-
-        if error:
-            raise Exception(f"Fetch Original Feed Failed: {error}")
-        elif not update:
-            logging.info("Original Feed is up to date, Skip:%s", obj.feed_url)
-        else:
-            with open(original_feed_file_path, "w", encoding="utf-8") as f:
-                f.write(xml)
-            if obj.name in ["Loading", "Empty", None]:
-                obj.name = feed.feed.get("title") or feed.feed.get("subtitle")
-            obj.size = os.path.getsize(original_feed_file_path)
-            update_time = feed.feed.get("updated_parsed")
-            obj.last_updated = (
-                datetime.fromtimestamp(mktime(update_time), tz=timezone.utc)
-                if update_time
-                else None
-            )
-            # obj.last_pull = datetime.now(timezone.utc)
-            obj.etag = feed.get("etag", "")
-
-        obj.valid = True
-        # update_original_feed.schedule(args=(obj.sid,), delay=obj.update_frequency * 60)
-    except Exception as e:
-        logging.exception("task update_original_feed %s: %s", obj.feed_url, str(e))
-    finally:
-        obj.last_pull = datetime.now(timezone.utc)
-        update_original_feed.schedule(args=(obj.sid,), delay=obj.update_frequency * 60)
-        obj.save()
-        unique_tasks.remove(sid)
-
-    # Update T_Feeds
-    t_feeds = obj.t_feed_set.all()
-    if obj.valid and t_feeds.exists():
-        for t_feed in t_feeds:
-            t_feed.status = None
-            t_feed.save()
-            update_translated_feed.schedule(args=(t_feed.sid,), delay=1)
+    # Feed.objects.bulk_update(
+    #         feeds,
+    #         fields=[
+    #             "fetch_status", "last_fetch", "etag", "log", "name",
+    #             "subtitle", "language", "author", "link", "pubdate", "updated"
+    #         ]
+    #     )
 
 
-@db_task(retries=3)
-def update_translated_feed(sid: str, force:bool = False):
-    if sid in unique_tasks: # 如果判断force的话，是没法停止正在执行的task
-        logging.warning("(skip)The task update_translated_feed is executing: %s",sid)
-        return
-    else:
-        unique_tasks.add(sid)
-
-    try:
-        # obj = T_Feed.objects.get(sid=sid)
-        obj = T_Feed.objects.select_related("o_feed").get(sid=sid)
-    except T_Feed.DoesNotExist:
-        logging.error(f"T_Feed Not Found: {sid}")
-        return False
-
-    try:
-        revoke_tasks_by_arg(sid)
-        logging.info("Call task update_translated_feed: %s", obj.o_feed.feed_url)
-
-        if obj.o_feed.pk is None:
-            raise Exception("Unable translate feed, because Original Feed is None")
-
-        if not force and obj.modified == obj.o_feed.last_pull:
-            logging.info(
-                "Translated Feed is up to date, Skip translation: %s",
-                obj.o_feed.feed_url,
-            )
-            obj.status = True
-            obj.save()
-            return True
-
-        feed_dir_path = f"{settings.DATA_FOLDER}/feeds"
-        if not os.path.exists(feed_dir_path):
-            os.makedirs(feed_dir_path)
-
-        original_feed_file_path = f"{feed_dir_path}/{obj.o_feed.sid}.xml"
-        if not os.path.exists(original_feed_file_path):
-            update_original_feed.call_local(obj.o_feed.sid)
-            return False
-
-        translated_feed_file_path = f"{feed_dir_path}/{obj.sid}"
-
-        original_feed = feedparser.parse(original_feed_file_path)
-
-        if original_feed.entries:
-            o_feed = obj.o_feed
-            logging.info("Start translate feed: [%s]%s", obj.language, o_feed.feed_url)
-            results = translate_feed(
-                feed=original_feed,
-                target_language=obj.language,
-                translate_engine=o_feed.translator,
-                translate_title=obj.translate_title,
-                translate_content=obj.translate_content,
-                summary=obj.summary,
-                summary_engine=o_feed.summary_engine,
-                summary_detail=o_feed.summary_detail,
-                max_posts=o_feed.max_posts,
-                translation_display=o_feed.translation_display,
-                quality=o_feed.quality,
-                fetch_article=o_feed.fetch_article,
-            )
-
-            if not results:
-                raise Exception("Translate Feed Failed")
-            else:
-                feed = results.get("feed")
-                total_tokens = results.get("tokens")
-                translated_characters = results.get("characters")
-            xml_str = generate_atom_feed(
-                o_feed.feed_url, feed
-            )  # feed is a feedparser object
-
-            if xml_str is None:
-                raise Exception("generate_atom_feed returned None")
-            with open(f"{translated_feed_file_path}.xml", "w", encoding="utf-8") as f:
-                f.write(xml_str)
-
-            json_dict = feed2json(f"{translated_feed_file_path}.xml")
-            json_str = json.dumps(json_dict, indent=4, ensure_ascii=False)
-            if json_str is None:
-                logging.error("atom2json returned None")
-            else:
-                with open(
-                    f"{translated_feed_file_path}.json", "w", encoding="utf-8"
-                ) as f:
-                    f.write(json_str)
-
-            # There can only be one billing method at a time, either token or character count.
-            if total_tokens > 0:
-                obj.total_tokens += total_tokens
-            else:
-                obj.total_characters += translated_characters
-
-            obj.modified = obj.o_feed.last_pull
-            obj.size = os.path.getsize(f"{translated_feed_file_path}.xml")
-            obj.status = True
-    except Exception as e:
-        logging.error(
-            "task update_translated_feed (%s)%s: %s",
-            obj.language,
-            obj.o_feed.feed_url,
-            str(e),
-        )
-        obj.status = False
-    finally:
-        obj.save()
-        unique_tasks.remove(sid)
-
-
-def translate_feed(
-    feed: feedparser.FeedParserDict,
-    target_language: str,
-    translate_title: bool,
-    translate_content: bool,
-    translate_engine: TranslatorEngine,
-    summary: bool,
-    summary_detail: float,
-    summary_engine: TranslatorEngine,
-    max_posts: int = 20,
-    translation_display: int = 0,
-    quality: bool = False,
-    fetch_article: bool = False,
-) -> dict:
-    logging.info(
-        "Call task translate_feed: %s(%s items)", target_language, len(feed.entries)
-    )
-    translated_feed = feed
-    total_tokens = 0
-    translated_characters = 0
-    need_cache_objs = {}
-    source_language = "auto"
-
-    try:
-        for entry in translated_feed.entries[:max_posts]:
-            title = entry.get("title")
-            source_language = text_handler.detect_language(entry)
-            
-            # Translate title
-            if title and translate_engine and translate_title:
-                cached = Translated_Content.is_translated(
-                    title, target_language
-                )  # check cache db
-                translated_text = ""
-                if not cached:
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        results = translate_engine.translate(
-                            title, target_language=target_language, source_language=source_language, text_type="title"
-                        )
-                        translated_text = results.get("text", "")
-                        if translated_text:
-                            break
-                        logging.warning(f"Empty translation for title, retrying (attempt {attempt + 1}/{max_retries})")
-                    
-                    if not translated_text:
-                        translated_text = title  # Fallback to original title if all retries fail
-                    
-                    total_tokens += results.get("tokens", 0)
-                    translated_characters += len(title)
-                    if title and translated_text:
-                        logging.info("[Title] Will cache:%s", translated_text)
-                        hash128 = cityhash.CityHash128(f"{title}{target_language}")
-                        need_cache_objs[hash128] = Translated_Content(
-                            hash=str(hash128),
-                            original_content=title,
-                            translated_language=target_language,
-                            translated_content=translated_text,
-                            tokens=results.get("tokens", 0),
-                            characters=results.get("characters", 0),
-                        )
-                else:
-                    logging.info("[Title] Use db cache:%s", cached["text"])
-                    translated_text = cached["text"]
-
-                entry["title"] = text_handler.set_translation_display(
-                    original=title,
-                    translation=translated_text,
-                    translation_display=translation_display,
-                    seprator=" || ",
-                )
-                bulk_save_cache(need_cache_objs)
-                need_cache_objs = {}
-
-            if fetch_article:
-                try:
-                    article = newspaper.article(
-                        entry.get("link")
-                    )  # 勿使用build，因为不支持跳转
-                    entry["content"] = [{"value": mistune.html(article.text)}]
-                except Exception as e:
-                    logging.warning("Fetch original article error:%s", e)
-
-            # Translate content
-            if translate_engine and translate_content:
-                original_content = entry.get("content")
-                content = (
-                    original_content[0].get("value")
-                    if original_content
-                    else entry.get("summary")
-                )
-
-                if content:
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        translated_summary, tokens, characters, need_cache = (
-                            content_translate(
-                                content, target_language, translate_engine, quality, source_language=source_language
-                            )
-                        )
-                        if translated_summary:
-                            break
-                        logging.warning(f"Empty translation for content, retrying (attempt {attempt + 1}/{max_retries})")
-                    
-                    if not translated_summary:
-                        translated_summary = content  # Fallback to original content if all retries fail
-                    
-                    total_tokens += tokens
-                    translated_characters += characters
-
-                    need_cache_objs.update(need_cache)
-
-                    text = text_handler.set_translation_display(
-                        original=content,
-                        translation=translated_summary,
-                        translation_display=translation_display,
-                        seprator="<br />---------------<br />",
-                    )
-                    entry["summary"] = text
-                    entry["content"] = [{"value": text}]
-
-                    bulk_save_cache(need_cache_objs)
-                    need_cache_objs = {}
-
-            if summary_engine and summary:
-                if summary_engine == None:
-                    logging.warning("No Summarize engine")
-                    continue
-                original_content = entry.get("content")
-                content = (
-                    original_content[0].get("value")
-                    if original_content
-                    else entry.get("summary")
-                )
-
-                if content:
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        summary_text, tokens, need_cache = content_summarize(
-                            content,
-                            target_language=target_language,
-                            detail=summary_detail,
-                            engine=summary_engine,
-                            minimum_chunk_size=summary_engine.max_size(),
-                        )
-                        if summary_text:
-                            break
-                        logging.warning(f"Empty summary, retrying (attempt {attempt + 1}/{max_retries})")
-                    
-                    if not summary_text:
-                        summary_text = content  # Fallback to original content if all retries fail
-                    
-                    total_tokens += tokens
-                    need_cache_objs.update(need_cache)
-                    html_summary = f"<br />🤖:{mistune.html(summary_text)}<br />---------------<br />"
-
-                    entry["summary"] = summary_text
-                    entry["content"] = [{"value": html_summary + content}]
-
-                    bulk_save_cache(need_cache_objs)
-                    need_cache_objs = {}
-
-    except Exception as e:
-        logging.error("translate_feed: %s", str(e))
-    finally:
-        bulk_save_cache(need_cache_objs)
-        need_cache_objs = {}
-
-    return {
-        "feed": translated_feed,
-        "tokens": total_tokens,
-        "characters": translated_characters,
-    }
-
-
-def bulk_save_cache(need_cache_objs):
-    try:
-        if need_cache_objs:
-            logging.info("Save caches to db")
-            Translated_Content.objects.bulk_create(need_cache_objs.values())
-    except IntegrityError:
-        logging.warning("Save cache: A record with this hash value already exists.")
-    except Exception as e:
-        logging.error("Save cache: %s", str(e))
-    return True
-
-
-def content_translate(
-    original_content: str,
-    target_language: str,
-    engine: TranslatorEngine,
-    quality: bool = False,
-    source_language:str = "auto"
-):
-    total_tokens = 0
-    total_characters = 0
-    need_cache_objs = {}
-    soup = BeautifulSoup(original_content, "lxml")
-
-    try:
-        if quality:
-            soup = BeautifulSoup(text_handler.unwrap_tags(soup), "lxml")
-
-        for element in soup.find_all(string=True):
-            if text_handler.should_skip(element):
+def handle_feeds_translation(feeds: list, target_field: str = "title"):
+    for feed in feeds:
+        try:
+            if not feed.entries.exists():
                 continue
-            # TODO 如果文字长度大于最大长度，就分段翻译，需要用chunk_translate
-            text = element.get_text()
 
-            logging.info("[Content] Translate: %s...", text)
-            cached = Translated_Content.is_translated(text, target_language)
-
-            if not cached:
-                results = engine.translate(
-                    text, target_language=target_language, source_language=source_language, text_type="content"
-                )
-                total_tokens += results.get("tokens", 0)
-                total_characters += len(text)
-
-                if results["text"]:
-                    logging.info("[Content] Will cache:%s", results["text"])
-                    hash128 = cityhash.CityHash128(f"{text}{target_language}")
-                    need_cache_objs[hash128] = Translated_Content(
-                        hash=str(hash128),
-                        original_content=text,
-                        translated_language=target_language,
-                        translated_content=results["text"],
-                        tokens=results.get("tokens", 0),
-                        characters=results.get("characters", 0),
-                    )
-
-                element.string.replace_with(results.get("text", text))
-            else:
-                logging.info("[Content] Use db cache:%s", text)
-                element.string.replace_with(cached.get("text"))
-    except Exception as e:
-        logging.error(f"content_translate: {str(e)}")
-
-    return str(soup), total_tokens, total_characters, need_cache_objs
-
-
-def content_summarize(
-    original_content: str,
-    target_language: str,
-    engine: TranslatorEngine,
-    detail: float = 0.0,
-    minimum_chunk_size: Optional[int] = 500,
-    chunk_delimiter: str = ".",
-    summarize_recursively=True,
-):
-    # check detail is set correctly
-    assert 0 <= detail <= 1
-
-    total_tokens = 0
-    need_cache_objs = {}
-    final_summary = ""
-    try:
-        text = text_handler.clean_content(original_content)
-        logging.info("[Summarize]: %s...", text)
-        cached = Translated_Content.is_translated(
-            f"Summary_{original_content}", target_language
-        )
-
-        if not cached:
-            # interpolate the number of chunks based to get specified level of detail
-            max_chunks = len(
-                text_handler.chunk_on_delimiter(
-                    text, minimum_chunk_size, chunk_delimiter
-                )
-            )
-            min_chunks = 1
-            num_chunks = int(min_chunks + detail * (max_chunks - min_chunks))
-
-            # adjust chunk_size based on interpolated number of chunks
-            document_length = len(text_handler.tokenize(text))
-            chunk_size = max(minimum_chunk_size, document_length // num_chunks)
-            text_chunks = text_handler.chunk_on_delimiter(
-                text, chunk_size, chunk_delimiter
-            )
-
+            feed.translation_status = None
             logging.info(
-                "Splitting the text into %d chunks to be summarized.", len(text_chunks)
+                "Start translate %s of feed %s to %s",
+                target_field,
+                feed.feed_url,
+                feed.target_language,
             )
-            # logging.info(f"Chunk lengths are {[len(text_handler.tokenize(x)) for x in text_chunks]}")
 
-            accumulated_summaries = []
-            for chunk in text_chunks:
-                if summarize_recursively and accumulated_summaries:
-                    # Creating a structured prompt for recursive summarization
-                    accumulated_summaries_string = "\n\n".join(accumulated_summaries)
-                    user_message_content = f"Previous summaries:\n\n{accumulated_summaries_string}\n\nText to summarize next:\n\n{chunk}"
-                else:
-                    # Directly passing the chunk for summarization without recursive context
-                    user_message_content = chunk
-
-                # Assuming this function gets the completion and works as expected
-                response = engine.summarize(user_message_content, target_language)
-                accumulated_summaries.append(response.get("text"))
-                total_tokens += response.get("tokens", 0)
-
-            # Compile final summary from partial summaries
-            final_summary = "<br/>".join(accumulated_summaries)
-
-            hash128 = cityhash.CityHash128(
-                f"Summary_{original_content}{target_language}"
+            translate_feed(feed, target_field=target_field)
+            feed.translation_status = True
+            feed.log += f"{timezone.now()} Translate Completed <br>"
+        except Exception as e:
+            logging.error(
+                "Task handle_feeds_translation (%s)%s: %s",
+                feed.target_language,
+                feed.feed_url,
+                str(e),
             )
-            logging.info("[Summary] Will cache:%s", final_summary)
-            need_cache_objs[hash128] = Translated_Content(
-                hash=str(hash128),
-                original_content=f"Summary_{original_content}",
-                translated_language=target_language,
-                translated_content=final_summary,
-                tokens=total_tokens,
-                characters=0,
+            feed.translation_status = False
+            feed.log += f"{timezone.now()} {str(e)} <br>"
+
+    Feed.objects.bulk_update(
+        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+    )
+
+
+def handle_feeds_summary(feeds: list):
+    for feed in feeds:
+        try:
+            if not feed.entries.exists():
+                continue
+
+            feed.translation_status = None
+            logging.info(
+                "Start summary feed %s to %s", feed.feed_url, feed.target_language
             )
-        else:
-            final_summary = cached.get("text")
-            logging.info("[Summary] Use db cache:%s", final_summary)
-    except Exception as e:
-        logging.error(f"content_summarize: {str(e)}")
 
-    return final_summary, total_tokens, need_cache_objs
+            summarize_feed(feed)
+            feed.translation_status = True
+            feed.log += f"{timezone.now()} Summary Completed <br>"
+        except Exception as e:
+            logging.error(
+                "Task handle_feeds_summary (%s)%s: %s",
+                feed.target_language,
+                feed.feed_url,
+                str(e),
+            )
+            feed.translation_status = False
+            feed.log += f"{timezone.now()} {str(e)}<br>"
+
+    Feed.objects.bulk_update(
+        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+    )
 
 
-"""
-def chunk_translate(original_content: str, target_language: str, engine: TranslatorEngine):
-    logging.info("Call chunk_translate: %s(%s items)", target_language, len(original_content))
-    split_chunks: dict = text_handler.content_split(original_content)
-    grouped_chunks: list = text_handler.group_chunks(split_chunks=split_chunks, min_size=engine.min_size(),
-                                                      max_size=engine.max_size(),
-                                                      group_by="characters")
-    translated_content = []
+def translate_feed(feed: Feed, target_field: str = "title"):
+    """Translate and summarize feed entries with enhanced error handling and caching"""
+    logging.info(
+        "Translating feed: %s (%s items)", feed.target_language, feed.entries.count()
+    )
     total_tokens = 0
     total_characters = 0
-    need_cache_objs: dict = {}
-    for chunk in grouped_chunks:
-        if not chunk:
-            continue
-        logging.info("Translate chunk: %s", chunk)
-        cached = Translated_Content.is_translated(chunk, target_language)
-        if not cached:
-            results = engine.translate(chunk, target_language=target_language)
-            translated_content.append(results["text"] if results["text"] else chunk)
-            total_tokens += results.get("tokens", 0)
-            total_characters += len(chunk)
+    entries_to_save = []
 
-            if chunk and results["text"]:
-                logging.info("Save to cache:%s", results["text"])
-                hash128 = cityhash.CityHash128(f"{chunk}{target_language}")
-                need_cache_objs[hash128] = Translated_Content(
-                    hash=str(hash128),
-                    original_content=chunk,
-                    translated_language=target_language,
-                    translated_content=results["text"],
-                    tokens=results.get("tokens", 0),
-                    characters=results.get("characters", 0),
+    for entry in feed.entries.all():
+        try:
+            logging.debug(f"Processing entry {entry}")
+            if not feed.translator:
+                raise Exception("Translate Engine Not Set")
+
+            entry_needs_save = False
+
+            # Process title translation
+            if target_field == "title" and feed.translate_title:
+                metrics = _translate_title(
+                    entry=entry,
+                    target_language=feed.target_language,
+                    engine=feed.translator,
                 )
-        else:
-            translated_content.append(cached["text"])
-    return "".join(translated_content), total_tokens, total_characters, need_cache_objs
-"""
+                total_tokens += metrics["tokens"]
+                total_characters += metrics["characters"]
+                entry_needs_save = True
+
+            # Process content translation
+            if (
+                target_field == "content"
+                and feed.translate_content
+                and entry.original_content
+            ):
+                if feed.fetch_article:
+                    article_content = _fetch_article_content(entry.link)
+                    if article_content:
+                        entry.original_content = article_content
+                        entry_needs_save = True
+
+                metrics = _translate_content(
+                    entry=entry,
+                    target_language=feed.target_language,
+                    engine=feed.translator,
+                    quality=feed.quality,
+                )
+                total_tokens += metrics["tokens"]
+                total_characters += metrics["characters"]
+                entry_needs_save = True
+
+            if entry_needs_save:
+                entries_to_save.append(entry)
+
+        except Exception as e:
+            logging.error(f"Error processing entry {entry.link}: {str(e)}")
+            feed.log += (
+                f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
+            )
+            continue
+
+    # 批量保存所有修改过的entry
+    if entries_to_save:
+        Entry.objects.bulk_update(
+            entries_to_save,
+            fields=["translated_title", "translated_content", "original_content"],
+        )
+
+    # 更新feed的统计信息（将在外层批量更新中保存）
+    feed.total_tokens += total_tokens
+    feed.total_characters += total_characters
+
+    logging.info(
+        f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}"
+    )
+
+
+def _translate_title(
+    entry: Entry,
+    target_language: str,
+    engine: TranslatorEngine,
+) -> dict:
+    """Translate entry title with caching and retry logic"""
+    total_tokens = 0
+    total_characters = 0
+    # Check if title has been translated
+    if entry.translated_title:
+        logging.debug(f"[Title] Title already translated: {entry.original_title}")
+        return {"tokens": 0, "characters": 0}
+
+    logging.debug("[Title] Translating title")
+    result = _auto_retry(
+        engine.translate,
+        max_retries=3,
+        text=entry.original_title,
+        target_language=target_language,
+        text_type="title",
+    )
+    if result:
+        translated_title = result.get("text")
+        entry.translated_title = (
+            translated_title if translated_title else entry.original_title
+        )
+        total_tokens = result.get("tokens", 0)
+        total_characters = result.get("characters", 0)
+    return {"tokens": total_tokens, "characters": total_characters}
+
+
+def _translate_content(
+    entry: Entry,
+    target_language: str,
+    engine: TranslatorEngine,
+    quality: bool = False,
+) -> dict:
+    """Translate entry content with optimized caching"""
+    total_tokens = 0
+    total_characters = 0
+    # 检查是否已经翻译过
+    if entry.translated_content:
+        logging.debug(f"[Content] Content already translated: {entry.original_title}")
+        return {"tokens": 0, "characters": 0}
+
+    soup = BeautifulSoup(entry.original_content, "lxml")
+    # if quality:
+    #     soup = BeautifulSoup(text_handler.unwrap_tags(soup), "lxml")
+
+    # add notranslate class and translate="no" to elements that should not be translated
+    for element in soup.find_all(string=True):
+        if not element.get_text(strip=True):
+            continue
+        if text_handler.should_skip(element):
+            logging.debug("[Content] Skipping element %s", element.parent)
+            # 标记父元素不翻译
+            parent = element.parent
+            parent.attrs.update(
+                {"class": parent.get("class", []) + ["notranslate"], "translate": "no"}
+            )
+
+    # TODO 如果文字长度大于最大长度，就分段翻译
+    processed_html = str(soup)
+
+    logging.debug(f"[Content] Translating content: {entry.original_title}")
+    result = _auto_retry(
+        func=engine.translate,
+        max_retries=3,
+        text=processed_html,
+        target_language=target_language,
+        text_type="content",
+    )
+    translated_content = result.get("text")
+    entry.translated_content = (
+        translated_content if translated_content else processed_html
+    )
+    total_tokens = result.get("tokens", 0)
+    total_characters = result.get("characters", 0)
+
+    return {"tokens": total_tokens, "characters": total_characters}
+
+
+def summarize_feed(
+    feed: Feed,
+    min_chunk_size: int = 300,
+    max_chunk_size: int = 1500,
+    summarize_recursively: bool = True,
+    max_context_chunks: int = 4,
+    max_context_tokens: int = 3000,
+    chunk_delimiter: str = ".",
+    max_chunks_per_entry: int = 20
+):
+    """
+    Generate content summary using adaptive chunking and context-aware summarization
+    
+    Args:
+        feed: Feed object containing entries to summarize
+        min_chunk_size: Minimum token size per chunk
+        max_chunk_size: Maximum token size per chunk
+        summarize_recursively: Whether to use recursive summarization
+        max_context_chunks: Max number of previous summaries to include as context
+        max_context_tokens: Max token count for context window
+        chunk_delimiter: Primary delimiter for chunking
+        max_chunks_per_entry: Safety limit to prevent excessive chunking
+    """
+    assert 0 <= feed.summary_detail <= 1, "summary_detail must be between 0 and 1"
+    entries_to_save = []
+    total_tokens = 0  # Track tokens separately to avoid race conditions
+    
+    try:
+        # Prefetch entries to reduce database queries
+        entries = feed.entries.select_related('feed').filter(ai_summary__isnull=True)
+        total_entries = entries.count()
+        
+        if not total_entries:
+            logging.info(f"No entries to summarize for feed: {feed.feed_url}")
+            return
+            
+        logging.info(f"Starting summary for {total_entries} entries in feed: {feed.feed_url}")
+        
+        for idx, entry in enumerate(entries.iterator(chunk_size=50)):
+            try:
+                logging.info(f"[{idx+1}/{total_entries}] Processing: {entry.original_title}")
+                
+                # Clean and prepare content
+                content_text = text_handler.clean_content(entry.original_content)
+                
+                # Skip empty content
+                if not content_text.strip():
+                    logging.warning(f"Empty content: {entry.original_title}")
+                    entry.ai_summary = "[No content available]"
+                    entries_to_save.append(entry)
+                    continue
+                
+                # Calculate target chunk count based on summary detail
+                token_count = text_handler.get_token_count(content_text)
+                min_chunks = 1
+                max_chunks = max(1, min(max_chunks_per_entry, token_count // min_chunk_size))
+                target_chunks = max(1, min(max_chunks, int(
+                    min_chunks + feed.summary_detail * (max_chunks - min_chunks)
+                )))
+                
+                # Generate adaptive chunks
+                text_chunks = text_handler.adaptive_chunking(
+                    content_text,
+                    target_chunks=target_chunks,
+                    min_chunk_size=min_chunk_size,
+                    max_chunk_size=max_chunk_size,
+                    initial_delimiter=chunk_delimiter
+                )
+                
+                actual_chunks = len(text_chunks)
+                logging.info(f"Chunked into {actual_chunks} chunks (target: {target_chunks})")
+                
+                # Handle small content directly
+                if actual_chunks == 1:
+                    response = _auto_retry(
+                        feed.summarizer.summarize,
+                        max_retries=3,
+                        text=text_chunks[0],
+                        target_language=feed.target_language,
+                        #max_tokens=max_context_tokens
+                    )
+                    entry.ai_summary = response.get("text", "")
+                    total_tokens += response.get("tokens", 0)
+                    entries_to_save.append(entry)
+                    continue
+                
+                # Process chunks with context management
+                accumulated_summaries = []
+                context_token_count = 0
+                
+                for chunk_idx, chunk in enumerate(text_chunks):
+                    # Prepare context for recursive summarization
+                    context_parts = []
+                    if summarize_recursively and accumulated_summaries:
+                        # Select recent summaries within context limits
+                        context_candidates = accumulated_summaries[-max_context_chunks:]
+                        
+                        # Build context within token limits
+                        for summary in reversed(context_candidates):
+                            summary_tokens = text_handler.get_token_count(summary)
+                            if context_token_count + summary_tokens <= max_context_tokens:
+                                context_parts.insert(0, summary)
+                                context_token_count += summary_tokens
+                            else:
+                                break
+                    
+                    # Construct prompt with context
+                    if context_parts:
+                        context_str = "\n\n".join(context_parts)
+                        prompt = (
+                            f"Previous context summaries:\n\n{context_str}\n\n"
+                            f"Current text to summarize:\n\n{chunk}"
+                        )
+                    else:
+                        prompt = chunk
+                    
+                    # Summarize with retry and token limit
+                    response = _auto_retry(
+                        feed.summarizer.summarize,
+                        max_retries=3,
+                        text=prompt,
+                        target_language=feed.target_language,
+                        max_tokens=max_context_tokens
+                    )
+                    
+                    chunk_summary = response.get("text", "")
+                    accumulated_summaries.append(chunk_summary)
+                    total_tokens += response.get("tokens", 0)
+                    context_token_count = text_handler.get_token_count(chunk_summary)
+                    
+                    # Progress logging
+                    if (chunk_idx + 1) % 5 == 0 or (chunk_idx + 1) == actual_chunks:
+                        progress = f"Chunk {chunk_idx+1}/{actual_chunks}"
+                        logging.info(f"{progress} - Summary tokens: {response.get('tokens', 0)}")
+                
+                # Finalize and store summary
+                entry.ai_summary = "\n\n".join(accumulated_summaries)
+                entries_to_save.append(entry)
+                logging.info(f"Completed summary for '{entry.original_title}' - Total tokens: {total_tokens}")
+                
+                # Periodically save progress
+                if (idx + 1) % 10 == 0:
+                    _save_progress(entries_to_save, feed, total_tokens)
+                    entries_to_save = []
+                    total_tokens = 0
+                    
+            except Exception as e:
+                logging.error(f"Error processing entry '{entry.original_title}': {str(e)}")
+                entry.ai_summary = f"[Summary failed: {str(e)}]"
+                entries_to_save.append(entry)
+    
+    except Exception as e:
+        logging.exception(f"Critical error summarizing feed {feed.feed_url}")
+        feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
+    finally:
+        _save_progress(entries_to_save, feed, total_tokens)
+        logging.info(f"Completed summary process for feed: {feed.feed_url}")
+
+def _save_progress(entries_to_save, feed, total_tokens):
+    """Save progress and update token count atomically"""
+    if entries_to_save:
+        Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+    
+    if total_tokens > 0:
+        feed.total_tokens += total_tokens
+        
+
+
+def _auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
+    """Retry translation function with exponential backoff"""
+    for attempt in range(max_retries):
+        try:
+            return func(**kwargs)
+        except Exception as e:
+            logging.error(f"Translation attempt {attempt + 1} failed: {str(e)}")
+        time.sleep(0.5 * (2**attempt))  # Exponential backoff
+    logging.error(f"All {max_retries} attempts failed for translation")
+    return {}
+
+
+def _fetch_article_content(link: str) -> str:
+    """Fetch full article content using newspaper"""
+    try:
+        article = newspaper.article(link)
+        return mistune.html(article.text)
+    except Exception as e:
+        logging.error(f"Article fetch failed: {str(e)}")
+    return ""

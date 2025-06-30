@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0004_o_feed_max_posts"),
     ]
@@ -15,7 +14,7 @@ class Migration(migrations.Migration):
             name="max_posts",
             field=models.IntegerField(
                 default=20,
-                help_text="Max number of posts to be translated",
+                help_text="Max number of posts to be fetched",
                 verbose_name="Max Posts",
             ),
         ),

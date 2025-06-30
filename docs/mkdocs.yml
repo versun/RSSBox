@@ -10,7 +10,7 @@ repo_name: versun/RSS-Translator
 repo_url: https://github.com/versun/RSS-Translator
 
 # Copyright
-copyright: Copyright &copy; 2023 - 2024 Versun
+copyright: Copyright &copy; 2023 - 2025 Versun
 
 theme:
   name: terminal # https://github.com/ntno/mkdocs-terminal
@@ -65,11 +65,9 @@ plugins:
             build: true
             nav_translations:
               主页: Home
-              截图: Screenshots
               安装: Install
               一键部署: One Click
               Docker安装: Docker
-              升级: Upgrade
               开启SSL: Enable SSL
               使用说明: Guide
               翻译服务: Translate Services
@@ -85,7 +83,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/versun/RSS-Translator
     - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/rsstranslator/rsstranslator
+      link: https://hub.docker.com/r/versun/rsstranslator
     - icon: fontawesome/brands/telegram
       link: https://t.me/rsstranslator
     - icon: fontawesome/brands/twitter
@@ -94,12 +92,10 @@ extra:
 # Page tree
 nav:
   - 主页: index.md
-  - 截图: screenshots.md
   - Demo: demo.md
   - 安装:
       - Docker安装: install/docker.md
       - 一键部署: install/one-click.md
-  - 升级: upgrade.md
   - 开启SSL: ssl.md
   - 使用说明: guide.md
   - 翻译服务: translator.md

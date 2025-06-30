@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0006_alter_o_feed_update_frequency"),
     ]
@@ -23,7 +22,7 @@ class Migration(migrations.Migration):
                 editable=False,
                 help_text="Last time the feed was pulled",
                 null=True,
-                verbose_name="Last Pull(UTC)",
+                verbose_name="Last Fetch(UTC)",
             ),
         ),
         migrations.AddField(

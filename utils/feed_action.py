@@ -1,30 +1,32 @@
 import logging
-import os
-# import json
+import time
 
-# import xml.dom.minidom
-from datetime import datetime, timezone, timedelta
-from time import mktime
+from django.utils import timezone
 
-# from dateutil import parser
 from django.conf import settings
 
 from typing import Dict
 
 import feedparser
-import httpx
 from lxml import etree
-
+import mistune
 from feedgen.feed import FeedGenerator
-from fake_useragent import UserAgent
+from core.models import Feed, Entry
+from utils.text_handler import set_translation_display
 
 
-def get_first_non_none(feed, *keys):
-    return next((feed.get(key) for key in keys if feed.get(key) is not None),
-                None)
+def convert_struct_time_to_datetime(time_str):
+    if not time_str:
+        return None
+    return timezone.datetime.fromtimestamp(
+        time.mktime(time_str), tz=timezone.get_default_timezone()
+    )
 
 
-def fetch_feed(url: str, etag: str = "") -> Dict:
+def manual_fetch_feed(url: str, etag: str = "") -> Dict:
+    import httpx
+    from fake_useragent import UserAgent
+
     update = False
     feed = {}
     error = None
@@ -34,8 +36,7 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
         "If-None-Match": etag,
         #'If-Modified-Since': modified,
         "User-Agent": ua.random.strip(),
-        "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
         "Accept-Encoding": "gzip, deflate, br",
         "Connection": "keep-alive",
@@ -44,16 +45,13 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
         "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0"
+        "Cache-Control": "max-age=0",
     }
 
     client = httpx.Client()
 
     try:
-        response = client.get(url,
-                              headers=headers,
-                              timeout=30,
-                              follow_redirects=True)
+        response = client.get(url, headers=headers, timeout=30, follow_redirects=True)
 
         if response.status_code == 200:
             feed = feedparser.parse(response.text)
@@ -77,378 +75,196 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
 
     return {
         "feed": feed,
-        "xml": response.text if response else "",
         "update": update,
         "error": error,
     }
 
 
-def generate_atom_feed(feed_url: str, feed_dict: dict):
-    if not feed_dict:
-        logging.error("generate_atom_feed: feed_dict is None")
-        return None
+def fetch_feed(url: str, etag: str = "") -> Dict:
     try:
-        source_feed = feed_dict["feed"]
-        pubdate = source_feed.get("published_parsed")
-        pubdate = (datetime.fromtimestamp(mktime(pubdate), tz=timezone.utc)
-                   if pubdate else None)
+        feed = feedparser.parse(url)
+        if feed.bozo and not feed.entries:
+            logging.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
+            results = manual_fetch_feed(url, etag)
+            return results
+        else:
+            return {
+                "feed": feed,
+                "update": True,
+                "error": None,
+            }
+    except Exception as e:
+        # logging.warning(f"Failed to fetch feed {url}: {str(e)}")
+        return {
+            "feed": None,
+            "update": False,
+            "error": str(e),
+        }
 
-        updated = source_feed.get("updated_parsed")
-        updated = (datetime.fromtimestamp(mktime(updated), tz=timezone.utc)
-                   if updated else None)
 
-        title = get_first_non_none(source_feed, "title", "subtitle", "info")
-        subtitle = get_first_non_none(source_feed, "subtitle")
-        link = source_feed.get("link") or feed_url
-        language = source_feed.get("language")
-        author_name = source_feed.get("author")
-        # logging.info("generate_atom_feed:%s,%s,%s,%s,%s",title,subtitle,link,language,author_name)
+def _build_atom_feed(
+    feed_id, title, author, link, subtitle, language, updated, pubdate=None
+):
+    """构建Atom Feed的基本结构"""
+    updated_time = updated or pubdate or timezone.now()
+    # 确保必要字段有值:updated, title, id
+    fg = FeedGenerator()
+    fg.id(str(feed_id))
+    fg.title(title or updated_time.strftime("%Y-%m-%d %H:%M:%S"))
+    fg.author({"name": author or "Unknown"})
+    fg.link(href=link, rel="alternate")
+    fg.subtitle(subtitle or "")
+    fg.language(language or "")
+    fg.updated(updated_time)
+    fg.pubDate(pubdate or updated_time)
 
-        fg = FeedGenerator()
-        fg.id(source_feed.get("id", link))
-        fg.title(title)
-        fg.author({"name": author_name})
-        fg.link(href=link, rel="alternate")
-        fg.subtitle(subtitle)
-        fg.language(language)
-        fg.updated(updated)
-        fg.pubDate(pubdate)
+    return fg
 
-        if not fg.updated():
-            fg.updated(pubdate if pubdate else datetime.now(timezone.utc))
-        if not fg.title():
-            fg.title(updated.strftime("%Y-%m-%d %H:%M:%S"))
-        if not fg.id():
-            fg.id(fg.title())
 
-        for entry in feed_dict["entries"]:
-            pubdate = entry.get("published_parsed")
-            pubdate = (datetime.fromtimestamp(mktime(pubdate), tz=timezone.utc)
-                       if pubdate else None)
+def _add_atom_entry(fg, entry, feed_type, translation_display=None):
+    """向Atom Feed添加条目"""
+    pubdate = entry.pubdate or timezone.now()
+    updated = entry.updated or pubdate
+    summary = entry.original_summary
 
-            updated = entry.get("updated_parsed")
-            updated = (datetime.fromtimestamp(mktime(updated), tz=timezone.utc)
-                       if updated else None)
+    # 处理标题和内容
+    title = entry.original_title
+    content = entry.original_content
 
-            title = entry.get("title")
-            link = get_first_non_none(entry, "link")
-            unique_id = entry.get("id", link)
+    if feed_type == "t":
+        if entry.translated_title:
+            title = set_translation_display(
+                entry.original_title,
+                entry.translated_title,
+                translation_display or entry.feed.translation_display,
+            )
 
-            author_name = get_first_non_none(entry, "author", "publisher")
-            content = (entry.get("content")[0].get("value")
-                       if entry.get("content") else None)
-            summary = entry.get("summary")
+        if entry.translated_content:
+            content = set_translation_display(
+                entry.original_content,
+                entry.translated_content,
+                translation_display or entry.feed.translation_display,
+                "<br />---------------<br />",
+            )
+            summary = content[:100] + "..." if len(content) > 100 else content
 
-            fe = fg.add_entry(order="append")
-            fe.title(title)
-            fe.link(href=link)
-            fe.author({"name": author_name})
-            fe.id(unique_id)
-            fe.content(content, type="html")
-            fe.updated(updated)
-            fe.pubDate(pubdate)
-            fe.summary(summary, type="html")
+        if entry.ai_summary:
+            html_summary = (
+                f"<br />🤖:{mistune.html(entry.ai_summary)}<br />---------------<br />"
+            )
+            content = html_summary + content
+            summary = entry.ai_summary
 
-            for enclosure in entry.get("enclosures", []):
+    # 创建条目
+    fe = fg.add_entry()
+    fe.title(title or updated.strftime("%Y-%m-%d %H:%M:%S"))
+    fe.link(href=entry.link or "", rel="alternate")
+    fe.author({"name": entry.author or "Unknown"})
+    fe.id(entry.guid or entry.link)
+    fe.content(content, type="html")
+    fe.summary(summary, type="html")
+    fe.updated(updated)
+    fe.pubDate(pubdate)
+
+    # 处理附件
+    if entry.enclosures_xml:
+        try:
+            xml = etree.fromstring(entry.enclosures_xml)
+            for enclosure in xml.iter("enclosure"):
                 fe.enclosure(
                     url=enclosure.get("href"),
                     type=enclosure.get("type"),
                     length=enclosure.get("length"),
                 )
+        except Exception as e:
+            logging.error(f"Error parsing enclosures for entry {entry.id}: {str(e)}")
 
-            # id, title, updated are required
-            if not fe.updated():
-                fe.updated(pubdate if pubdate else datetime.now(timezone.utc))
-            if not fe.title():
-                fe.title(updated.strftime("%Y-%m-%d %H:%M:%S"))
-            if not fe.id():
-                fe.id(fe.title())
+    return fe
 
-        # fg.atom_file(file_path, extensions=True, pretty=True, encoding='UTF-8', xml_declaration=True)
-        atom_string = fg.atom_str(pretty=False)
 
-    except Exception as e:
-        logging.error("generate_atom_feed error %s: %s", feed_url, str(e))
-        return None
-
-    # dom = xml.dom.minidom.parseString(atom_string)
-    # pi = dom.createProcessingInstruction("xml-stylesheet", 'type="text/xsl" href="/static/rss.xsl"')
-    # dom.insertBefore(pi, dom.firstChild)
-    # atom_string_with_pi = dom.toprettyxml()
-
+def _finalize_atom_feed(fg):
+    """生成最终的Atom XML字符串"""
+    atom_string = fg.atom_str(pretty=False)
     root = etree.fromstring(atom_string)
     tree = etree.ElementTree(root)
-    pi = etree.ProcessingInstruction("xml-stylesheet",
-                                     'type="text/xsl" href="/static/rss.xsl"')
+    pi = etree.ProcessingInstruction(
+        "xml-stylesheet", 'type="text/xsl" href="/static/rss.xsl"'
+    )
     root.addprevious(pi)
-    atom_string_with_pi = etree.tostring(tree,
-                                         pretty_print=True,
-                                         xml_declaration=True,
-                                         encoding="utf-8").decode()
-
-    return atom_string_with_pi
+    return etree.tostring(
+        tree, pretty_print=True, xml_declaration=True, encoding="utf-8"
+    ).decode()
 
 
-ATOM_NS = "http://www.w3.org/2005/Atom"
-ENTRY_ID = f"{{{ATOM_NS}}}id"
-ENTRY_PUBLISHED = f"{{{ATOM_NS}}}published"
-ENTRY_UPDATED = f"{{{ATOM_NS}}}updated"
-
-
-class FeedMerger:
-
-    def __init__(self, feed_name, feed_files):
-        self.feed_name = feed_name
-        self.feed_files = feed_files
-        self.output_dir = os.path.join(settings.DATA_FOLDER, "feeds")
-        self.output_file = check_file_path(self.output_dir, f"{feed_name}.xml")
-        self.processed_entries = set()
-
-    def merge_feeds(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        self._write_feed_header()
-
-        for feed_file in self.feed_files:
-            if not os.path.exists(feed_file):
-                logging.warning(f"{feed_file} does not exist, skipping")
-                continue
-
-            self._process_feed_file(feed_file)
-
-        self._write_feed_footer()
-
-    def _write_feed_header(self):
-        with open(self.output_file, "wb") as f:
-            f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-            f.write(
-                b'<?xml-stylesheet type="text/xsl" href="/static/rss.xsl"?>\n')
-            f.write(f'<feed xmlns="{ATOM_NS}">\n'.encode("utf-8"))
-            f.write(
-                f"<title>Translated Feeds for {self.feed_name} | RSS Translator</title>\n"
-                .encode("utf-8"))
-            f.write(b'<link href="https://rsstranslator.com"/>\n')
-            f.write(
-                f"<updated>{datetime.now(timezone.utc).isoformat()}</updated>\n"
-                .encode("utf-8"))
-
-    def _process_feed_file(self, feed_file):
-        try:
-            feed_tree = etree.parse(feed_file)
-            feed_root = feed_tree.getroot()
-            feed_title = feed_root.findtext(f"{{{ATOM_NS}}}title", "")
-            feed_url = feed_root.find(f"{{{ATOM_NS}}}link").get("href", "")
-            self.processed_entries.update(
-                entry.find(ENTRY_ID).text
-                for entry in feed_root.iterfind(f"{{{ATOM_NS}}}entry")
-                if self._should_process_entry(entry, feed_title, feed_url))
-
-        except Exception as e:
-            logging.error(f"FeedMerger::_process_feed_file: {feed_file}: {e}")
-
-    def _should_process_entry(self, entry, feed_title, feed_url):
-        try:
-            id_elem = entry.find(ENTRY_ID)
-            if id_elem is None or id_elem.text in self.processed_entries:
-                return False
-
-            published_elem = entry.find(ENTRY_PUBLISHED) or entry.find(
-                ENTRY_UPDATED)
-            if published_elem is None:
-                return False
-
-            published_date = self._parse_date(published_elem.text)
-            thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
-
-            if published_date < thirty_days_ago.date():
-                return False
-
-            self._add_author_info(entry, feed_title, feed_url)
-            self._write_entry(entry)
-            return True
-        except Exception as e:
-            logging.error(f"FeedMerger::_should_process_entry:{e}")
-            return False
-
-    def _parse_date(self, date_str):
-        try:
-            return datetime.fromisoformat(date_str).date()
-        except ValueError:
-            logging.error(f"Error parsing date: {date_str}")
-            return None
-
-    def _add_author_info(self, entry, feed_title, feed_url):
-        author_elem = entry.find(f"{{{ATOM_NS}}}author")
-        if author_elem is None:
-            author_elem = etree.Element(f"{{{ATOM_NS}}}author")
-            entry.append(author_elem)
-
-        name_elem = author_elem.find(f"{{{ATOM_NS}}}name")
-        if name_elem is None:
-            name_elem = etree.SubElement(author_elem, f"{{{ATOM_NS}}}name")
-
-        # 将name元素的文本修改为feed_title+原author信息
-        if name_elem.text:
-            name_elem.text = f"{feed_title} - {name_elem.text}"
-        else:
-            name_elem.text = feed_title
-
-        uri_elem = author_elem.find(f"{{{ATOM_NS}}}uri")
-        if uri_elem is None:
-            uri_elem = etree.SubElement(author_elem, f"{{{ATOM_NS}}}uri")
-        uri_elem.text = feed_url
-
-    def _write_entry(self, entry):
-        with open(os.path.normpath(self.output_file), "ab") as f:
-            f.write(etree.tostring(entry, pretty_print=True))
-
-    def _write_feed_footer(self):
-        with open(os.path.normpath(self.output_file), "ab") as f:
-            f.write(b"</feed>")
-
-
-def check_file_path(base_path: str, filename: str) -> str:
-    fullpath = os.path.normpath(os.path.join(base_path, filename))
-    if not fullpath.startswith(base_path):
-        raise Exception("not allowed")
-    return fullpath
-
-
-def merge_all_atom(feed_files, feed_name):
-    merger = FeedMerger(feed_name, feed_files)
-    merger.merge_feeds()
-
-
-"""
-def merge_all_atom(feed_files: list, filename: str):
-    ATOM_NS = "http://www.w3.org/2005/Atom"
-
-    output_dir = os.path.join(settings.DATA_FOLDER, "feeds")
-    os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, f"{filename}.xml")
-    
-    with open(os.path.normpath(output_file), "wb") as f:
-        # Write Feed Header
-        f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
-        f.write(b'<?xml-stylesheet type="text/xsl" href="/static/rss.xsl"?>\n')
-        f.write(f'<feed xmlns="{ATOM_NS}">\n'.encode("utf-8"))
-        f.write(
-            f"<title>Translated Feeds for {filename} | RSS Translator</title>\n".encode(
-                "utf-8"
-            )
-        )
-        f.write(b'<link href="https://rsstranslator.com"/>\n')
-        f.write(
-            f"<updated>{datetime.now(timezone.utc).isoformat()}</updated>\n".encode(
-                "utf-8"
-            )
-        )
-
-        today = date.today()
-        thirty_days_ago = today - timedelta(days=30)
-        processed_entries = set()
-
-        for feed_file in feed_files:
-            if not os.path.exists(feed_file):
-                logging.warning(f"{feed_file} does not exist, skipping")
-                continue
-            
-            try:
-                feed_tree = etree.parse(feed_file)
-                feed_root = feed_tree.getroot()
-                
-                feed_title = feed_root.findtext(f"{{{ATOM_NS}}}title", "")
-                feed_url = feed_root.findtext(f"{{{ATOM_NS}}}link[@rel='self']/@href", "")
-
-                processed_entries.update(
-                    {
-                        entry.find(f"{{{ATOM_NS}}}id").text
-                        for entry in feed_root.xpath(f".//{{{ATOM_NS}}}entry")
-                        if _should_process_entry(entry, feed_title, feed_url)
-                    }
-                )
-            except Exception as e:
-                logging.error(f"Error processing {feed_file}: {e}")
-            
-            # for _, entry in etree.iterparse(
-            #     feed_file, events=("end",), tag=f"{{{ATOM_NS}}}entry"
-            # ):
-            def _should_process_entry(entry, feed_title, feed_url):
-                id_elem = entry.find(f"{{{ATOM_NS}}}id")
-                if id_elem is None and id_elem.text in processed_entries:
-                    return False
-
-                published_elem = entry.find(
-                    f"{{{ATOM_NS}}}published"
-                ) or entry.find(f"{{{ATOM_NS}}}updated")
-                if published_elem is None:
-                    return False
-
-                published_date = parser.parse(published_elem.text).date()
-                if published_date < thirty_days_ago.date():
-                    return False
-                    
-                author_elem = etree.Element(f"{{{ATOM_NS}}}author")
-                name_elem = etree.SubElement(author_elem, f"{{{ATOM_NS}}}name")
-                name_elem.text = feed_title
-                uri_elem = etree.SubElement(author_elem, f"{{{ATOM_NS}}}uri")
-                uri_elem.text = feed_url
-                entry.append(author_elem)
-
-                f.write(etree.tostring(entry, pretty_print=True))
-                return True
-
-        f.write(b"</feed>")
-"""
-''' old generate_atom_feed function, use django feedgenerator
-def generate_atom_feed_old(feed_url:str, feed_dict: dict):
-    """
-    Generate an Atom feed from a dictionary parsed by feedparser.
-    """
-    if not feed_dict:
-        logging.error("generate_atom_feed: feed_dict is None")
+def generate_atom_feed(feed: Feed, feed_type="t"):
+    """生成单个Feed的Atom格式"""
+    if not feed:
+        logging.error("generate_atom_feed: feed is None")
         return None
-    try:
-        source_feed = feed_dict['feed']
-        # https://feedparser.readthedocs.io/en/latest/reference.html
-        pubdate = source_feed.get('published_parsed')
-        pubdate = datetime(*pubdate[:6]) if pubdate else ''
 
-        updated = source_feed.get('updated_parsed')
-        updated = datetime(*updated[:6]) if updated else ''
-        feed = Atom1Feed(
-            title=get_first_non_none(source_feed, 'title', 'subtitle', 'info'),
-            link=get_first_non_none(source_feed, 'link', feed_url),
-            description=get_first_non_none(source_feed, 'subtitle', 'info', 'description'),
-            language=source_feed.get('language'),
-            author_name=get_first_non_none(source_feed, 'author'),
-            updated=updated or pubdate,
+    try:
+        # 构建基础Feed
+        fg = _build_atom_feed(
+            feed_id=feed.id,
+            title=feed.name,
+            author=feed.author,
+            link=feed.link or feed.feed_url,
+            subtitle=feed.subtitle,
+            language=feed.language,
+            updated=feed.updated,
+            pubdate=feed.pubdate,
         )
 
-        for entry in feed_dict.get('entries'):
-            pubdate = entry.get('published_parsed')
-            pubdate = datetime(*pubdate[:6]) if pubdate else ''
+        # 添加所有条目
+        for entry in feed.entries.all():
+            _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
-            updated = entry.get('updated_parsed')
-            updated = datetime(*updated[:6]) if updated else ''
+        # 生成最终XML
+        return _finalize_atom_feed(fg)
 
-            feed.add_item(
-                # https://github.com/django/django/blob/c7e986fc9f4848bd757d4b9b70a40586d2cee9fb/django/utils/feedgenerator.py#L343
-                title=entry.get('title',''),
-                link=get_first_non_none(entry, 'link'),
-                pubdate=pubdate,
-                updateddate=updated,
-                unique_id=entry.get('id'),
-                author_name=get_first_non_none(entry, 'author', 'publisher'),
-                description=get_first_non_none(entry, 'content', 'summary'),
-            )
     except Exception as e:
-        logging.error("generate_atom_feed error: %s", str(e))
-    finally:
-        atom_string = feed.writeString('utf-8')
-        dom = xml.dom.minidom.parseString(atom_string)
-        pi = dom.createProcessingInstruction("xml-stylesheet", 'type="text/xsl" href="/static/rss.xsl"')
-        dom.insertBefore(pi, dom.firstChild)
-        atom_string_with_pi = dom.toprettyxml()
-        return atom_string_with_pi
+        logging.exception(f"generate_atom_feed error {feed.feed_url}: {str(e)}")
+        return None
 
-'''
+
+def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
+    """合并多个Feeds生成单个Atom Feed"""
+    type_str = "Original" if feed_type == "o" else "Translated"
+    feed_id = f"urn:merged-category-{category}-{type_str}-feeds"
+    feed_title = f"{type_str} Category {category} Feeds"
+
+    # 构建基础Feed
+    fg = _build_atom_feed(
+        feed_id=feed_id,
+        title=feed_title,
+        author=feed_title,
+        link=settings.SITE_URL,
+        subtitle=f"Combined {type_str} {category} Feeds",
+        language="en",
+        updated=timezone.now(),
+    )
+
+    # 收集所有条目
+    all_entries = []
+    for feed in feeds:
+        # 添加Feed作为分类
+        fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
+        # 收集当前feed的条目
+        for entry in feed.entries.all():
+            sort_time = entry.pubdate or entry.updated or timezone.now()
+            all_entries.append((sort_time, entry))
+
+    # 按时间升序排序
+    all_entries.sort(key=lambda x: x[0], reverse=True)
+
+    # 更新Feed时间为最新条目时间
+    if all_entries:
+        latest_time = all_entries[0][0]
+        fg.updated(latest_time)
+
+    # 添加所有条目
+    for _, entry in all_entries[:100]:  # 限制为前100条
+        _add_atom_entry(fg, entry, feed_type)
+
+    # 生成最终XML
+    return _finalize_atom_feed(fg)

@@ -5,29 +5,72 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0038_openltranslator'),
+        ("translator", "0038_openltranslator"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='KagiTranslator',
+            name="KagiTranslator",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True, verbose_name='Name')),
-                ('valid', models.BooleanField(null=True, verbose_name='Valid')),
-                ('api_key', encrypted_model_fields.fields.EncryptedCharField()),
-                ('url', models.URLField(default='https://kagi.com/api/v0', help_text="We'll use fastgpt for the translation and summarise for the summary", max_length=255)),
-                ('is_ai', models.BooleanField(default=True)),
-                ('summarization_engine', models.TextField(default='cecil', help_text='Please check https://help.kagi.com/kagi/api/summarizer.html#summarization-engines', max_length=20)),
-                ('summary_type', models.TextField(default='summary', help_text='Please check https://help.kagi.com/kagi/api/summarizer.html#summary-types', max_length=20)),
-                ('translate_prompt', models.TextField(default='You are a professional, authentic translation engine. Translate only the text into {target_language}, return only the translations, do not explain the original text.', verbose_name='Title Translate Prompt')),
-                ('content_translate_prompt', models.TextField(default='You are a professional, authentic translation engine. Translate only the text into {target_language}, return only the translations, do not explain the original text.', verbose_name='Content Translate Prompt')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(max_length=100, unique=True, verbose_name="Name"),
+                ),
+                ("valid", models.BooleanField(null=True, verbose_name="Valid")),
+                ("api_key", encrypted_model_fields.fields.EncryptedCharField()),
+                (
+                    "url",
+                    models.URLField(
+                        default="https://kagi.com/api/v0",
+                        help_text="We'll use fastgpt for the translation and summarise for the summary",
+                        max_length=255,
+                    ),
+                ),
+                ("is_ai", models.BooleanField(default=True)),
+                (
+                    "summarization_engine",
+                    models.TextField(
+                        default="cecil",
+                        help_text="Please check https://help.kagi.com/kagi/api/summarizer.html#summarization-engines",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "summary_type",
+                    models.TextField(
+                        default="summary",
+                        help_text="Please check https://help.kagi.com/kagi/api/summarizer.html#summary-types",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "translate_prompt",
+                    models.TextField(
+                        default="You are a professional, authentic translation engine. Translate only the text into {target_language}, return only the translations, do not explain the original text.",
+                        verbose_name="Title Translate Prompt",
+                    ),
+                ),
+                (
+                    "content_translate_prompt",
+                    models.TextField(
+                        default="You are a professional, authentic translation engine. Translate only the text into {target_language}, return only the translations, do not explain the original text.",
+                        verbose_name="Content Translate Prompt",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Kagi',
-                'verbose_name_plural': 'Kagi',
+                "verbose_name": "Kagi",
+                "verbose_name_plural": "Kagi",
             },
         ),
     ]

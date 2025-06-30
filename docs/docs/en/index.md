@@ -11,77 +11,86 @@ Official website: [rsstranslator.com](https://rsstranslator.com)
 
 ## Features:
 
-1. Translation of title or content
+1. Translate titles or content
 2. Bilingual display
-3. Subscribe to the translated RSS/JSON
-4. Support multiple translation engines, each source can specify a translation engine
-5. Control the update frequency of the translation source and check the status of the translation
-6. Cache all translated content to minimise translation costs
-7. View the number of tokens/characters spent on each source.
-8. AI summary content
-9. Fetch Original Article 
+3. Subscribe to translated RSS/JSON
+4. Supports multiple translation engines, each source can specify an engine
+5. Control update frequency and view translation status
+6. Cache all translated content to minimize translation costs
+7. View token/character usage per source
+8. AI content summarization
+9. Full-text fetching
    
-Currently supported translation services:
-
-- Free Translators(A collection of all major free translation services)
+Supported translation engines:
 - DeepL
-- DeepLX
-- Google Translate(Web)
-- Microsoft Translate API
-- Caiyun API
-- OpenAI
-- Claude AI
-- Azure OpenAI
-- Google Gemini
-- Moonshot AI
-- Together AI
-- OpenRouter AI
-- Groq
-- Doubao
-- OpenL
-- Kagi API
+- OpenAI 
 
-Continuously adding   
-For more information, please check [translation service](translator.md).
+More engines coming soon.
 
-## Sponsorship
+## Sponsors
 
-Thanks to the following companies for providing open source support for this project.
+Thanks to the following companies for their open-source support.
 
-<table style="width:auto;">
+<table>
   <tr>
-    <td style="padding:10px;">
-      <a href="https://www.jetbrains.com/pycharm/">
-        <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/PyCharm_icon.svg" alt="PyCharm logo." style="width:100px; height:100px;">
-      </a>
-    </td>
     <td style="padding:10px;">
       <a href="https://www.railway.app">
         <img src="https://railway.app/brand/logo-light.png" alt="Railway" style="width:100px; height:100px;">
       </a>
     </td>
-    <td style="padding:10px;">
-      <a href="https://www.gitpod.io">
-        <img src="https://raw.githubusercontent.com/rss-translator/RSS-Translator/main/docs/docs/assets/gitpod.svg" alt="Gitpod" style="width:100px; height:100px;">
-      </a>
-    </td>
   </tr>
 </table>
-Thank you for your support!
-<p align="center">
-  <a href="https://github.com/versun/sponsors/">
-    <img src='https://raw.githubusercontent.com/versun/sponsors/main/sponsors.svg'/>
-  </a>
-</p>
 
-If it has helped you, please consider sponsoring me: [AFDIAN](https://afdian.com/a/versun) | [Open Collective](https://opencollective.com/rsstranslator)
-> Description: Sponsored avatars are refreshed every morning and afternoon at 5:30 a.m. (UTC time zone).
+Special thanks to the following users for their support:
+![sponsors](https://supporters.versun.me/sponsors.svg)
 
-## Contribution
+If you find this project helpful, consider becoming a sponsor: [Afdian](https://afdian.com/a/versun) | [Github Sponsor](https://github.com/sponsors/versun)
+> Note: Sponsor avatars refresh at 5:30 AM and PM UTC daily.
 
-[WiKi](https://github.com/rss-translator/RSS-Translator/wiki)
+## Contributing
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/RSS-Translator)
 
-## Star
+We welcome all forms of contribution! To contribute to RSS-Translator, please follow these steps:
+
+1. **Fork this repository**  
+
+   Click the Fork button in the top right to copy the project to your GitHub account.
+
+2. **Clone to local**  
+
+   ```bash
+   git clone https://github.com/your-username/RSS-Translator.git
+   cd RSS-Translator
+   ```
+
+3. **Create a new branch**
+
+    It is recommended to create a separate branch for each feature or fix:
+    ```
+    git checkout -b feature/your-feature-name
+    ```
+
+4. **Install dependencies and start development**
+
+    Recommended to use the uv tool:
+    ```
+    uv run dev # Automatically installs dependencies and starts the dev server
+    ```
+5. **Submit a Pull Request**
+
+    Submit a PR on GitHub, describing your changes and motivation.
+
+**Contribution Tips**
+
+Make sure your code passes formatting checks and basic tests before submitting.
+It is recommended to describe your changes and motivation in detail in the PR.
+All types of contributions are welcome: documentation, tests, features, or bug fixes.
+If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rsstranslator).
+
+Thank you for your participation and support!
+
+
+## Star History Chart
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rss-translator/RSS-Translator&type=Date)](https://star-history.com/#rss-translator/RSS-Translator&Date)
 

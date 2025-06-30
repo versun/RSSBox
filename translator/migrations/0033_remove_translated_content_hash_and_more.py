@@ -4,19 +4,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0032_update_current_hash_value'),
+        ("translator", "0032_update_current_hash_value"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='translated_content',
-            name='hash',
+            model_name="translated_content",
+            name="hash",
         ),
         migrations.AlterField(
-            model_name='translated_content',
-            name='new_hash',
-            field=models.CharField(editable=False, max_length=39, primary_key=True, serialize=False),
+            model_name="translated_content",
+            name="new_hash",
+            field=models.CharField(
+                editable=False, max_length=39, primary_key=True, serialize=False
+            ),
         ),
     ]

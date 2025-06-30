@@ -1,6 +1,6 @@
 import os
 import uuid
-import re
+# import re
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -11,66 +11,63 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from tagulous.models import SingleTagField
 
 
-class O_Feed(models.Model):
-    sid = models.SlugField(
+class Feed(models.Model):
+    name = models.CharField(
+        max_length=255, blank=True, null=True, verbose_name=_("Name")
+    )
+    subtitle = models.CharField(
+        max_length=255, blank=True, null=True, verbose_name=_("Subtitle")
+    )
+    slug = models.SlugField(
+        _("URL Slug"),
         max_length=255,
         unique=True,
-        editable=False,
-    )
-    name = models.CharField(_("Name"), max_length=255, blank=True, null=True)
-    feed_url = models.URLField(
-        _("Feed URL"),
-        unique=True,
-    )
-    last_updated = models.DateTimeField(
-        _("Last Updated(UTC)"),
-        default=None,
         blank=True,
         null=True,
-        editable=False,
-        help_text=_("Last updated from the original feed"),
     )
-    last_pull = models.DateTimeField(
-        _("Last Pull(UTC)"),
-        default=None,
+    link = models.URLField(
+        _("Link"),
         blank=True,
         null=True,
-        editable=False,
-        help_text=_("Last time the feed was pulled"),
     )
-    TRANSLATION_DISPLAY_CHOICES = [
-        (0, _("Only Translation")),
-        (1, _("Translation | Original")),
-        (2, _("Original | Translation")),
-    ]
-    translation_display = models.IntegerField(
-        _("Translation Display"), default=0, choices=TRANSLATION_DISPLAY_CHOICES
-    )  # 0: Only Translation, 1: Translation || Original, 2: Original || Translation
+    author = models.CharField(
+        _("Author"),
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+    language = models.CharField(
+        _("Language"),
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+    pubdate = models.DateTimeField(
+        _("Pubdate"),
+        blank=True,
+        null=True,
+    )
+    updated = models.DateTimeField(
+        _("Updated"),
+        blank=True,
+        null=True,
+    )
+    feed_url = models.URLField(_("Feed URL"))
+    fetch_status = models.BooleanField(
+        _("Fetch Status"),
+        null=True,
+        editable=False,
+    )
 
-    etag = models.CharField(
-        max_length=255,
-        default="",
-        editable=False,
-    )
-    size = models.IntegerField(
-        _("Size"),
-        default=0,
-        editable=False,
-    )
-    valid = models.BooleanField(
-        _("Valid"),
-        null=True,
-        editable=False,
-    )
     update_frequency = models.IntegerField(
         _("Update Frequency"),
-        default=os.getenv("default_update_frequency", 30),
+        default=30,
         help_text=_("Minutes"),
     )
     max_posts = models.IntegerField(
         _("Max Posts"),
         default=os.getenv("default_max_posts", 20),
-        help_text=_("Max number of posts to be translated"),
+        help_text=_("Max number of posts to be fetched"),
     )
     quality = models.BooleanField(
         _("Best Quality"),
@@ -85,17 +82,56 @@ class O_Feed(models.Model):
         help_text=_("Fetch original article from the website."),
     )
 
-    content_type = models.ForeignKey(
-        ContentType, on_delete=models.SET_NULL, null=True, related_name="translator"
-    )
-    object_id = models.PositiveIntegerField(null=True)
-    translator = GenericForeignKey("content_type", "object_id")
+    TRANSLATION_DISPLAY_CHOICES = [
+        (0, _("Only Translation")),
+        (1, _("Translation | Original")),
+        (2, _("Original | Translation")),
+    ]
+    translation_display = models.IntegerField(
+        _("Translation Display"), default=0, choices=TRANSLATION_DISPLAY_CHOICES
+    )  # 0: Only Translation, 1: Translation || Original, 2: Original || Translation
 
-    content_type_summary = models.ForeignKey(
-        ContentType, on_delete=models.SET_NULL, null=True, related_name="summary_engine"
+    target_language = models.CharField(
+        _("Language"),
+        choices=settings.TRANSLATION_LANGUAGES,
+        max_length=50,
+        default=settings.DEFAULT_TARGET_LANGUAGE,
     )
-    object_id_summary = models.PositiveIntegerField(null=True)
-    summary_engine = GenericForeignKey("content_type_summary", "object_id_summary")
+    translate_title = models.BooleanField(_("Translate Title"), default=False)
+    translate_content = models.BooleanField(_("Translate Content"), default=False)
+    summary = models.BooleanField(_("Summary"), default=False)
+
+    translation_status = models.BooleanField(
+        _("Translation Status"),
+        null=True,
+        editable=False,
+    )
+
+    translator_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="translator",
+    )
+    translator_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
+    translator = GenericForeignKey("translator_content_type", "translator_object_id")
+
+    summarizer_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        default=None,
+        related_name="summarizer",
+    )
+    summarizer_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
+    summarizer = GenericForeignKey("summarizer_content_type", "summarizer_object_id")
 
     summary_detail = models.FloatField(
         _("Summary Detail"),
@@ -119,84 +155,106 @@ class O_Feed(models.Model):
         force_lowercase=True, blank=True, help_text=_("Enter a category string")
     )
 
-    def __str__(self):
-        return self.feed_url
-
-    class Meta:
-        verbose_name = _("Original Feed")
-        verbose_name_plural = _("Original Feeds")
-
-    def save(self, *args, **kwargs):
-        if not self.sid:
-            self.sid = uuid.uuid5(
-                uuid.NAMESPACE_URL, f"{self.feed_url}:{settings.SECRET_KEY}"
-            ).hex
-        super(O_Feed, self).save(*args, **kwargs)
-
-    def get_translation_display(self):
-        return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
-
-
-class T_Feed(models.Model):
-    sid = models.SlugField(
-        _("URL Slug(Optional)"),
-        max_length=255,
-        unique=True,
-        help_text=_(
-            "Example: if set to hacker_news, the subscription address will be http://127.0.0.1:8000/rss/hacker_news"
-        ),
-    )  # sid for feed_url and file name
-    language = models.CharField(
-        _("Language"), choices=settings.TRANSLATION_LANGUAGES, max_length=50
-    )
-    o_feed = models.ForeignKey(
-        O_Feed, on_delete=models.CASCADE, verbose_name=_("Original Feed")
-    )
-    status = models.BooleanField(
-        _("Translation Status"),
-        null=True,
-        editable=False,
-    )
-
-    translate_title = models.BooleanField(_("Translate Title"), default=False)
-    translate_content = models.BooleanField(_("Translate Content"), default=False)
-    summary = models.BooleanField(_("Summary"), default=False)
-
     total_tokens = models.IntegerField(_("Tokens Cost"), default=0)
     total_characters = models.IntegerField(_("Characters Cost"), default=0)
 
-    modified = models.DateTimeField(
-        _("Last Modified"),
+    last_translate = models.DateTimeField(
+        _("Last translate"),
         blank=True,
         null=True,
         editable=False,
         help_text=_("Last time the feed was translated"),
     )
-    size = models.IntegerField(
-        _("Size"),
-        default=0,
+
+    last_fetch = models.DateTimeField(
+        _("Last Fetch(UTC)"),
+        default=None,
+        blank=True,
+        null=True,
         editable=False,
+        help_text=_("Last time the feed was fetched"),
+    )
+    etag = models.CharField(
+        max_length=255,
+        default="",
+        editable=False,
+        null=True,
+        blank=True,
     )
 
-    # translate_paragraphs = models.IntegerField(_("Translate Paragraphs"), default=0)
+    log = models.TextField(
+        _("Log"),
+        default="",
+        blank=True,
+        null=True,
+        help_text=_("Log for the feed, useful for debugging"),
+    )
+
+    def __str__(self):
+        return self.feed_url
 
     class Meta:
-        verbose_name = _("Translated Feed")
-        verbose_name_plural = _("Translated Feeds")
+        verbose_name = _("Feed")
+        verbose_name_plural = _("Feeds")
         constraints = [
             models.UniqueConstraint(
-                fields=["o_feed", "language"], name="unique_o_feed_lang"
+                fields=["feed_url", "target_language"], name="unique_feed_lang"
             )
         ]
 
-    def __str__(self):
-        return self.sid
-
     def save(self, *args, **kwargs):
-        if not self.sid:
-            self.sid = (
-                f"{self.o_feed.sid}_{re.sub('[^a-z]', '_', self.language.lower())}"
-            )
-        # else:
-        #     self.sid = self.sid
-        super(T_Feed, self).save(*args, **kwargs)
+        if not self.slug:
+            self.slug = uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"{self.feed_url}:{self.target_language}:{settings.SECRET_KEY}",
+            ).hex
+
+        thresholds = [5, 15, 30, 60, 1440, 10080]
+        for threshold in thresholds:
+            if self.update_frequency <= threshold:
+                self.update_frequency = threshold
+                break
+
+        if len(self.log.encode("utf-8")) > 2048:
+            self.log = self.log[-2048:]
+
+        if not self.translator_content_type_id:
+            self.translator_content_type_id = None
+            self.translator_object_id = None
+        if not self.summarizer_content_type_id:
+            self.summarizer_content_type_id = None
+            self.summarizer_object_id = None
+
+        super(Feed, self).save(*args, **kwargs)
+
+    def get_translation_display(self):
+        return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
+
+
+class Entry(models.Model):
+    feed = models.ForeignKey(Feed, on_delete=models.CASCADE, related_name="entries")
+    link = models.URLField(null=False)
+    author = models.CharField(max_length=255, null=True, blank=True)
+    pubdate = models.DateTimeField(null=True, blank=True)
+    updated = models.DateTimeField(null=True, blank=True)
+    guid = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    enclosures_xml = models.TextField(null=True, blank=True)
+
+    original_title = models.CharField(max_length=255, null=True, blank=True)
+    translated_title = models.CharField(max_length=255, null=True, blank=True)
+    original_content = models.TextField(null=True, blank=True)
+    translated_content = models.TextField(null=True, blank=True)
+    original_summary = models.TextField(null=True, blank=True)
+    ai_summary = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return self.original_title
+
+    class Meta:
+        verbose_name = _("Entry")
+        verbose_name_plural = _("Entries")
+        # constraints = [
+        #     models.UniqueConstraint(
+        #         fields=["feed", "guid"], name="unique_entry_guid"
+        #     )
+        # ]

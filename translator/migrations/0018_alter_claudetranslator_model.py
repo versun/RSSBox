@@ -4,15 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0017_remove_translated_content_id_and_more'),
+        ("translator", "0017_remove_translated_content_id_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='claudetranslator',
-            name='model',
-            field=models.CharField(choices=[('claude-instant-1.2', 'claude-instant-1.2'), ('claude-2.1', 'claude-2.1'), ('claude-2.0', 'claude-2.0'), ('claude-3-opus-20240229', 'claude-3-opus-20240229'), ('claude-3-sonnet-20240229', 'claude-3-sonnet-20240229')], default='claude-instant-1.2', max_length=50),
+            model_name="claudetranslator",
+            name="model",
+            field=models.CharField(
+                choices=[
+                    ("claude-instant-1.2", "claude-instant-1.2"),
+                    ("claude-2.1", "claude-2.1"),
+                    ("claude-2.0", "claude-2.0"),
+                    ("claude-3-opus-20240229", "claude-3-opus-20240229"),
+                    ("claude-3-sonnet-20240229", "claude-3-sonnet-20240229"),
+                ],
+                default="claude-instant-1.2",
+                max_length=50,
+            ),
         ),
     ]

@@ -1,48 +1,41 @@
 [project]
 name = "rss-translator"
-version = "2025.5.27"
+version = "2025.7.1"
 description = "A Django-based RSS translation service. Compatible with uv/uvicorn."
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.2.1",
+    "redis>=6.2.0",
     "django-encrypted-model-fields>=0.6.5",
     "django-tagulous2",
-    "anthropic>=0.52.0",
     "bs4>=0.0.2",
-    "cityhash>=0.4.8",
-    "dateutils>=0.6.12",
     "deepl>=1.22.0",
-    "easytranslator>=2024.6.20",
-    "fake-useragent>=2.2.0",
+    "openai>=1.82.0",
+    "translators>=6.0.0",
     "feed2json>=2024.4.29",
     "feedgen>=1.0.0",
     "feedparser>=6.0.11",
     "gevent>=25.5.1",
-    "google-generativeai>=0.8.5",
     "html2text>=2025.4.15",
-    "httpx>=0.28.1",
-    "huey>=2.5.3",
-    "langdetect>=1.0.9",
     "lxml>=5.4.0",
     "lxml-html-clean>=0.4.2",
     "mistune>=3.1.3",
     "newspaper4k>=0.9.3.1",
-    "openai>=1.82.0",
-    "opyml>=0.1.2",
-    "pydeeplx>=1.0.7",
     "python-dateutil>=2.9.0.post0",
     "tiktoken>=0.9.0",
-    "translators>=6.0.0",
     "gunicorn>=23.0.0",
-    "volcengine-python-sdk[ark]>=3.0.4",
     "whitenoise>=6.9.0",
+    "django-debug-toolbar>=5.2.0",
+    "bx_django_utils>=89",
+    "fake-useragent>=2.2.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv]
 package = true
 
 [tool.setuptools]
-packages = [ "config", "core", "locale", "scripts", "templates", "translator", "utils" ] 
+packages = [ "config", "core", "locale", "scripts", "translator", "templates", "utils" ] 
 
 [project.scripts]
 server = "scripts.prod_server:main"
@@ -54,6 +47,5 @@ django-tagulous2 = { git = "https://github.com/versun/django-tagulous2" }
 
 [dependency-groups]
 dev = [
-    "django-debug-toolbar>=5.2.0",
-    "django-huey-monitor>=0.9.0",
+    "ipykernel>=6.29.5",
 ]

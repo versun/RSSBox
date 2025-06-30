@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("translator", "0027_alter_azureaitranslator_api_key_and_more"),
     ]

@@ -5,29 +5,56 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0010_claudetranslator'),
+        ("translator", "0010_claudetranslator"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='GoogleTranslateWebTranslator',
+            name="GoogleTranslateWebTranslator",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True, verbose_name='Name')),
-                ('valid', models.BooleanField(null=True, verbose_name='Valid')),
-                ('base_url',
-                 models.URLField(default='https://translate.googleapis.com/translate_a/t', verbose_name='URL')),
-                ('proxy', models.URLField(blank=True, default=None, null=True, verbose_name='Proxy(optional)')),
-                ('interval', models.IntegerField(default=3, verbose_name='Request Interval(s)')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(max_length=100, unique=True, verbose_name="Name"),
+                ),
+                ("valid", models.BooleanField(null=True, verbose_name="Valid")),
+                (
+                    "base_url",
+                    models.URLField(
+                        default="https://translate.googleapis.com/translate_a/t",
+                        verbose_name="URL",
+                    ),
+                ),
+                (
+                    "proxy",
+                    models.URLField(
+                        blank=True,
+                        default=None,
+                        null=True,
+                        verbose_name="Proxy(optional)",
+                    ),
+                ),
+                (
+                    "interval",
+                    models.IntegerField(default=3, verbose_name="Request Interval(s)"),
+                ),
             ],
             options={
-                'verbose_name': 'Google Translate(Web)',
-                'verbose_name_plural': 'Google Translate(Web)',
+                "verbose_name": "Google Translate(Web)",
+                "verbose_name_plural": "Google Translate(Web)",
             },
         ),
         migrations.AddField(
-            model_name='deeplxtranslator',
-            name='interval',
-            field=models.IntegerField(default=3, verbose_name='Request Interval(s)'),
+            model_name="deeplxtranslator",
+            name="interval",
+            field=models.IntegerField(default=3, verbose_name="Request Interval(s)"),
         ),
     ]

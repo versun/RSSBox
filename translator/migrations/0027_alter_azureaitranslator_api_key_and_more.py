@@ -5,25 +5,28 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0026_groqtranslator_openrouteraitranslator_and_more'),
+        ("translator", "0026_groqtranslator_openrouteraitranslator_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='azureaitranslator',
-            name='api_key',
-            field=encrypted_model_fields.fields.EncryptedCharField(verbose_name='API Key'),
+            model_name="azureaitranslator",
+            name="api_key",
+            field=encrypted_model_fields.fields.EncryptedCharField(
+                verbose_name="API Key"
+            ),
         ),
         migrations.AlterField(
-            model_name='azureaitranslator',
-            name='base_url',
-            field=models.URLField(default='https://example.openai.azure.com/', verbose_name='Endpoint'),
+            model_name="azureaitranslator",
+            name="base_url",
+            field=models.URLField(
+                default="https://example.openai.azure.com/", verbose_name="Endpoint"
+            ),
         ),
         migrations.AlterField(
-            model_name='azureaitranslator',
-            name='version',
-            field=models.CharField(default='2024-02-15-preview', max_length=50),
+            model_name="azureaitranslator",
+            name="version",
+            field=models.CharField(default="2024-02-15-preview", max_length=50),
         ),
     ]

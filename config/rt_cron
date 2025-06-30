@@ -1,0 +1,13 @@
+# 每5分钟执行一次 update_feeds_for_frequency 任务
+*/5 * * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency '5 min' >> /var/log/cron.log 2>&1
+# 每15分钟执行一次 update_feeds_for_frequency 任务
+*/15 * * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency '15 min' >> /var/log/cron.log 2>&1
+# 每30分钟执行一次 update_feeds_for_frequency 任务
+*/30 * * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency '30 min' >> /var/log/cron.log 2>&1
+# 每60分钟执行一次 update_feeds_for_frequency 任务
+*/60 * * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency 'hourly' >> /var/log/cron.log 2>&1
+# 每天凌晨1点执行一次 update_feeds_for_frequency 任务
+0 1 * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency 'daily' >> /var/log/cron.log 2>&1
+# 每周一凌晨2点执行一次 update_feeds_for_frequency 任务
+0 2 * * 1 root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency 'weekly' >> /var/log/cron.log 2>&1
+

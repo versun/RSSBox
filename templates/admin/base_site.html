@@ -45,7 +45,7 @@
         updateStatus.textContent = " Checking...";
 
         fetch(
-            "https://api.github.com/repos/rss-translator/RSS-Translator/releases/latest",
+            "https://api.github.com/repos/versun/RSS-Translator/releases/latest",
         )
             .then((response) => {
                 if (!response.ok) {
@@ -56,7 +56,7 @@
             .then((data) => {
                 const latestVersion = data.tag_name;
                 if (latestVersion !== currentVersion) {
-                    updateStatus.innerHTML = ` <a href="${data.html_url}" target="_blank">Update available (${latestVersion})</a>`;
+                    updateStatus.innerHTML = ` <a href="${data.html_url}" target="_blank">Latest version: ${latestVersion})</a>`;
                 } else {
                     updateStatus.textContent = " Up to date";
                 }
@@ -76,7 +76,7 @@
         >RSS Translator</a
     >
     · <a href="https://afdian.com/a/versun" title="Donate">Donate</a> · Version:
-    <span data-version="2025.5.27">2025.5.27</span>
+    <span data-version="{{ VERSION }}">{{ VERSION }}</span>
     <svg
         id="update-button"
         class="svg-icon"

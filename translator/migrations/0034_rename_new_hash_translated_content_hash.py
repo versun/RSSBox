@@ -4,15 +4,14 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0033_remove_translated_content_hash_and_more'),
+        ("translator", "0033_remove_translated_content_hash_and_more"),
     ]
 
     operations = [
         migrations.RenameField(
-            model_name='translated_content',
-            old_name='new_hash',
-            new_name='hash',
+            model_name="translated_content",
+            old_name="new_hash",
+            new_name="hash",
         ),
     ]

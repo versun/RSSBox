@@ -11,37 +11,18 @@
 ### 文档：[rsstranslator.com](https://rsstranslator.com)
 ## 功能：
 
-1. 翻译标题或内容
+1. 翻译标题或内容或总结
 2. 双语显示
 3. 订阅翻译后的RSS/JSON
 4. 支持多种翻译引擎，每个源都可以指定一个翻译引擎
 5. 控制翻译源的更新频率和查看翻译状态
-6. 缓存所有翻译内容，尽可能减少翻译费用
 7. 可查看每个源所花费的Token/字符数
-8. AI内容总结
 9. 获取全文
    
 目前支持的翻译引擎：
 
-- Free Translators(集合了所有主流的免费翻译服务)
 - DeepL
-- DeepLX
-- OpenAI
-- ClaudeAI
-- Azure OpenAI
-- Google Gemini
-- Google Translate(Web)
-- Microsoft Translate API
-- Caiyun API
-- Moonshot AI
-- Together AI
-- OpenRouter AI
-- Groq
-- 豆包(Doubao)
-- OpenL
-- Kagi API
-
-陆续增加中
+- 兼容所有支持 OpenAI 接口的模型
 
 ## 赞助
 
@@ -73,7 +54,7 @@
 
 2. **克隆到本地**  
    ```bash
-   git clone https://github.com/你的用户名/RSS-Translator.git
+   git clone https://github.com/versun/RSS-Translator.git
    cd RSS-Translator
    ```
 
@@ -84,21 +65,19 @@
     git checkout -b feature/你的功能名
     ```
 
-4. **安装依赖并启动开发环境**
+4. **安装依赖并启动开发服务器**
+    ```
+    uv run dev # 将会自动安装依赖包并完成初始化
+    ```
 
-    推荐使用 uv 工具：
-    ```
-    uv run init # 将会自动安装依赖包并完成初始化
-    uv run dev # 将会安装开发依赖包并启动开发服务
-    ```
-5. **发起 Pull Request**
+6. **发起 Pull Request**
 
     在 GitHub 上提交 PR，描述你的更改内容和动机。
 
 
 **贡献建议**
 
-  提交前请确保代码通过格式检查和基本测试。
+  提交前请确保代码通过 ruff 格式检查和基本测试。
   建议在 PR 中详细说明更改内容和动机。
   欢迎提交文档、测试、功能或 Bug 修复等各类贡献。
   如有疑问或建议，欢迎在 [Telegram 群组](https://t.me/rsstranslator)中交流。

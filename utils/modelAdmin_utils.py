@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 # if settings.DEBUG:
 #    from huey_monitor.models import TaskModel
 
+
 # def get_all_subclasses(cls):
 #     subclasses = set()
 #     for subclass in cls.__subclasses__():
@@ -18,7 +19,7 @@ def get_all_app_models(app_name):
     app = apps.get_app_config(app_name)
     models = app.get_models()
     # exclude Translated_Content
-    exclude_models = ["Translated_Content"]
+    exclude_models = []
     if not settings.DEBUG:
         exclude_models.append("TestTranslator")
 
@@ -53,7 +54,7 @@ def get_translator_and_summary_choices():
     return translator_choices, summary_engine_choices
 
 
-def valid_icon(status):
+def status_icon(status):
     match status:
         case None:
             return format_html(

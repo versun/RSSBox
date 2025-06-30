@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0010_o_feed_additional_prompt_o_feed_content_type_summary_and_more"),
     ]

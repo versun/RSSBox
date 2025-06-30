@@ -4,15 +4,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('translator', '0021_alter_claudetranslator_model'),
+        ("translator", "0021_alter_claudetranslator_model"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='geminitranslator',
-            name='model',
-            field=models.CharField(choices=[('gemini-pro', 'gemini-pro'), ('gemini-1.5-pro', 'gemini-1.5-pro')], default='gemini-pro', max_length=100),
+            model_name="geminitranslator",
+            name="model",
+            field=models.CharField(
+                choices=[
+                    ("gemini-pro", "gemini-pro"),
+                    ("gemini-1.5-pro", "gemini-1.5-pro"),
+                ],
+                default="gemini-pro",
+                max_length=100,
+            ),
         ),
     ]

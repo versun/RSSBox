@@ -1,224 +1,163 @@
 import logging
-import os
-import json
-
-from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
-from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.views.decorators.http import condition
-from .models import T_Feed, O_Feed
+from .models import Feed
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from opyml import OPML
+from lxml import etree
 from django.utils.translation import gettext_lazy as _
+from feed2json import feed2json
 
-from utils.feed_action import merge_all_atom, check_file_path
+from .cache import cache_rss, cache_category
 
-def import_opml(request):
-    if request.method == 'POST':
-        opml_file = request.FILES.get('opml_file')
-        if opml_file and isinstance(opml_file, InMemoryUploadedFile):
-            try:
-                opml_content = opml_file.read().decode('utf-8')
-                opml = OPML.from_xml(opml_content)
-                
-                for outline in opml.body.outlines:
-                    category = outline.text
-                    #category, _ = Category.objects.get_or_create(name=category_name)
-                    
-                    for feed in outline.outlines:
-                        O_Feed.objects.create(
-                            name=feed.title or feed.text,
-                            feed_url=feed.xml_url,
-                            category=category
-                        )
-                
-                messages.success(request, _("OPML file imported successfully."))
-            except Exception as e:
-                messages.error(request, _("Error importing OPML file: {}").format(str(e)))
-        else:
-            messages.error(request, _("Please upload a valid OPML file."))
-    
-    return redirect('admin:core_o_feed_changelist')
 
-def get_modified(request, feed_sid):
+def _get_modified(request, feed_slug, feed_type="t", **kwargs):
     try:
-        modified = T_Feed.objects.get(sid=feed_sid).modified
-    except T_Feed.DoesNotExist:
+        if feed_type == "t":
+            modified = Feed.objects.get(slug=feed_slug).last_translate
+        else:
+            modified = Feed.objects.get(slug=feed_slug).last_fetch
+    except Feed.DoesNotExist:
         logging.warning(
             "Translated feed not found, Maybe still in progress, Please confirm it's exist: %s",
-            feed_sid,
+            feed_slug,
         )
         modified = None
     return modified
 
 
-def get_etag(request, feed_sid):
+def _get_etag(request, feed_slug, feed_type="t", **kwargs):
     try:
-        modified = T_Feed.objects.get(sid=feed_sid).modified
-    except T_Feed.DoesNotExist:
+        if feed_type == "t":
+            etag = Feed.objects.get(slug=feed_slug).last_translate
+        else:
+            etag = Feed.objects.get(slug=feed_slug).etag
+    except Feed.DoesNotExist:
         logging.warning(
-            "Translated feed not found, Maybe still in progress, Please confirm it's exist: %s",
-            feed_sid,
+            "Feed not fetched yet, Please update it first: %s",
+            feed_slug,
         )
-        modified = None
-    return modified.strftime("%Y-%m-%d %H:%M:%S") if modified else None
+        etag = None
+    return etag
 
 
-# @cache_page(60 * 15)  # Cache this view for 15 minutes
-@condition(etag_func=get_etag, last_modified_func=get_modified)
-def rss(request, feed_sid):
-    # Sanitize the feed_sid to prevent path traversal attacks
-    feed_sid = smart_str(feed_sid)
-
-    #feed_file_path = os.path.join(settings.DATA_FOLDER, "feeds", f"{feed_sid}.xml")
-    base_path = os.path.join(settings.DATA_FOLDER, "feeds")
-    feed_file_path = check_file_path(base_path=base_path, filename=f"{feed_sid}.xml")
-    # Check if the file exists and if not, raise a 404 error
-    if not os.path.exists(feed_file_path):
-        logging.warning("Requested feed file not found: %s", feed_file_path)
-        # raise Http404(f"The feed with ID {feed_sid} does not exist.")
-        return HttpResponse(
-            "Please wait for the translation to complete or check if the original feeds has been verified"
-        )
-
-    try:
-        # Stream the file content
-        # def file_iterator(file_name, chunk_size=8192):
-        #     with open(file_name, "rb") as f:
-        #         while True:
-        #             chunk = f.read(chunk_size)
-        #             if not chunk:
-        #                 break
-        #             yield chunk
+def _make_response(atom_feed, filename, format="xml"):
+    if format == "json":
+        # 如果需要返回 JSON 格式
+        feed_json = feed2json(atom_feed)
+        response = JsonResponse(feed_json)
+    else:
+        # 使用生成器函数实现流式传输
+        def stream_content():
+            chunk_size = 4096  # 每次发送4KB
+            for i in range(0, len(atom_feed), chunk_size):
+                yield atom_feed[i : i + chunk_size]
 
         response = StreamingHttpResponse(
-            file_iterator(feed_file_path), content_type="application/xml"
+            stream_content(),  # 使用生成器
+            content_type="application/xml; charset=utf-8",
         )
-        response["Content-Disposition"] = (
-            f'inline; filename="{os.path.basename(feed_file_path)}"'
-        )
-        logging.info("Feed file served: %s", feed_file_path)
-        return response
-    except IOError as e:
-        # Log the exception and return an appropriate error response
-        logging.exception(
-            "Failed to read the feed file: %s / %s", feed_file_path, str(e)
-        )
-        return HttpResponse(status=500)
+        response["Content-Disposition"] = f"inline; filename={filename}.xml"
+    return response
 
 
-@condition(etag_func=get_etag, last_modified_func=get_modified)
-def rss_json(request, feed_sid):
-    # Sanitize the feed_sid to prevent path traversal attacks
-    feed_sid = smart_str(feed_sid)
-    base_path = os.path.join(settings.DATA_FOLDER, "feeds")
-    feed_file_path = check_file_path(base_path, f"{feed_sid}.json")
-    content_type = "application/json; charset=utf-8"
+def import_opml(request):
+    if request.method == "POST":
+        opml_file = request.FILES.get("opml_file")
+        if opml_file and isinstance(opml_file, InMemoryUploadedFile):
+            try:
+                # 直接读取字节数据（lxml 支持二进制解析）
+                opml_content = opml_file.read()
 
-    # Check if the file exists and if not, raise a 404 error
-    if not os.path.exists(feed_file_path):
-        logging.warning("Requested feed file not found: %s", feed_file_path)
-        # raise Http404(f"The feed with ID {feed_sid} does not exist.")
-        return HttpResponse(
-            "Please wait for the translation to complete or check if the original feeds has been verified"
-        )
+                # 使用安全的 lxml 解析器解析 OPML
+                parser = etree.XMLParser(resolve_entities=False)
+                root = etree.fromstring(opml_content, parser=parser)
+                body = root.find("body")
 
+                if body is None:
+                    messages.error(request, _("Invalid OPML: Missing body element"))
+                    return redirect("admin:core_feed_changelist")
+
+                # 递归处理所有 outline 节点
+                def process_outlines(outlines, category: str = None):
+                    for outline in outlines:
+                        # 检查是否为 feed（有 xmlUrl 属性）
+                        if "xmlUrl" in outline.attrib:
+                            Feed.objects.get_or_create(
+                                name=outline.get("title") or outline.get("text"),
+                                feed_url=outline.get("xmlUrl"),
+                                category=category,
+                            )
+                        # 处理嵌套结构（新类别）
+                        elif outline.find("outline") is not None:
+                            new_category = outline.get("text") or outline.get("title")
+                            process_outlines(outline.findall("outline"), new_category)
+
+                # 从 body 开始处理顶级 outline
+                process_outlines(body.findall("outline"))
+
+                messages.success(request, _("OPML file imported successfully."))
+            except etree.XMLSyntaxError as e:
+                messages.error(request, _("XML syntax error: {}").format(str(e)))
+            except Exception as e:
+                messages.error(
+                    request, _("Error importing OPML file: {}").format(str(e))
+                )
+        else:
+            messages.error(request, _("Please upload a valid OPML file."))
+
+    return redirect("admin:core_feed_changelist")
+
+
+@condition(etag_func=_get_etag, last_modified_func=_get_modified)
+def rss(request, feed_slug, feed_type="t", format="xml"):
+    # Sanitize the feed_slug to prevent path traversal attacks
+    feed_slug = smart_str(feed_slug)
     try:
-        with open(feed_file_path, "rb") as f:
-            feed_data = json.load(f)
-        response = JsonResponse(feed_data)
+        cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
+        content = cache.get(cache_key)
+        if content is None:
+            logging.debug(f"Cache MISS for key: {cache_key}")
+            content = cache_rss(feed_slug, feed_type, format)
+            return (
+                HttpResponse(
+                    status=500, content="Feed not found, Maybe it's still in progress, Please try again later."
+                )
+            )
+        else:
+            logging.debug(f"Cache HIT for key: {cache_key}")
 
-        logging.info("Feed file served: %s", feed_file_path)
-        return response
+        return _make_response(content, feed_slug, format)
     except Exception as e:
-        # Log the exception and return an appropriate error response
-        logging.exception(
-            "Failed to read the feed file: %s / %s", feed_file_path, str(e)
-        )
-        return HttpResponse(status=500)
+        logging.error(f"Error generating rss {feed_slug}: {str(e)}")
+        return HttpResponse(status=500, content="Internal Server Error")
 
 
-@cache_page(60 * 15)  # Cache this view for 15 minutes
-def all(request, name):
-    if name != "t":
-        return HttpResponse(status=404)
-    try:
-        # get all data from t_feed
-        feeds = T_Feed.objects.all()
-        # get all feed file path from feeds.sid
-        feed_file_paths = get_feed_file_paths(feeds)
-        merge_all_atom(feed_file_paths, "all_t")
-        base_path = os.path.join(settings.DATA_FOLDER, "feeds")
-        #merge_file_path = os.path.join(settings.DATA_FOLDER, "feeds", "all_t.xml")
-        merge_file_path = check_file_path(base_path, "all_t.xml")
-        response = StreamingHttpResponse(
-            file_iterator(merge_file_path), content_type="application/xml"
-        )
-        response["Content-Disposition"] = "inline; filename=all_t.xml"
-        logging.info("All Translated Feed file served: %s", merge_file_path)
-        return response
-    except Exception as e:
-        # Log the exception and return an appropriate error response
-        logging.exception(
-            "Failed to read the all_t feed file: %s / %s", merge_file_path, str(e)
-        )
-        return HttpResponse(status=500)
-
-
-@cache_page(60 * 15)  # Cache this view for 15 minutes
-def category(request, category: str):
-    all_category = O_Feed.category.tag_model.objects.all()
+def category(request, category: str, feed_type="t", format="xml"):
+    category = smart_str(category)
+    all_category = Feed.category.tag_model.objects.all()
 
     if category not in all_category:
         return HttpResponse(status=404)
 
     try:
-        # # get all data from t_feed
-        feeds = T_Feed.objects.filter(o_feed__category__name=category)
-        # # get all feed file path from feeds.sid
-        # feed_file_paths = [os.path.join(settings.DATA_FOLDER, 'feeds', f'{feed.sid}.xml') for feed in feeds]
-        feed_file_paths = get_feed_file_paths(feeds)
-        merge_all_atom(feed_file_paths, category)
-        base_path = os.path.join(settings.DATA_FOLDER, "feeds")
-        #merge_file_path = os.path.join(settings.DATA_FOLDER, "feeds", f"{category}.xml")
-        merge_file_path = check_file_path(base_path, f"{category}.xml")
-        response = StreamingHttpResponse( 
-            file_iterator(merge_file_path), content_type="application/xml"
-        )
-        response["Content-Disposition"] = f"inline; filename={category}.xml"
-        logging.info("Category Feed file served: %s", merge_file_path)
-        return response
+        cache_key = f"cache_category_{category}_{feed_type}_{format}"
+        content = cache.get(cache_key)
+        if content is None:
+            logging.debug(f"Cache MISS for key: {cache_key}")
+            content = cache_category(category, feed_type, format)
+            return (
+                HttpResponse(
+                    status=500,
+                    content="Category not found, Maybe it's still in progress, Please try again later.",
+                )
+            )
+        else:
+            logging.debug(f"Cache HIT for key: {cache_key}")
+        return _make_response(content, category, format)
     except Exception as e:
-        # Log the exception and return an appropriate error response
-        logging.exception(
-            "Failed to read the category feed file: %s / %s", category, str(e)
-        )
-        return HttpResponse(status=500)
-
-
-def get_feed_file_paths(feeds: list) -> list:
-    feed_file_dir = os.path.abspath(os.path.join(settings.DATA_FOLDER, "feeds"))
-    feed_file_paths = []
-
-    for feed in feeds:
-        file_path = os.path.abspath(
-            os.path.join(feed_file_dir, f"{feed.sid}.xml")
-        )  # 获取绝对路径
-        if (
-            os.path.commonpath((feed_file_dir, file_path)) != feed_file_dir
-        ):  # 对比最长公共路径，防止目录遍历
-            raise ValueError(f"Invalid feed file path: {file_path}")
-        feed_file_paths.append(file_path)
-    return feed_file_paths
-
-
-def file_iterator(file_path, chunk_size=8192):
-    with open(file_path, "rb") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            yield chunk
+        logging.error("Error generating category rss: %s / %s", category, str(e))
+        return HttpResponse(status=500, content="Internal Server Error")

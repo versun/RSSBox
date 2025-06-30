@@ -7,8 +7,10 @@ from django.shortcuts import render, redirect
 
 from utils.modelAdmin_utils import (
     get_all_app_models,
-    valid_icon,
+    status_icon,
 )
+
+
 class CoreAdminSite(AdminSite):
     site_header = _("RSS Translator Admin")
     site_title = _("RSS Translator")
@@ -26,7 +28,7 @@ class CoreAdminSite(AdminSite):
         app_list = super().get_app_list(request, app_label)
         app_list += [
             {
-                "name": _("Engine"),
+                "name": "",
                 "app_label": "engine",
                 "models": [
                     {
@@ -78,7 +80,7 @@ class TranslatorPaginator(Paginator):
                         "id": obj_id,
                         "table_name": model._meta.db_table.split("_")[1],
                         "name": obj_name,
-                        "valid": valid_icon(obj_valid),
+                        "valid": status_icon(obj_valid),
                         "provider": model._meta.verbose_name,
                     }
                 )
@@ -130,4 +132,3 @@ def translator_add_view(request):
 
 
 core_admin_site = CoreAdminSite()
-

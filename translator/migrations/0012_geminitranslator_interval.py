@@ -5,13 +5,13 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('translator', '0011_googletranslatewebtranslator_and_more'),
+        ("translator", "0011_googletranslatewebtranslator_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='geminitranslator',
-            name='interval',
-            field=models.IntegerField(default=3, verbose_name='Request Interval(s)'),
+            model_name="geminitranslator",
+            name="interval",
+            field=models.IntegerField(default=3, verbose_name="Request Interval(s)"),
         ),
     ]
