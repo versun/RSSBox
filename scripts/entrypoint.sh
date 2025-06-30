@@ -9,6 +9,7 @@ gosu rsstranslator /opt/venv/bin/python $DockerHOME/scripts/init.py
 
 # 修复权限问题
 chown rsstranslator:rsstranslator /var/run/crond.pid
+chown -R rsstranslator:rsstranslator $DockerHOME
 
 # 以root用户启动cron服务
 cron -n &
