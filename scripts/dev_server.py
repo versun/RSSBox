@@ -20,9 +20,6 @@ def setup_environment():
     existing = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
     origins_set = set(filter(None, (existing + "," + default_origins).split(",")))
     os.environ["CSRF_TRUSTED_ORIGINS"] = ",".join(sorted(origins_set))
-    print("Allow below domains access CSRF protection:")
-    for origin in os.environ["CSRF_TRUSTED_ORIGINS"].split(","):
-        print(f"  - {origin}")
 
 def start_development_server():
     """启动开发服务器"""
