@@ -1,13 +1,14 @@
 name: dev:Docker Image CI
 
-on:
-  release:
-    types: [prereleased]
-    branches:    
-      - next
-
 permissions:
   contents: read
+  packages: write
+
+on:
+release:
+  types: [prereleased]
+  branches:    
+    - main
 
 jobs:
   build:
