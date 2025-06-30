@@ -4,7 +4,7 @@ from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
 import newspaper
-from typing import Optional
+from typing import Optional, Tuple
 from .models import Feed, Entry
 from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
@@ -355,73 +355,170 @@ def _translate_content(
 
 def summarize_feed(
     feed: Feed,
-    minimum_chunk_size: Optional[int] = 500,
+    min_chunk_size: int = 300,
+    max_chunk_size: int = 1500,
+    summarize_recursively: bool = True,
+    max_context_chunks: int = 4,
+    max_context_tokens: int = 3000,
     chunk_delimiter: str = ".",
-    summarize_recursively=True,
+    max_chunks_per_entry: int = 20
 ):
-    """Generate content summary with retry logic"""
-    # check detail is set correctly
-    assert 0 <= feed.summary_detail <= 1
+    """
+    Generate content summary using adaptive chunking and context-aware summarization
+    
+    Args:
+        feed: Feed object containing entries to summarize
+        min_chunk_size: Minimum token size per chunk
+        max_chunk_size: Maximum token size per chunk
+        summarize_recursively: Whether to use recursive summarization
+        max_context_chunks: Max number of previous summaries to include as context
+        max_context_tokens: Max token count for context window
+        chunk_delimiter: Primary delimiter for chunking
+        max_chunks_per_entry: Safety limit to prevent excessive chunking
+    """
+    assert 0 <= feed.summary_detail <= 1, "summary_detail must be between 0 and 1"
     entries_to_save = []
+    total_tokens = 0  # Track tokens separately to avoid race conditions
+    
     try:
-        for entry in feed.entries.all():
-            entry_needs_save = False
-            # Check cache first
-            if entry.ai_summary:
-                logging.debug(
-                    f"[Summary] Summary already generated: {entry.original_title}"
-                )
-            else:
+        # Prefetch entries to reduce database queries
+        entries = feed.entries.select_related('feed').filter(ai_summary__isnull=True)
+        total_entries = entries.count()
+        
+        if not total_entries:
+            logging.info(f"No entries to summarize for feed: {feed.feed_url}")
+            return
+            
+        logging.info(f"Starting summary for {total_entries} entries in feed: {feed.feed_url}")
+        
+        for idx, entry in enumerate(entries.iterator(chunk_size=50)):
+            try:
+                logging.info(f"[{idx+1}/{total_entries}] Processing: {entry.original_title}")
+                
+                # Clean and prepare content
                 content_text = text_handler.clean_content(entry.original_content)
-                logging.debug(f"[Summary] Generating summary: {entry.original_title}")
-                max_chunks = len(
-                    text_handler.chunk_on_delimiter(
-                        content_text, minimum_chunk_size, chunk_delimiter
-                    )
-                )
+                
+                # Skip empty content
+                if not content_text.strip():
+                    logging.warning(f"Empty content: {entry.original_title}")
+                    entry.ai_summary = "[No content available]"
+                    entries_to_save.append(entry)
+                    continue
+                
+                # Calculate target chunk count based on summary detail
+                token_count = text_handler.get_token_count(content_text)
                 min_chunks = 1
-                num_chunks = int(
+                max_chunks = max(1, min(max_chunks_per_entry, token_count // min_chunk_size))
+                target_chunks = max(1, min(max_chunks, int(
                     min_chunks + feed.summary_detail * (max_chunks - min_chunks)
+                )))
+                
+                # Generate adaptive chunks
+                text_chunks = text_handler.adaptive_chunking(
+                    content_text,
+                    target_chunks=target_chunks,
+                    min_chunk_size=min_chunk_size,
+                    max_chunk_size=max_chunk_size,
+                    initial_delimiter=chunk_delimiter
                 )
-
-                # adjust chunk_size based on interpolated number of chunks
-                document_length = len(text_handler.tokenize(content_text))
-                chunk_size = max(minimum_chunk_size, document_length // num_chunks)
-                text_chunks = text_handler.chunk_on_delimiter(
-                    content_text, chunk_size, chunk_delimiter
-                )
-                accumulated_summaries = []
-                for chunk in text_chunks:
-                    if summarize_recursively and accumulated_summaries:
-                        accumulated_summaries_string = "\n\n".join(
-                            accumulated_summaries
-                        )
-                        user_message_content = f"Previous summaries:\n\n{accumulated_summaries_string}\n\nText to summarize next:\n\n{chunk}"
-                    else:
-                        user_message_content = chunk
-
+                
+                actual_chunks = len(text_chunks)
+                logging.info(f"Chunked into {actual_chunks} chunks (target: {target_chunks})")
+                
+                # Handle small content directly
+                if actual_chunks == 1:
                     response = _auto_retry(
                         feed.summarizer.summarize,
                         max_retries=3,
-                        text=user_message_content,
+                        text=text_chunks[0],
                         target_language=feed.target_language,
+                        #max_tokens=max_context_tokens
                     )
-                    accumulated_summaries.append(response.get("text"))
-                    feed.total_tokens += response.get("tokens", 0)
-
-                entry.ai_summary = "<br>".join(accumulated_summaries)
-                entry_needs_save = True
-
-            if entry_needs_save:
+                    entry.ai_summary = response.get("text", "")
+                    total_tokens += response.get("tokens", 0)
+                    entries_to_save.append(entry)
+                    continue
+                
+                # Process chunks with context management
+                accumulated_summaries = []
+                context_token_count = 0
+                
+                for chunk_idx, chunk in enumerate(text_chunks):
+                    # Prepare context for recursive summarization
+                    context_parts = []
+                    if summarize_recursively and accumulated_summaries:
+                        # Select recent summaries within context limits
+                        context_candidates = accumulated_summaries[-max_context_chunks:]
+                        
+                        # Build context within token limits
+                        for summary in reversed(context_candidates):
+                            summary_tokens = text_handler.get_token_count(summary)
+                            if context_token_count + summary_tokens <= max_context_tokens:
+                                context_parts.insert(0, summary)
+                                context_token_count += summary_tokens
+                            else:
+                                break
+                    
+                    # Construct prompt with context
+                    if context_parts:
+                        context_str = "\n\n".join(context_parts)
+                        prompt = (
+                            f"Previous context summaries:\n\n{context_str}\n\n"
+                            f"Current text to summarize:\n\n{chunk}"
+                        )
+                    else:
+                        prompt = chunk
+                    
+                    # Summarize with retry and token limit
+                    response = _auto_retry(
+                        feed.summarizer.summarize,
+                        max_retries=3,
+                        text=prompt,
+                        target_language=feed.target_language,
+                        max_tokens=max_context_tokens
+                    )
+                    
+                    chunk_summary = response.get("text", "")
+                    accumulated_summaries.append(chunk_summary)
+                    total_tokens += response.get("tokens", 0)
+                    context_token_count = text_handler.get_token_count(chunk_summary)
+                    
+                    # Progress logging
+                    if (chunk_idx + 1) % 5 == 0 or (chunk_idx + 1) == actual_chunks:
+                        progress = f"Chunk {chunk_idx+1}/{actual_chunks}"
+                        logging.info(f"{progress} - Summary tokens: {response.get('tokens', 0)}")
+                
+                # Finalize and store summary
+                entry.ai_summary = "\n\n".join(accumulated_summaries)
                 entries_to_save.append(entry)
+                logging.info(f"Completed summary for '{entry.original_title}' - Total tokens: {total_tokens}")
+                
+                # Periodically save progress
+                if (idx + 1) % 10 == 0:
+                    _save_progress(entries_to_save, feed, total_tokens)
+                    entries_to_save = []
+                    total_tokens = 0
+                    
+            except Exception as e:
+                logging.error(f"Error processing entry '{entry.original_title}': {str(e)}")
+                entry.ai_summary = f"[Summary failed: {str(e)}]"
+                entries_to_save.append(entry)
+    
     except Exception as e:
-        logging.error(f"Error summarizing feed {feed.feed_url}: {str(e)}")
-        feed.log += (
-            f"{timezone.now()} Error summarizing feed {feed.feed_url}: {str(e)}<br>"
-        )
+        logging.exception(f"Critical error summarizing feed {feed.feed_url}")
+        feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
     finally:
-        if entries_to_save:
-            Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+        _save_progress(entries_to_save, feed, total_tokens)
+        logging.info(f"Completed summary process for feed: {feed.feed_url}")
+
+def _save_progress(entries_to_save, feed, total_tokens):
+    """Save progress and update token count atomically"""
+    if entries_to_save:
+        Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+    
+    if total_tokens > 0:
+        feed.total_tokens += total_tokens
+        
 
 
 def _auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
