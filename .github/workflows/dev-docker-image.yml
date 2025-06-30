@@ -5,10 +5,10 @@ permissions:
   packages: write
 
 on:
-release:
-  types: [prereleased]
-  branches:    
-    - main
+  release:
+    types: [prereleased]
+    branches:    
+      - main
 
 jobs:
   build:
