@@ -4,7 +4,7 @@
 </div>
 <br/>
 
-| [English](https://github.com/versun/RSS-Translator/blob/main/README_EN.md) | [Demo](https://rsstranslator.com/demo/) | [Telegram交流群](https://t.me/rsstranslator) | [开发进度](https://github.com/users/versun/projects/8) | [收支表](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
+| [English](/README_EN.md) | [Demo](https://rsstranslator.com/demo/) | [Telegram交流群](https://t.me/rsstranslator) | [开发进度](https://github.com/users/versun/projects/8) | [收支表](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
 
 ---
 
