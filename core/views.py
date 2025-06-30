@@ -122,18 +122,13 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_rss(feed_slug, feed_type, format)
-            return (
-                HttpResponse(
-                    status=404, content="Feed not found, Maybe it's still in progress, Please try again later."
-                )
-            )
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
 
         return _make_response(content, feed_slug, format)
     except Exception as e:
         logging.warning(f"Feed not found {feed_slug}: {str(e)}")
-        return HttpResponse(status=404, content="Feed not found")
+        return HttpResponse(status=404, content="Feed not found, Maybe it's still in progress, Please try again later.")
 
 
 def category(request, category: str, feed_type="t", format="xml"):
@@ -149,15 +144,9 @@ def category(request, category: str, feed_type="t", format="xml"):
         if content is None:
             logging.debug(f"Cache MISS for key: {cache_key}")
             content = cache_category(category, feed_type, format)
-            return (
-                HttpResponse(
-                    status=404,
-                    content="Category not found, Maybe it's still in progress, Please try again later.",
-                )
-            )
         else:
             logging.debug(f"Cache HIT for key: {cache_key}")
         return _make_response(content, category, format)
     except Exception as e:
-        logging.warning("Feed not found: %s / %s", category, str(e))
-        return HttpResponse(status=404, content="Feed not found")
+        logging.warning("Category not found: %s / %s", category, str(e))
+        return HttpResponse(status=404, content="Feed not found, Maybe it's still in progress, Please try again later.")
