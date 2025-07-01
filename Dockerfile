@@ -51,10 +51,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app"
 
 # 创建非root用户并设置工作目录
-RUN groupadd -r rsstranslator && \
-    useradd -r -g rsstranslator -d $DockerHOME -s /bin/bash rsstranslator && \
-    mkdir -p $DockerHOME/data && \
-    chown -R rsstranslator:rsstranslator $DockerHOME
+# RUN groupadd -r rsstranslator && \
+#     useradd -r -g rsstranslator -d $DockerHOME -s /bin/bash rsstranslator && \
+#     mkdir -p $DockerHOME/data && \
+#     chown -R rsstranslator:rsstranslator $DockerHOME
 
 WORKDIR $DockerHOME
 
@@ -74,20 +74,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu \
 # 配置Cron
 RUN mkdir -p /var/run/cron && \
     touch /var/run/crond.pid && \
-    chmod 644 /var/run/crond.pid && \
-    chown rsstranslator:rsstranslator /var/run/crond.pid && \
-    chown -R rsstranslator:rsstranslator /var/run/cron
+    chmod 644 /var/run/crond.pid 
+    # chown rsstranslator:rsstranslator /var/run/crond.pid && \
+    # chown -R rsstranslator:rsstranslator /var/run/cron
 
 COPY config/rt_cron /etc/cron.d/rt_cron
 RUN chmod 0644 /etc/cron.d/rt_cron && \
-    crontab -u rsstranslator /etc/cron.d/rt_cron && \
-    touch /var/log/cron.log && \
-    chown rsstranslator:rsstranslator /var/log/cron.log
+    crontab /etc/cron.d/rt_cron && \
+    # crontab -u rsstranslator /etc/cron.d/rt_cron && \
+    touch /var/log/cron.log
+    # chown rsstranslator:rsstranslator /var/log/cron.log
 
-# 设置entrypoint (关键修复：使用root用户启动)
+# 设置entrypoint
 COPY scripts/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh && \
-    chown -R rsstranslator:rsstranslator $DockerHOME
+RUN chmod +x /usr/local/bin/entrypoint.sh
+    # chown -R rsstranslator:rsstranslator $DockerHOME
     
 # 声明端口
 EXPOSE ${PORT}
