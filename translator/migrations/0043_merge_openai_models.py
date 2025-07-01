@@ -66,7 +66,7 @@ def migrate_ai_models(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0001_initial"),
+        ("core", "0017_alter_o_feed_content_type_tagulous_feed_category_and_more"),
         (
             "translator",
             "0042_delete_azureaitranslator_delete_caiyuntranslator_and_more",
