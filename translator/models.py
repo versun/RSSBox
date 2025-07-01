@@ -5,6 +5,7 @@ from config import settings
 from openai import OpenAI
 from encrypted_model_fields.fields import EncryptedCharField
 from time import sleep
+from utils.text_handler import get_token_count, adaptive_chunking
 
 
 class TranslatorEngine(models.Model):
@@ -122,6 +123,40 @@ class OpenAITranslator(TranslatorEngine):
             if user_prompt:
                 system_prompt += f"\n\n{user_prompt}"
 
+            # 计算系统提示的token占用
+            system_prompt_tokens = get_token_count(system_prompt)
+            # 计算最大可用token数（保留buffer）
+            max_usable_tokens = self.max_tokens - system_prompt_tokens - 100  # 100 token buffer
+            # 检查文本长度是否需要分块
+            if get_token_count(text) > max_usable_tokens:
+                logging.info(f"Text too large ({get_token_count(text)} tokens), chunking...")
+                
+                # 使用自适应分块
+                chunks = adaptive_chunking(
+                    text,
+                    target_chunks=max(1, int(len(text) / max_usable_tokens)),
+                    min_chunk_size=500,
+                    max_chunk_size=max_usable_tokens
+                )
+                
+                # 分块翻译
+                translated_chunks = []
+                for chunk in chunks:
+                    result = self.translate(
+                        text=chunk,
+                        target_language=target_language,
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        text_type=text_type,
+                        **kwargs
+                    )
+                    translated_chunks.append(result["text"])
+                    tokens += result["tokens"]
+                
+                translated_text = " ".join(translated_chunks)
+                return {"text": translated_text, "tokens": tokens}
+            
+            # 正常翻译流程
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers={
                     "HTTP-Referer": "https://www.rsstranslator.com",
