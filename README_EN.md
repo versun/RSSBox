@@ -1,6 +1,12 @@
 <div align="center">
 <em><img src="https://raw.githubusercontent.com/rss-translator/RSS-Translator/main/core/static/favicon.ico" height="90px"></em>
 <h1>RSS Translator<br/><sub>Translate RSS feeds into your language!</sub></h1>
+
+![GitHub top language](https://img.shields.io/github/languages/top/versun/rss-translator)
+![Docker Image Version](https://img.shields.io/docker/v/versun/rsstranslator)
+![Docker Pulls](https://img.shields.io/docker/pulls/versun/rsstranslator)
+![GitHub License](https://img.shields.io/github/license/versun/RSS-Translator)
+
 </div>
 <br/>
 
