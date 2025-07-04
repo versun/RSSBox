@@ -23,6 +23,7 @@ jobs:
     - name: Run migrations
       run: |
         python manage.py migrate
+        python manage.py collectstatic
     - name: Run tests
       run: |
         python manage.py test
