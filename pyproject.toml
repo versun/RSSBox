@@ -7,7 +7,7 @@ dependencies = [
     "django>=5.2.1",
     "redis>=6.2.0",
     "django-encrypted-model-fields>=0.6.5",
-    "django-tagulous2",
+    "django-tagulous2 @ git+https://github.com/versun/django-tagulous2",
     "bs4>=0.0.2",
     "deepl>=1.22.0",
     "openai>=1.82.0",
@@ -41,9 +41,6 @@ packages = [ "config", "core", "locale", "scripts", "translator", "templates", "
 server = "scripts.prod_server:main"
 dev = "scripts.dev_server:main"
 init = "scripts.init:init_server"
-
-[tool.uv.sources]
-django-tagulous2 = { git = "https://github.com/versun/django-tagulous2" }
 
 [dependency-groups]
 dev = [
