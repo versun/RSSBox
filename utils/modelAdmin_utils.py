@@ -1,20 +1,9 @@
 from django.conf import settings
 from django.utils.html import format_html
 from django.apps import apps
-from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
 
-# if settings.DEBUG:
-#    from huey_monitor.models import TaskModel
 
-
-# def get_all_subclasses(cls):
-#     subclasses = set()
-#     for subclass in cls.__subclasses__():
-#         if not subclass.__subclasses__():
-#             subclasses.add(subclass)
-#         subclasses.update(get_all_subclasses(subclass))
-#     return subclasses
 def get_all_app_models(app_name):
     app = apps.get_app_config(app_name)
     models = app.get_models()
