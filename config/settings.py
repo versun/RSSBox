@@ -17,6 +17,7 @@ import tomllib
 # from django.utils.crypto import get_random_string
 from django.core.management.utils import get_random_secret_key
 import os
+import sys
 
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 USER_MANAGEMENT = os.environ.get("USER_MANAGEMENT") == "1"
@@ -132,7 +133,7 @@ DATABASES = {
     }
 }
 
-if not DEBUG and not os.environ.get("REDIS_URL"):
+if not DEBUG and not os.environ.get("REDIS_URL") and "test" not in sys.argv:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",

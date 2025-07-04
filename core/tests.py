@@ -124,7 +124,6 @@ class AdminSiteTest(TestCase):
 
 class CacheFunctionTest(TestCase):
     def setUp(self):
-        DEBUG=1
         self.feed = Feed.objects.create(
             name="Test Feed",
             feed_url="https://example.com/feed.xml",
