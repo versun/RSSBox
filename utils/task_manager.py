@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -10,7 +11,8 @@ class TaskManager:
     全局单例模式，整个Django进程共享一个实例
     """
 
-    def __init__(self, max_workers=5):
+    def __init__(self, max_workers=5, max_task_history=1000):
+        self.max_task_history = max_task_history
         self.executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="task_manager_"
         )
@@ -19,6 +21,10 @@ class TaskManager:
 
     def submit_task(self, task_name, task_fn, *args, **kwargs):
         """提交新任务"""
+        # 清理旧任务
+        if len(self.tasks) >= self.max_task_history:
+            self.cleanup_old_tasks()
+
         task_id = str(uuid.uuid4())
 
         # 创建任务信息字典
@@ -43,6 +49,14 @@ class TaskManager:
 
         return task_id
 
+    def cleanup_old_tasks(self, max_age_seconds=3600):
+        now = time.time()
+        for task_id in list(self.tasks.keys()):
+            task = self.tasks[task_id]
+            if task["status"] in ("completed", "failed"):
+                if now - task.get("finish_time", now) > max_age_seconds:
+                    del self.tasks[task_id]
+                    
     def _wrap_task(self, task_id, task_fn, *args, **kwargs):
         """包装任务函数，添加状态管理"""
         try:
