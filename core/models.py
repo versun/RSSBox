@@ -231,8 +231,103 @@ class Feed(models.Model):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
 
+class AISummaryReport(models.Model):
+    name = models.CharField(
+        _("Report Name"),
+        max_length=255,
+        help_text=_("Name of the AI Summary Report"),
+        blank=True,
+        null=True,
+    )
+    slug = models.SlugField(
+        _("URL Slug"),
+        max_length=255,
+        unique=True,
+        help_text=_("Unique URL slug for the report"),
+    )
+    target_language = models.CharField(
+        _("Language"),
+        choices=settings.TRANSLATION_LANGUAGES,
+        max_length=50,
+        default=settings.DEFAULT_TARGET_LANGUAGE,
+    )
+    reporter_content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.SET_NULL,
+        related_name="reporter",
+    )
+    reporter_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
+    reporter = GenericForeignKey("reporter_content_type", "reporter_object_id")
+    report_prompt = models.TextField(
+        _("Report Prompt"),
+        default=settings.default_report_prompt
+        help_text=_("Custom prompt for generating AI summaries report"),
+    )
+    publish_days = models.CharField(
+        _("Publish Days"),
+        max_length=7,
+        default="1234567",  # Default to every day
+        help_text=_(
+            "A string of 7 characters representing days of the week (Mon-Sun), where 1 means Monday, 2 means Tuesday, etc."
+        ),
+    )
+    related_feeds = models.ManyToManyField(
+        Feed,
+        blank=True,
+        related_name="ai_summary_reports",
+        verbose_name=_("Related Feeds"),
+    )
+    # 获取feed的时间范围：按天数填写，1就是今天，2就是2天
+    days_range = models.IntegerField(
+        _("Days Range"),
+        default=1,
+        help_text=_("Number of days to fetch entries from related feeds for the report"),
+        validators=[MinValueValidator(1)],
+    )
+
+    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
+    total_tokens = models.IntegerField(
+        _("Total Tokens"),
+        default=0,
+        help_text=_("Total tokens used for AI summaries in this report"),
+    )
+    log = models.TextField(
+        _("Log"),
+        default="",
+        blank=True,
+        null=True,
+        help_text=_("Log for the AI Summary Report, useful for debugging"),
+    )
+
+    def __str__(self):
+        return f"{self.name} - {self.created_at.strftime('%Y-%m-%d')}"
+
+    class Meta:
+        verbose_name = _("AI Summary Report")
+        verbose_name_plural = _("AI Summary Reports")
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = uuid.uuid4().hex
+
+        if len(self.log.encode("utf-8")) > 2048:
+            self.log = self.log[-2048:]
+
+
 class Entry(models.Model):
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE, related_name="entries")
+    feed = models.ForeignKey(
+        Feed, on_delete=models.CASCADE, related_name="entries", null=True, blank=True
+    )
+    ai_summary_report = models.ForeignKey(
+        AISummaryReport,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="reports",
+    )
     link = models.URLField(null=False)
     author = models.CharField(max_length=255, null=True, blank=True)
     pubdate = models.DateTimeField(null=True, blank=True)
