@@ -2,6 +2,8 @@ import logging
 import sys
 import time
 import os
+from concurrent.futures import wait
+
 from django.core.management.base import BaseCommand
 from core.models import Feed
 from core.tasks import (
@@ -120,33 +122,25 @@ def update_multiple_feeds(feeds: list):
         return
     try:
         # 先执行所有feed更新任务
-        task_ids = []
-        for feed in feeds:
-            task_name = f"update_feed_{feed.name}"
-            task_id = task_manager.submit_task(task_name, update_single_feed, feed)
-            task_ids.append(task_id)
+        futures = [
+            task_manager.submit_task(f"update_feed_{feed.name}", update_single_feed, feed)
+            for feed in feeds
+        ]
 
         # 等待所有任务完成（最多30分钟）
-        timeout = 1800  # 30分钟（秒）
-        start_time = time.time()
+        timeout = 1800  # 30分钟（1800秒）
+        done, not_done = wait(futures, timeout=timeout)
 
-        while True:
-            # 检查所有任务状态
-            all_done = True
-            for task_id in task_ids:
-                status_info = task_manager.get_task_status(task_id)
-                if status_info.get("status") in ["pending", "running"]:
-                    all_done = False
-                    break
+        if not_done:
+            logging.warning(
+                f"Feed update task timed out. {len(not_done)} tasks did not complete."
+            )
 
-            # 如果所有任务完成或超时则退出循环
-            if all_done or (time.time() - start_time > timeout):
-                if not all_done:
-                    logging.warning("Feed update task timed out.")
-                break
-
-            # 等待3秒后再次检查
-            time.sleep(3)
+        for future in done:
+            try:
+                future.result()
+            except Exception as e:
+                logging.warning(f"A feed update task resulted in an exception: {e}")
 
         # 所有任务完成后执行缓存操作
         # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
