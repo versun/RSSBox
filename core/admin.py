@@ -22,11 +22,6 @@ from utils.task_manager import task_manager
 from .views import import_opml
 from .management.commands.update_feeds import update_single_feed
 
-BACKGROUND_EXECUTOR = ThreadPoolExecutor(
-    max_workers=5, thread_name_prefix="feed_updater_"
-)
-
-
 class FeedAdmin(admin.ModelAdmin):
     form = FeedForm
     list_display = [
