@@ -13,7 +13,7 @@ from translator.models import TranslatorEngine
 
 def handle_single_feed_fetch(feed: Feed):
     """
-    Fetch feeds and update entries.
+    Fetch feeds and update entries with batch processing optimization.
     """
     try:
         feed.fetch_status = None
@@ -42,15 +42,14 @@ def handle_single_feed_fetch(feed: Feed):
 
         # Update entries
         if getattr(latest_feed, "entries", None):
+            BATCH_SIZE = 50  # Smaller batch size for memory efficiency
             entries_to_create = []
-            # entries_to_update = []
-            # Use values_list for better memory efficiency
             existing_entries = dict(
                 Entry.objects.filter(feed=feed).values_list("guid", "id")
             )
 
-            for entry_data in latest_feed.entries[: feed.max_posts]:
-                # 获取内容
+            for i, entry_data in enumerate(latest_feed.entries[: feed.max_posts]):
+                # Get content
                 content = ""
                 if "content" in entry_data:
                     content = entry_data.content[0].value if entry_data.content else ""
@@ -61,9 +60,9 @@ def handle_single_feed_fetch(feed: Feed):
                 link = entry_data.get("link", "")
                 author = entry_data.get("author", feed.author)
                 if not guid:
-                    continue  # 跳过无效条目
+                    continue  # Skip invalid entries
 
-                # 判断是否需要创建新条目
+                # Create new entry if needed
                 if guid not in existing_entries:
                     entry_values = {
                         "link": link,
@@ -83,30 +82,20 @@ def handle_single_feed_fetch(feed: Feed):
                     entries_to_create.append(
                         Entry(feed=feed, guid=guid, **entry_values)
                     )
+                    
+                    # Batch create periodically
+                    if len(entries_to_create) >= BATCH_SIZE:
+                        Entry.objects.bulk_create(entries_to_create)
+                        entries_to_create = []
+                        # Explicitly clear memory
+                        del entry_values
+                        if 'content' in locals():
+                            del content
 
-                # if guid in existing_entries:
-                #     # 更新操作
-                #     entry = Entry(
-                #         id=existing_entries[guid],  # 直接设置主键
-                #         feed=feed,
-                #         guid=guid,
-                #         **entry_values
-                #     )
-                #     entries_to_update.append(entry)
-                # else:
-                #     # 创建操作
-                #     entries_to_create.append(Entry(
-                #         feed=feed,
-                #         guid=guid,
-                #         **entry_values
-                #     ))
-
-            # 批量执行数据库操作
+            # Create remaining entries
             if entries_to_create:
                 Entry.objects.bulk_create(entries_to_create)
-            # if entries_to_update:
-            #     update_fields = list(entry_values.keys())
-            #     Entry.objects.bulk_update(entries_to_update, fields=update_fields)
+                del entries_to_create
 
         feed.fetch_status = True
         feed.log = f"{timezone.now()} Fetch Completed <br>"
@@ -116,22 +105,21 @@ def handle_single_feed_fetch(feed: Feed):
         feed.log = f"{timezone.now()} {str(e)}<br>"
     finally:
         feed.save()
+        # Explicitly clean up large objects
+        if 'latest_feed' in locals():
+            del latest_feed
+        if 'fetch_results' in locals():
+            del fetch_results
 
 
 def handle_feeds_fetch(feeds: list):
     """
-    Fetch feeds and update entries.
+    Fetch feeds and update entries with memory optimization.
     """
     for feed in feeds:
         handle_single_feed_fetch(feed)
-
-    # Feed.objects.bulk_update(
-    #         feeds,
-    #         fields=[
-    #             "fetch_status", "last_fetch", "etag", "log", "name",
-    #             "subtitle", "language", "author", "link", "pubdate", "updated"
-    #         ]
-    #     )
+        # Explicitly clean up reference
+        del feed
 
 
 def handle_feeds_translation(feeds: list, target_field: str = "title"):
@@ -160,10 +148,15 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)} <br>"
+        finally:
+            # Explicitly clean up reference
+            del feed
 
     Feed.objects.bulk_update(
         feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
     )
+    # Clear the list after processing
+    del feeds
 
 
 def handle_feeds_summary(feeds: list):
@@ -189,23 +182,31 @@ def handle_feeds_summary(feeds: list):
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)}<br>"
+        finally:
+            # Explicitly clean up reference
+            del feed
 
     Feed.objects.bulk_update(
         feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
     )
+    # Clear the list after processing
+    del feeds
 
 
 def translate_feed(feed: Feed, target_field: str = "title"):
-    """Translate and summarize feed entries with enhanced error handling and caching"""
+    """Translate and summarize feed entries with memory optimizations."""
     logging.info(
         "Translating feed: %s (%s items)", feed.target_language, feed.entries.count()
     )
     total_tokens = 0
     total_characters = 0
     entries_to_save = []
+    BATCH_SIZE = 30  # Reduced batch size for memory efficiency
 
-    # Use iterator to reduce memory usage for large feeds
-    for entry in feed.entries.all().iterator(chunk_size=100):
+    # 只处理前 feed.max_posts 条 entries
+    entries = feed.entries.all()[: feed.max_posts].iterator(chunk_size=50)
+    
+    for entry in entries:
         try:
             logging.debug(f"Processing entry {entry}")
             if not feed.translator:
@@ -235,6 +236,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     if article_content:
                         entry.original_content = article_content
                         entry_needs_save = True
+                        # Clean up article content after use
+                        del article_content
 
                 metrics = _translate_content(
                     entry=entry,
@@ -249,35 +252,43 @@ def translate_feed(feed: Feed, target_field: str = "title"):
             if entry_needs_save:
                 entries_to_save.append(entry)
 
-            # Batch update to save memory and avoid large transactions
-            if len(entries_to_save) >= 50:
+            # Batch update with smaller size
+            if len(entries_to_save) >= BATCH_SIZE:
                 Entry.objects.bulk_update(
                     entries_to_save,
                     fields=["translated_title", "translated_content", "original_content"],
                 )
                 entries_to_save = []
+                # Force garbage collection
+                import gc
+                gc.collect()
 
         except Exception as e:
             logging.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
-            continue
+        finally:
+            # Explicitly clean up entry reference
+            del entry
 
-    # 批量保存所有修改过的entry
+    # Save remaining entries
     if entries_to_save:
         Entry.objects.bulk_update(
             entries_to_save,
             fields=["translated_title", "translated_content", "original_content"],
         )
+        del entries_to_save
 
-    # 更新feed的统计信息（将在外层批量更新中保存）
+    # Update feed stats
     feed.total_tokens += total_tokens
     feed.total_characters += total_characters
 
     logging.info(
         f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}"
     )
+    # Clean up large variables
+    del entries, total_tokens, total_characters
 
 
 def _translate_title(
@@ -285,12 +296,12 @@ def _translate_title(
     target_language: str,
     engine: TranslatorEngine,
 ) -> dict:
-    """Translate entry title with caching and retry logic"""
+    """Translate entry title with memory optimization."""
     total_tokens = 0
     total_characters = 0
-    # Check if title has been translated
+    
+    # Check if title needs translation
     if entry.translated_title:
-        logging.debug(f"[Title] Title already translated: {entry.original_title}")
         return {"tokens": 0, "characters": 0}
 
     logging.debug("[Title] Translating title")
@@ -301,6 +312,7 @@ def _translate_title(
         target_language=target_language,
         text_type="title",
     )
+    
     if result:
         translated_title = result.get("text")
         entry.translated_title = (
@@ -308,6 +320,7 @@ def _translate_title(
         )
         total_tokens = result.get("tokens", 0)
         total_characters = result.get("characters", 0)
+        
     return {"tokens": total_tokens, "characters": total_characters}
 
 
@@ -317,34 +330,35 @@ def _translate_content(
     engine: TranslatorEngine,
     quality: bool = False,
 ) -> dict:
-    """Translate entry content with optimized caching"""
+    """Translate entry content with memory optimization."""
     total_tokens = 0
     total_characters = 0
-    # 检查是否已经翻译过
+    
+    # Check if content needs translation
     if entry.translated_content:
-        logging.debug(f"[Content] Content already translated: {entry.original_title}")
         return {"tokens": 0, "characters": 0}
 
+    # Parse HTML with explicit cleanup
     soup = BeautifulSoup(entry.original_content, "lxml")
-    # if quality:
-    #     soup = BeautifulSoup(text_handler.unwrap_tags(soup), "lxml")
-
-    # add notranslate class and translate="no" to elements that should not be translated
+    
+    # Add notranslate class to elements that shouldn't be translated
     for element in soup.find_all(string=True):
         if not element.get_text(strip=True):
             continue
         if text_handler.should_skip(element):
-            logging.debug("[Content] Skipping element %s", element.parent)
-            # 标记父元素不翻译
             parent = element.parent
             parent.attrs.update(
                 {"class": parent.get("class", []) + ["notranslate"], "translate": "no"}
             )
 
-    # TODO 如果文字长度大于最大长度，就分段翻译
     processed_html = str(soup)
+    
+    # Explicitly clean up BeautifulSoup object
+    del soup
+    import gc
+    gc.collect()
 
-    logging.debug(f"[Content] Translating content: {entry.original_title}")
+    # Perform translation
     result = _auto_retry(
         func=engine.translate,
         max_retries=3,
@@ -352,12 +366,18 @@ def _translate_content(
         target_language=target_language,
         text_type="content",
     )
+    
     translated_content = result.get("text")
     entry.translated_content = (
         translated_content if translated_content else processed_html
     )
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
+    
+    # Clean up large strings
+    del processed_html
+    if translated_content:
+        del translated_content
 
     return {"tokens": total_tokens, "characters": total_characters}
 
@@ -373,26 +393,17 @@ def summarize_feed(
     max_chunks_per_entry: int = 20
 ):
     """
-    Generate content summary using adaptive chunking and context-aware summarization
-    
-    Args:
-        feed: Feed object containing entries to summarize
-        min_chunk_size: Minimum token size per chunk
-        max_chunk_size: Maximum token size per chunk
-        summarize_recursively: Whether to use recursive summarization
-        max_context_chunks: Max number of previous summaries to include as context
-        max_context_tokens: Max token count for context window
-        chunk_delimiter: Primary delimiter for chunking
-        max_chunks_per_entry: Safety limit to prevent excessive chunking
+    Generate content summary with memory optimizations.
     """
     assert 0 <= feed.summary_detail <= 1, "summary_detail must be between 0 and 1"
     entries_to_save = []
-    total_tokens = 0  # Track tokens separately to avoid race conditions
-    
+    total_tokens = 0
+    BATCH_SIZE = 5  # Reduced batch size for memory efficiency
+
     try:
-        # Prefetch entries to reduce database queries
-        entries = feed.entries.select_related('feed').filter(ai_summary__isnull=True)
-        total_entries = entries.count()
+        # 只处理前 feed.max_posts 条 entries
+        entries = feed.entries.select_related('feed').filter(ai_summary__isnull=True)[: feed.max_posts].iterator(chunk_size=30)
+        total_entries = feed.entries.filter(ai_summary__isnull=True)[: feed.max_posts].count()
         
         if not total_entries:
             logging.info(f"No entries to summarize for feed: {feed.feed_url}")
@@ -400,21 +411,20 @@ def summarize_feed(
             
         logging.info(f"Starting summary for {total_entries} entries in feed: {feed.feed_url}")
         
-        for idx, entry in enumerate(entries.iterator(chunk_size=50)):
+        for idx, entry in enumerate(entries):
             try:
                 logging.info(f"[{idx+1}/{total_entries}] Processing: {entry.original_title}")
                 
-                # Clean and prepare content
+                # Clean and prepare content with explicit cleanup
                 content_text = text_handler.clean_content(entry.original_content)
                 
                 # Skip empty content
                 if not content_text.strip():
-                    logging.warning(f"Empty content: {entry.original_title}")
                     entry.ai_summary = "[No content available]"
                     entries_to_save.append(entry)
                     continue
                 
-                # Calculate target chunk count based on summary detail
+                # Calculate chunking parameters
                 token_count = text_handler.get_token_count(content_text)
                 min_chunks = 1
                 max_chunks = max(1, min(max_chunks_per_entry, token_count // min_chunk_size))
@@ -422,7 +432,7 @@ def summarize_feed(
                     min_chunks + feed.summary_detail * (max_chunks - min_chunks)
                 )))
                 
-                # Generate adaptive chunks
+                # Generate chunks with cleanup
                 text_chunks = text_handler.adaptive_chunking(
                     content_text,
                     target_chunks=target_chunks,
@@ -430,6 +440,9 @@ def summarize_feed(
                     max_chunk_size=max_chunk_size,
                     initial_delimiter=chunk_delimiter
                 )
+                
+                # Clean up original content after chunking
+                del content_text
                 
                 actual_chunks = len(text_chunks)
                 logging.info(f"Chunked into {actual_chunks} chunks (target: {target_chunks})")
@@ -441,11 +454,13 @@ def summarize_feed(
                         max_retries=3,
                         text=text_chunks[0],
                         target_language=feed.target_language,
-                        #max_tokens=max_context_tokens
                     )
                     entry.ai_summary = response.get("text", "")
                     total_tokens += response.get("tokens", 0)
                     entries_to_save.append(entry)
+                    
+                    # Clean up chunks
+                    del text_chunks
                     continue
                 
                 # Process chunks with context management
@@ -453,13 +468,11 @@ def summarize_feed(
                 context_token_count = 0
                 
                 for chunk_idx, chunk in enumerate(text_chunks):
-                    # Prepare context for recursive summarization
+                    # Prepare context
                     context_parts = []
                     if summarize_recursively and accumulated_summaries:
-                        # Select recent summaries within context limits
                         context_candidates = accumulated_summaries[-max_context_chunks:]
                         
-                        # Build context within token limits
                         for summary in reversed(context_candidates):
                             summary_tokens = text_handler.get_token_count(summary)
                             if context_token_count + summary_tokens <= max_context_tokens:
@@ -468,17 +481,10 @@ def summarize_feed(
                             else:
                                 break
                     
-                    # Construct prompt with context
-                    if context_parts:
-                        context_str = "\n\n".join(context_parts)
-                        prompt = (
-                            f"Previous context summaries:\n\n{context_str}\n\n"
-                            f"Current text to summarize:\n\n{chunk}"
-                        )
-                    else:
-                        prompt = chunk
+                    # Construct prompt
+                    prompt = "\n\n".join(context_parts) + "\n\nCurrent text to summarize:\n\n" + chunk if context_parts else chunk
                     
-                    # Summarize with retry and token limit
+                    # Summarize with retry
                     response = _auto_retry(
                         feed.summarizer.summarize,
                         max_retries=3,
@@ -492,61 +498,94 @@ def summarize_feed(
                     total_tokens += response.get("tokens", 0)
                     context_token_count = text_handler.get_token_count(chunk_summary)
                     
-                    # Progress logging
-                    if (chunk_idx + 1) % 5 == 0 or (chunk_idx + 1) == actual_chunks:
-                        progress = f"Chunk {chunk_idx+1}/{actual_chunks}"
-                        logging.info(f"{progress} - Summary tokens: {response.get('tokens', 0)}")
-                
+                    # Clean up prompt and response
+                    del prompt, response
+                    
+                    # Clean up chunk after processing
+                    del text_chunks[chunk_idx]
+                    
                 # Finalize and store summary
                 entry.ai_summary = "\n\n".join(accumulated_summaries)
                 entries_to_save.append(entry)
+                
+                # Clean up accumulated summaries
+                del accumulated_summaries
+                
                 logging.info(f"Completed summary for '{entry.original_title}' - Total tokens: {total_tokens}")
                 
-                # Periodically save progress
-                if (idx + 1) % 10 == 0:
+                # Periodically save progress with smaller batch size
+                if len(entries_to_save) >= BATCH_SIZE:
                     _save_progress(entries_to_save, feed, total_tokens)
-                    entries_to_save = []
                     total_tokens = 0
+                    entries_to_save = []
+                    
+                    # Force garbage collection
+                    import gc
+                    gc.collect()
                     
             except Exception as e:
                 logging.error(f"Error processing entry '{entry.original_title}': {str(e)}")
                 entry.ai_summary = f"[Summary failed: {str(e)}]"
                 entries_to_save.append(entry)
-    
+            finally:
+                # Explicitly clean up large variables
+                if 'text_chunks' in locals():
+                    del text_chunks
+                if 'content_text' in locals():
+                    del content_text
     except Exception as e:
         logging.exception(f"Critical error summarizing feed {feed.feed_url}")
         feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
     finally:
         _save_progress(entries_to_save, feed, total_tokens)
         logging.info(f"Completed summary process for feed: {feed.feed_url}")
+        
+        # Clean up large references
+        del entries, entries_to_save
+
 
 def _save_progress(entries_to_save, feed, total_tokens):
-    """Save progress and update token count atomically"""
+    """Save progress with memory cleanup."""
     if entries_to_save:
         Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+        del entries_to_save
     
     if total_tokens > 0:
         feed.total_tokens += total_tokens
-        
+        feed.save()
 
 
 def _auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
-    """Retry translation function with exponential backoff"""
+    """Retry function with exponential backoff and memory cleanup."""
+    result = {}
     for attempt in range(max_retries):
         try:
-            return func(**kwargs)
+            result = func(**kwargs)
+            break
         except Exception as e:
-            logging.error(f"Translation attempt {attempt + 1} failed: {str(e)}")
-        time.sleep(0.5 * (2**attempt))  # Exponential backoff
-    logging.error(f"All {max_retries} attempts failed for translation")
-    return {}
+            logging.error(f"Attempt {attempt + 1} failed: {str(e)}")
+            time.sleep(0.5 * (2**attempt))  # Exponential backoff
+    
+    # Clean up kwargs if they contain large objects
+    for key in list(kwargs.keys()):
+        if key == 'text' and isinstance(kwargs[key], str) and len(kwargs[key]) > 1000:
+            del kwargs[key]
+    
+    return result
 
 
 def _fetch_article_content(link: str) -> str:
-    """Fetch full article content using newspaper"""
+    """Fetch full article content with explicit cleanup."""
+    content = ""
     try:
-        article = newspaper.article(link)
-        return mistune.html(article.text)
+        article = newspaper.Article(link)
+        article.download()
+        article.parse()
+        content = mistune.html(article.text)
     except Exception as e:
         logging.error(f"Article fetch failed: {str(e)}")
-    return ""
+    finally:
+        # Explicitly clean up newspaper objects
+        if 'article' in locals():
+            del article
+        return content
