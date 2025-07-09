@@ -133,11 +133,23 @@ DATABASES = {
     }
 }
 
-if not DEBUG and not os.environ.get("REDIS_URL") and "test" not in sys.argv:
+if not DEBUG and "test" not in sys.argv:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/"),
+            "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/1"),
+            "OPTIONS": {
+                # Timeout for establishing a connection in seconds
+                "socket_connect_timeout": 5,
+                # Timeout for read/write operations in seconds
+                "socket_timeout": 5,
+                # Maximum number of connections in the pool
+                "max_connections": 100,
+            },
+            # Default timeout for cache keys (1 day).
+            # Keys without an expiration date will be cleaned up,
+            # and expired keys are cleaned up periodically by Redis.
+            "TIMEOUT": 60 * 60 * 24,
         }
     }
 
