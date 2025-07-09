@@ -44,10 +44,10 @@ def handle_single_feed_fetch(feed: Feed):
         if getattr(latest_feed, "entries", None):
             entries_to_create = []
             # entries_to_update = []
-            existing_entries = {
-                entry.guid: entry.id
-                for entry in Entry.objects.filter(feed=feed).only("id", "guid")
-            }
+            # Use values_list for better memory efficiency
+            existing_entries = dict(
+                Entry.objects.filter(feed=feed).values_list("guid", "id")
+            )
 
             for entry_data in latest_feed.entries[: feed.max_posts]:
                 # 获取内容
@@ -204,7 +204,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     total_characters = 0
     entries_to_save = []
 
-    for entry in feed.entries.all():
+    # Use iterator to reduce memory usage for large feeds
+    for entry in feed.entries.all().iterator(chunk_size=100):
         try:
             logging.debug(f"Processing entry {entry}")
             if not feed.translator:
@@ -247,6 +248,14 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
             if entry_needs_save:
                 entries_to_save.append(entry)
+
+            # Batch update to save memory and avoid large transactions
+            if len(entries_to_save) >= 50:
+                Entry.objects.bulk_update(
+                    entries_to_save,
+                    fields=["translated_title", "translated_content", "original_content"],
+                )
+                entries_to_save = []
 
         except Exception as e:
             logging.error(f"Error processing entry {entry.link}: {str(e)}")
