@@ -1,9 +1,9 @@
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from .models import Feed
+from .models import Feed, AISummaryReport
 from utils.modelAdmin_utils import get_translator_and_summary_choices
-
+import logging
 
 class FeedForm(forms.ModelForm):
     # 自定义字段，使用ChoiceField生成下拉菜单
@@ -171,5 +171,96 @@ class FeedForm(forms.ModelForm):
 
         if commit:
             instance.save()
+
+        return instance
+
+
+class AISummaryReportForm(forms.ModelForm):
+    reporter_option = forms.ChoiceField(
+        choices=(),
+        required=True,
+        help_text=_("Select a valid AI engine"),
+        label=_("Reporter"),
+    )
+
+    publish_days_option = forms.MultipleChoiceField(
+        choices=(
+            ("1", _("Monday")),
+            ("2", _("Tuesday")),
+            ("3", _("Wednesday")),
+            ("4", _("Thursday")),
+            ("5", _("Friday")),
+            ("6", _("Saturday")),
+            ("7", _("Sunday")),
+        ),
+        required=True,
+        label=_("Publish Days"),
+        widget=forms.CheckboxSelectMultiple,
+        initial=["1", "2", "3", "4", "5", "6", "7"],
+    )
+
+    class Meta:
+        model = AISummaryReport
+        fields = [
+            "name",
+            "slug",
+            "target_language",
+            "reporter_option",
+            "report_prompt",
+            "publish_days_option",
+            "related_feeds",
+            "days_range",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super(AISummaryReportForm, self).__init__(*args, **kwargs)
+
+        translator_choices, self.fields["reporter_option"].choices = get_translator_and_summary_choices()
+
+        self.fields["slug"].widget.attrs.update(
+            {
+                "placeholder": _("Optional, default use the random slug"),
+            }
+        )
+
+        instance = getattr(self, "instance", None)
+        if instance and instance.pk:
+            self._set_initial_values(instance)
+
+    def _set_initial_values(self, instance):
+        if instance.reporter_content_type and instance.reporter_object_id:
+            self.fields[
+                "reporter_option"
+            ].initial = f"{instance.reporter_content_type.id}:{instance.reporter_object_id}"
+        if instance.publish_days:
+            self.fields["publish_days_option"].initial = list(instance.publish_days)
+
+    def _process_reporter(self, instance):
+        if self.cleaned_data["reporter_option"]:
+            content_type_id, object_id = map(
+                int, self.cleaned_data["reporter_option"].split(":")
+            )
+            instance.reporter_content_type_id = content_type_id
+            instance.reporter_object_id = object_id
+        else:
+            instance.reporter_content_type_id = None
+            instance.reporter_object_id = None
+
+    def _process_publish_days_option(self, instance):
+        if self.cleaned_data["publish_days_option"]:
+            instance.publish_days = "".join(self.cleaned_data["publish_days_option"])
+        else:
+            instance.publish_days = ""
+
+    @transaction.atomic
+    def save(self, commit=True):
+        instance = super(AISummaryReportForm, self).save(commit=False)
+
+        self._process_reporter(instance)
+        self._process_publish_days_option(instance)
+        logging.debug("Saving AISummaryReportForm with instance: %s", instance)
+        if commit:
+            instance.save()
+            #self.save_m2m()
 
         return instance
