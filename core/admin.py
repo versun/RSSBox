@@ -1,26 +1,74 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.contrib import admin
 from django.conf import settings
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils.encoding import force_str
 from django.urls import path, reverse
 from django.db import transaction
 
-from .models import Feed
+from .models import Feed, AISummaryReport
 from .custom_admin_site import core_admin_site
-from .forms import FeedForm
+from .forms import FeedForm, AISummaryReportForm
 from .actions import (
     export_original_feed_as_opml,
     export_translated_feed_as_opml,
     feed_force_update,
     feed_batch_modify,
+    create_ai_summary_report,
 )
 from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
 from .views import import_opml
 from .management.commands.update_feeds import update_single_feed
+
+
+class AISummaryReportAdmin(admin.ModelAdmin):
+    form = AISummaryReportForm
+    list_display = (
+        "name",
+        "target_language",
+        "reporter",
+        "publish_days_display",
+        "publish_time",
+        "last_published_at",
+        "days_range",
+        "created_at",
+    )
+    list_filter = ("target_language", "publish_days")
+    search_fields = ("name", "slug")
+    readonly_fields = ("total_tokens", "created_at", "updated_at", "log")
+    filter_horizontal = ("related_feeds",)
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        if "feed_ids" in request.GET:
+            feed_ids_str = request.GET.get("feed_ids")
+            if feed_ids_str:
+                feed_ids = [
+                    int(fid) for fid in feed_ids_str.split(",") if fid.isdigit()
+                ]
+                initial["related_feeds"] = feed_ids
+        return initial
+
+    @admin.display(description=_("Publish Days"))
+    def publish_days_display(self, obj):
+        day_map = {
+            "1": _("Mo"),
+            "2": _("Tu"),
+            "3": _("We"),
+            "4": _("Th"),
+            "5": _("Fr"),
+            "6": _("Sa"),
+            "7": _("Su"),
+        }
+        if not obj.publish_days:
+            return ""
+        
+        # 保持顺序 Su,Mo,Tu,We,Th,Fr,Sa
+        ordered_days = [d for d in "1234567" if d in obj.publish_days]
+        return ",".join([force_str(day_map[d]) for d in ordered_days])
 
 class FeedAdmin(admin.ModelAdmin):
     form = FeedForm
@@ -55,7 +103,9 @@ class FeedAdmin(admin.ModelAdmin):
         "last_translate",
         "show_log",
     ]
+
     actions = [
+        create_ai_summary_report,
         feed_force_update,
         export_original_feed_as_opml,
         export_translated_feed_as_opml,
@@ -208,6 +258,7 @@ class FeedAdmin(admin.ModelAdmin):
 
 
 core_admin_site.register(Feed, FeedAdmin)
+core_admin_site.register(AISummaryReport, AISummaryReportAdmin)
 
 if settings.USER_MANAGEMENT:
     core_admin_site.register(User)
