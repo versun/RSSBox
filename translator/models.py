@@ -107,6 +107,7 @@ class OpenAITranslator(TranslatorEngine):
         system_prompt: str = None,
         user_prompt: str = None,
         text_type: str = "title",
+        max_tokens: int = None,
         **kwargs,
     ) -> dict:
         logging.info(">>> Translate [%s]: %s", target_language, text)
@@ -126,7 +127,9 @@ class OpenAITranslator(TranslatorEngine):
             # 计算系统提示的token占用
             system_prompt_tokens = get_token_count(system_prompt)
             # 计算最大可用token数（保留buffer）
-            max_usable_tokens = self.max_tokens - system_prompt_tokens - 100  # 100 token buffer
+            if max_tokens is None:
+                max_tokens = self.max_tokens
+            max_usable_tokens = max_tokens - system_prompt_tokens - 100  # 100 token buffer
             # 检查文本长度是否需要分块
             if get_token_count(text) > max_usable_tokens:
                 logging.info(f"Text too large ({get_token_count(text)} tokens), chunking...")
@@ -190,9 +193,9 @@ class OpenAITranslator(TranslatorEngine):
 
         return {"text": translated_text, "tokens": tokens}
 
-    def summarize(self, text: str, target_language: str) -> dict:
+    def summarize(self, text: str, target_language: str, max_tokens: int = None, **kwargs) -> dict:
         logging.info(">>> Summarize [%s]: %s", target_language, text)
-        return self.translate(text, target_language, system_prompt=self.summary_prompt)
+        return self.translate(text, target_language, system_prompt=self.summary_prompt, max_tokens=max_tokens, **kwargs)
 
 
 class DeepLTranslator(TranslatorEngine):
