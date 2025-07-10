@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-29 09:01+0800\n"
+"POT-Creation-Date: 2025-07-10 14:49+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -37,46 +37,82 @@ msgstr "强制更新"
 msgid "Batch modification"
 msgstr "批量修改"
 
-#: core/admin.py:126 core/forms.py:35 core/models.py:63
+#: core/actions.py:282
+msgid "Create AI Summary Report"
+msgstr "创建 AI 摘要报告"
+
+#: core/admin.py:53 core/forms.py:197 core/models.py:271
+msgid "Publish Days"
+msgstr "发布日"
+
+#: core/admin.py:56
+msgid "Mo"
+msgstr "一"
+
+#: core/admin.py:57
+msgid "Tu"
+msgstr "二"
+
+#: core/admin.py:58
+msgid "We"
+msgstr "三"
+
+#: core/admin.py:59
+msgid "Th"
+msgstr "四"
+
+#: core/admin.py:60
+msgid "Fr"
+msgstr "五"
+
+#: core/admin.py:61
+msgid "Sa"
+msgstr "六"
+
+#: core/admin.py:62
+msgid "Su"
+msgstr "日"
+
+#: core/admin.py:169 core/forms.py:35 core/models.py:63
 #: templates/admin/feed_batch_modify.html:13
 msgid "Update Frequency"
 msgstr "更新频率(分钟)"
 
-#: core/admin.py:141 core/custom_admin_site.py:35 core/forms.py:14
+#: core/admin.py:184 core/custom_admin_site.py:35 core/forms.py:14
 #: templates/admin/feed_batch_modify.html:45
 msgid "Translator"
 msgstr "翻译器"
 
-#: core/admin.py:145
+#: core/admin.py:188
 msgid "Translated Feed"
 msgstr "翻译源"
 
-#: core/admin.py:158
+#: core/admin.py:201
 msgid "Fetch Feed"
 msgstr "获取源"
 
-#: core/admin.py:169
+#: core/admin.py:212
 msgid "Options"
 msgstr "选项"
 
-#: core/admin.py:174 core/forms.py:40
+#: core/admin.py:217 core/forms.py:40
 msgid "Title"
 msgstr "标题"
 
-#: core/admin.py:175 core/forms.py:41
+#: core/admin.py:218 core/forms.py:41
 msgid "Content"
 msgstr "内容"
 
-#: core/admin.py:176 core/forms.py:42 core/models.py:102
+#: core/admin.py:219 core/forms.py:42 core/models.py:102
 #: templates/admin/feed_batch_modify.html:73
 msgid "Summary"
 msgstr "摘要"
 
-#: core/admin.py:188 core/models.py:186
+#: core/admin.py:231 core/models.py:186 core/models.py:300
 msgid "Log"
 msgstr "日志"
 
-#: core/admin.py:202
+#: core/admin.py:245
 msgid "Category"
 msgstr "类别"
 
@@ -128,11 +164,43 @@ msgstr "翻译选项"
 msgid "Optonal, default use the feed title"
 msgstr "可选，默认使用源标题"
 
-#: core/forms.py:88
+#: core/forms.py:88 core/forms.py:222
 msgid "Optional, default use the random slug"
 msgstr "可选，默认随机生成"
 
-#: core/models.py:16 translator/models.py:11
+#: core/forms.py:183
+msgid "Reporter"
+msgstr "报告器"
+
+#: core/forms.py:188
+msgid "Monday"
+msgstr "星期一"
+
+#: core/forms.py:189
+msgid "Tuesday"
+msgstr "星期二"
+
+#: core/forms.py:190
+msgid "Wednesday"
+msgstr "星期三"
+
+#: core/forms.py:191
+msgid "Thursday"
+msgstr "星期四"
+
+#: core/forms.py:192
+msgid "Friday"
+msgstr "星期五"
+
+#: core/forms.py:193
+msgid "Saturday"
+msgstr "星期六"
+
+#: core/forms.py:194
+msgid "Sunday"
+msgstr "星期日"
+
+#: core/models.py:16 translator/models.py:12
 msgid "Name"
 msgstr "名称"
 
@@ -140,7 +208,7 @@ msgstr "名称"
 msgid "Subtitle"
 msgstr "子标题"
 
-#: core/models.py:22
+#: core/models.py:22 core/models.py:243
 msgid "URL Slug"
 msgstr "URL别名"
 
@@ -152,7 +220,7 @@ msgstr "链接"
 msgid "Author"
 msgstr "作者"
 
-#: core/models.py:40 core/models.py:95
+#: core/models.py:40 core/models.py:95 core/models.py:250
 msgid "Language"
 msgstr "语言"
 
@@ -288,11 +356,69 @@ msgstr "源"
 msgid "Feeds"
 msgstr "源"
 
-#: core/models.py:254
+#: core/models.py:236
+msgid "Report Name"
+msgstr "报告名称"
+
+#: core/models.py:238
+msgid "Name of the AI Summary Report"
+msgstr "摘要报告的名称"
+
+#: core/models.py:266
+msgid "Report Prompt"
+msgstr "报告提示词"
+
+#: core/models.py:268
+msgid "Custom prompt for generating AI summaries report"
+msgstr "自定义生成摘要报告的提示词"
+
+#: core/models.py:275
+msgid ""
+"A string of 7 characters representing days of the week (Mon-Sun), where 1 "
+"means Monday, 2 means Tuesday, etc."
+msgstr ""
+
+#: core/models.py:282
+msgid "Related Feeds"
+msgstr "关联源"
+
+#: core/models.py:286
+msgid "Days Range"
+msgstr "天数范围"
+
+#: core/models.py:288
+msgid "Number of days to fetch entries from related feeds for the report"
+msgstr "获取指定天数内的条目"
+
+#: core/models.py:292
+msgid "Created At"
+msgstr "创建日期"
+
+#: core/models.py:293
+msgid "Updated At"
+msgstr "更新日期"
+
+#: core/models.py:295
+msgid "Total Tokens"
+msgstr "代币总数"
+
+#: core/models.py:297
+msgid "Total tokens used for AI summaries in this report"
+msgstr "本报告中 AI 摘要所用代币总数"
+
+#: core/models.py:311
+msgid "AI Summary Report"
+msgstr "AI 摘要报告"
+
+#: core/models.py:312
+msgid "AI Summary Reports"
+msgstr "AI 摘要报告"
+
+#: core/models.py:354
 msgid "Entry"
 msgstr "条目"
 
-#: core/models.py:255
+#: core/models.py:355
 msgid "Entries"
 msgstr "条目"
 
@@ -385,34 +511,34 @@ msgstr "类别"
 msgid "Which service provider you want to add?"
 msgstr "您想添加哪个服务提供商？"
 
-#: translator/models.py:12
+#: translator/models.py:13
 msgid "Valid"
 msgstr "验证"
 
-#: translator/models.py:51 translator/models.py:165
+#: translator/models.py:52 translator/models.py:200
 msgid "API Key"
 msgstr ""
 
-#: translator/models.py:52
+#: translator/models.py:53
 msgid "API URL"
 msgstr ""
 
-#: translator/models.py:59
+#: translator/models.py:60
 msgid "Title Translate Prompt"
 msgstr "标题翻译提示词"
 
-#: translator/models.py:62
+#: translator/models.py:63
 msgid "Content Translate Prompt"
 msgstr "内容翻译提示词"
 
-#: translator/models.py:167
+#: translator/models.py:202
 msgid "API URL(optional)"
 msgstr ""
 
-#: translator/models.py:168
+#: translator/models.py:203
 msgid "Proxy(optional)"
 msgstr ""
 
-#: translator/models.py:235
+#: translator/models.py:270
 msgid "Request Interval(s)"
 msgstr "请求间隔"
