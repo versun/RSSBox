@@ -1,8 +1,8 @@
 import os
 import uuid
 # import re
+from config import settings
 
-from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -243,7 +243,8 @@ class AISummaryReport(models.Model):
         _("URL Slug"),
         max_length=255,
         unique=True,
-        help_text=_("Unique URL slug for the report"),
+        blank=True,
+        null=True,
     )
     target_language = models.CharField(
         _("Language"),
@@ -253,6 +254,7 @@ class AISummaryReport(models.Model):
     )
     reporter_content_type = models.ForeignKey(
         ContentType,
+        null=True,
         on_delete=models.SET_NULL,
         related_name="reporter",
     )
@@ -262,7 +264,7 @@ class AISummaryReport(models.Model):
     reporter = GenericForeignKey("reporter_content_type", "reporter_object_id")
     report_prompt = models.TextField(
         _("Report Prompt"),
-        default=settings.default_report_prompt
+        default=settings.default_report_prompt,
         help_text=_("Custom prompt for generating AI summaries report"),
     )
     publish_days = models.CharField(
@@ -299,11 +301,10 @@ class AISummaryReport(models.Model):
         default="",
         blank=True,
         null=True,
-        help_text=_("Log for the AI Summary Report, useful for debugging"),
     )
 
     def __str__(self):
-        return f"{self.name} - {self.created_at.strftime('%Y-%m-%d')}"
+        return f"{self.name} - {self.slug}"
 
     class Meta:
         verbose_name = _("AI Summary Report")
@@ -315,6 +316,9 @@ class AISummaryReport(models.Model):
 
         if len(self.log.encode("utf-8")) > 2048:
             self.log = self.log[-2048:]
+        
+        super(AISummaryReport, self).save(*args, **kwargs)
+
 
 
 class Entry(models.Model):
