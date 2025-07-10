@@ -49,6 +49,9 @@ class TaskManager:
             if self.tasks_executed_since_restart >= self.restart_threshold:
                 self._restart_executor()
             self.tasks_executed_since_restart += 1
+            logging.debug(
+                f"Submitting task: {task_name} (Total executed: {self.tasks_executed_since_restart})"
+            )
 
         self._cleanup_tasks()
         task_id = str(uuid.uuid4())
