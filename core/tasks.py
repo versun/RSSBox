@@ -47,8 +47,19 @@ def handle_single_feed_fetch(feed: Feed):
             existing_entries = dict(
                 Entry.objects.filter(feed=feed).values_list("guid", "id")
             )
+            
+            # Sort entries by publication date (newest first)
+            sorted_entries = sorted(
+                latest_feed.entries,
+                key=lambda x: (
+                    x.get("published_parsed") or 
+                    x.get("updated_parsed") or 
+                    time.gmtime(0)  # Fallback to epoch if no date
+                ),
+                reverse=True
+            )[: feed.max_posts]
 
-            for i, entry_data in enumerate(latest_feed.entries[: feed.max_posts]):
+            for i, entry_data in enumerate(sorted_entries):
                 # Get content
                 content = ""
                 if "content" in entry_data:
@@ -108,6 +119,8 @@ def handle_single_feed_fetch(feed: Feed):
         # Explicitly clean up large objects
         if 'latest_feed' in locals():
             del latest_feed
+        if 'sorted_entries' in locals():
+            del sorted_entries
         if 'fetch_results' in locals():
             del fetch_results
 

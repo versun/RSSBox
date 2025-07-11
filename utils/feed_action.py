@@ -216,7 +216,7 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         )
 
         # 添加所有条目
-        for entry in feed.entries.all():
+        for entry in reversed(feed.entries.all()[: feed.max_posts]):
             _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
         # 生成最终XML
@@ -250,7 +250,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
         # 收集当前feed的条目
-        for entry in feed.entries.all():
+        for entry in reversed(feed.entries.all()[: feed.max_posts]):
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
 
