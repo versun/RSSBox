@@ -31,10 +31,8 @@ class AISummaryReportAdmin(admin.ModelAdmin):
         "target_language",
         "reporter",
         "publish_days_display",
-        "publish_time",
-        "last_published_at",
         "days_range",
-        "created_at",
+        "total_tokens",
     )
     list_filter = ("target_language", "publish_days")
     search_fields = ("name", "slug")
