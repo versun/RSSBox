@@ -232,6 +232,14 @@ class Feed(models.Model):
 
 
 class AISummaryReport(models.Model):
+    CONTENT_MODULE_CHOICES = (
+        ('title', _('Original Title')),
+        ('translated_title', _('Translated Title')),
+        ('content', _('Original Content')),
+        ('translated_content', _('Translated Content')),
+        ('summary', _('Content Summary')),
+    )
+
     name = models.CharField(
         _("Report Name"),
         max_length=255,
@@ -261,11 +269,18 @@ class AISummaryReport(models.Model):
         null=True, blank=True, default=None
     )
     reporter = GenericForeignKey("reporter_content_type", "reporter_object_id")
+    content_modules = models.JSONField(
+        _("Content Modules"),
+        default=['title', 'content', 'summary'],
+        help_text=_("Select which content modules to send to AI (stored as JSON list)"),
+        blank=True,
+    )
     report_prompt = models.TextField(
         _("Report Prompt"),
         default=settings.default_report_prompt,
         help_text=_("Custom prompt for generating AI summaries report"),
     )
+    
     publish_days = models.CharField(
         _("Publish Days"),
         max_length=7,
