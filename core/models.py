@@ -269,12 +269,12 @@ class AISummaryReport(models.Model):
         null=True, blank=True, default=None
     )
     reporter = GenericForeignKey("reporter_content_type", "reporter_object_id")
-    content_modules = models.JSONField(
-        _("Content Modules"),
-        default=['title', 'content', 'summary'],
-        help_text=_("Select which content modules to send to AI (stored as JSON list)"),
-        blank=True,
-    )
+    # content_modules = models.JSONField(
+    #     _("Content Modules"),
+    #     default=['title', 'content', 'summary'],
+    #     help_text=_("Select which content modules to send to AI (stored as JSON list)"),
+    #     blank=True,
+    # )
     report_prompt = models.TextField(
         _("Report Prompt"),
         default=settings.default_report_prompt,
@@ -295,13 +295,13 @@ class AISummaryReport(models.Model):
         related_name="ai_summary_reports",
         verbose_name=_("Related Feeds"),
     )
-    # 获取feed的时间范围：按天数填写，1就是今天，2就是2天
-    days_range = models.IntegerField(
-        _("Days Range"),
-        default=1,
-        help_text=_("Number of days to fetch entries from related feeds for the report"),
-        validators=[MinValueValidator(1)],
-    )
+    # # 获取feed的时间范围：按天数填写，1就是今天，2就是2天
+    # days_range = models.IntegerField(
+    #     _("Days Range"),
+    #     default=1,
+    #     help_text=_("Number of days to fetch entries from related feeds for the report"),
+    #     validators=[MinValueValidator(1)],
+    # )
 
     created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Updated At"), auto_now=True)

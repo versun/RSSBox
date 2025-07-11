@@ -209,7 +209,7 @@ class AISummaryReportForm(forms.ModelForm):
             "report_prompt",
             "publish_days_option",
             "related_feeds",
-            "days_range",
+            #"days_range",
         ]
 
     def __init__(self, *args, **kwargs):
