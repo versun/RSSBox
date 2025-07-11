@@ -1477,7 +1477,7 @@ wheels = [
 
 [[package]]
 name = "rss-translator"
-version = "2025.7.1"
+version = "2025.7.11"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },
