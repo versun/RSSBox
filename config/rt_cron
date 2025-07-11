@@ -10,4 +10,6 @@
 0 1 * * * root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency 'daily' >> /var/log/cron.log 2>&1
 # 每周一凌晨2点执行一次 update_feeds_for_frequency 任务
 0 2 * * 1 root cd /app && /opt/venv/bin/python manage.py update_feeds --frequency 'weekly' >> /var/log/cron.log 2>&1
+# 每周运行一次 清理entreis 任务
+0 3 * * 1 root cd /app && /opt/venv/bin/python manage.py clean_entries >> /var/log/cron.log 2>&1
 
