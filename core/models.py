@@ -235,7 +235,6 @@ class AISummaryReport(models.Model):
     name = models.CharField(
         _("Report Name"),
         max_length=255,
-        help_text=_("Name of the AI Summary Report"),
         blank=True,
         null=True,
     )

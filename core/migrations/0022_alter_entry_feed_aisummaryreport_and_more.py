@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
             name='AISummaryReport',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(blank=True, help_text='Name of the AI Summary Report', max_length=255, null=True, verbose_name='Report Name')),
+                ('name', models.CharField(blank=True, max_length=255, null=True, verbose_name='Report Name')),
                 ('slug', models.SlugField(blank=True, max_length=255, null=True, unique=True, verbose_name='URL Slug')),
                 ('target_language', models.CharField(choices=[('English', 'English'), ('Chinese Simplified', 'Chinese Simplified'), ('Chinese Traditional', 'Chinese Traditional'), ('Russian', 'Russian'), ('Japanese', 'Japanese'), ('Korean', 'Korean'), ('Czech', 'Czech'), ('Danish', 'Danish'), ('German', 'German'), ('Spanish', 'Spanish'), ('French', 'French'), ('Indonesian', 'Indonesian'), ('Italian', 'Italian'), ('Hungarian', 'Hungarian'), ('Norwegian Bokmal', 'Norwegian Bokmal'), ('Dutch', 'Dutch'), ('Polish', 'Polish'), ('Portuguese', 'Portuguese'), ('Swedish', 'Swedish'), ('Turkish', 'Turkish')], default='Chinese Simplified', max_length=50, verbose_name='Language')),
                 ('reporter_object_id', models.PositiveIntegerField(blank=True, default=None, null=True)),

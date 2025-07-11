@@ -360,10 +360,6 @@ msgstr "源"
 msgid "Report Name"
 msgstr "报告名称"
 
-#: core/models.py:238
-msgid "Name of the AI Summary Report"
-msgstr "摘要报告的名称"
-
 #: core/models.py:266
 msgid "Report Prompt"
 msgstr "报告提示词"
