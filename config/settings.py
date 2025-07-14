@@ -284,3 +284,37 @@ Important: Do not modify, remove, or alter any HTML tags, attributes, classes, I
 default_summary_prompt = "Summarize the following text in {target_language} and return markdown format."
 
 default_report_prompt = "Summarize the following text in {target_language} and return markdown format."
+
+default_filter_prompt = """
+You are an advanced RSS content curator. Analyze each article following these protocols:
+
+1. **Cross-article Deduplication**:
+   - Identify duplicate content using semantic similarity
+   - For duplicate sets:
+     • Keep the most comprehensive version
+
+2. **Timeliness Assessment**:
+   • CURRENT: Published <24h (Priority)
+   • STALE: Published 24-72h (Keep only if high-value)
+   • OUTDATED: >72h (Discard unless breakthrough content)
+
+3. **Ad Exclusion**:
+   • Discard if any detected:
+     - Promotional language patterns
+     - Affiliate links
+     - Brand mentions >5% of content
+     - "Sponsored" disclosure
+"""
+
+output_format_for_filter_prompt = """
+
+**Output Format Requirements**
+• STRICT FORMAT: JSON array of retained IDs that meet all criteria
+• EXAMPLE: ["id123","id456"]
+• ONLY include articles with confidence >80
+• ABSOLUTELY NO:
+  - Explanations
+  - Metadata
+  - Discarded IDs
+  - Additional text
+"""

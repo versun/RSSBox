@@ -214,9 +214,9 @@ class AISummaryReportAdmin(admin.ModelAdmin):
     list_display = (
         "name",
         "target_language",
+        "filter",
         "reporter",
         "publish_days_display",
-        #"days_range",
         "total_tokens",
     )
     list_filter = ("target_language", "publish_days")

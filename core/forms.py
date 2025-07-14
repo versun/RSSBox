@@ -176,6 +176,12 @@ class FeedForm(forms.ModelForm):
 
 
 class AISummaryReportForm(forms.ModelForm):
+    filter_option = forms.ChoiceField(
+        choices=(),
+        required=False,
+        help_text=_("Select a valid AI engine"),
+        label=_("Filter"),
+    )
     reporter_option = forms.ChoiceField(
         choices=(),
         required=True,
@@ -205,17 +211,19 @@ class AISummaryReportForm(forms.ModelForm):
             "name",
             "slug",
             "target_language",
+            "filter_option",
+            "filter_prompt",
             "reporter_option",
             "report_prompt",
             "publish_days_option",
             "related_feeds",
-            #"days_range",
         ]
 
     def __init__(self, *args, **kwargs):
         super(AISummaryReportForm, self).__init__(*args, **kwargs)
 
         translator_choices, self.fields["reporter_option"].choices = get_translator_and_summary_choices()
+        self.fields["filter_option"].choices = self.fields["reporter_option"].choices
 
         self.fields["slug"].widget.attrs.update(
             {
@@ -232,8 +240,23 @@ class AISummaryReportForm(forms.ModelForm):
             self.fields[
                 "reporter_option"
             ].initial = f"{instance.reporter_content_type.id}:{instance.reporter_object_id}"
+        if instance.filter_content_type and instance.filter_object_id:
+            self.fields[
+                "filter_option"
+            ].initial = f"{instance.filter_content_type.id}:{instance.filter_object_id}"
         if instance.publish_days:
             self.fields["publish_days_option"].initial = list(instance.publish_days)
+
+    def _process_filter(self, instance):
+        if self.cleaned_data["filter_option"]:
+            content_type_id, object_id = map(
+                int, self.cleaned_data["filter_option"].split(":")
+            )
+            instance.filter_content_type_id = content_type_id
+            instance.filter_object_id = object_id
+        else:
+            instance.filter_content_type_id = None
+            instance.filter_object_id = None
 
     def _process_reporter(self, instance):
         if self.cleaned_data["reporter_option"]:
@@ -257,6 +280,7 @@ class AISummaryReportForm(forms.ModelForm):
         instance = super(AISummaryReportForm, self).save(commit=False)
 
         self._process_reporter(instance)
+        self._process_filter(instance)
         self._process_publish_days_option(instance)
         logging.debug("Saving AISummaryReportForm with instance: %s", instance)
         if commit:
