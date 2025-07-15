@@ -182,8 +182,14 @@ def handle_feeds_summary(feeds: list):
             logging.info(
                 "Start summary feed %s to %s", feed.feed_url, feed.target_language
             )
+            if not feed.summarizer:
+                raise Exception("Summarizer Engine Not Set")
 
-            summarize_feed(feed)
+            min_chunk_size = feed.summarizer.min_size()
+            max_chunk_size = feed.summarizer.max_size()
+            max_context_tokens = feed.summarizer.max_tokens
+
+            summarize_feed(feed, min_chunk_size=min_chunk_size, max_chunk_size=max_chunk_size, max_context_tokens=max_context_tokens)
             feed.translation_status = True
             feed.log += f"{timezone.now()} Summary Completed <br>"
         except Exception as e:
