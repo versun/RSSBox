@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from config import settings
 from openai import OpenAI
 from encrypted_model_fields.fields import EncryptedCharField
+import time
 from time import sleep
 from utils.text_handler import get_token_count, adaptive_chunking
 
@@ -197,10 +198,15 @@ class OpenAITranslator(TranslatorEngine):
         logging.info(">>> Summarize [%s]: %s", target_language, text)
         return self.translate(text, target_language, system_prompt=self.summary_prompt, max_tokens=max_tokens, **kwargs)
     
-    def report(self, text: str, target_language: str, prompt: str, max_tokens: int = None, **kwargs) -> dict:
-        logging.info(">>> Report [%s]: %s", target_language, text)
+    def reporter(self, text: str, target_language: str, prompt: str, max_tokens: int = None, **kwargs) -> dict:
+        logging.info(">>> Start Reporter [%s]: %s", target_language, text)
         prompt += settings.output_format_for_filter_prompt
         return self.translate(text, target_language, system_prompt=prompt, max_tokens=max_tokens, **kwargs)
+    
+    def filter(self, text: str, prompt: str, report_name:str = None, max_tokens: int = None, **kwargs) -> dict:
+        logging.info(">>> Start Filter [%s]: %s", report_name, text)
+        prompt = prompt.replace("{report_name}", report_name).replace("{date}", time.strftime("%Y-%m-%d"))
+        return self.translate(text, system_prompt=prompt, max_tokens=max_tokens, **kwargs)
 
 class DeepLTranslator(TranslatorEngine):
     # https://github.com/DeepLcom/deepl-python
