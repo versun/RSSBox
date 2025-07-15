@@ -87,8 +87,8 @@ class DeepLTranslatorAdmin(BaseTranslatorAdmin):
 
 
 class TestTranslatorAdmin(BaseTranslatorAdmin):
-    fields = ["name", "translated_text", "max_characters", "interval"]
-    list_display = ["name", "is_valid", "translated_text", "max_characters", "interval"]
+    fields = ["name", "translated_text", "max_characters", "max_tokens", "interval"]
+    list_display = ["name", "is_valid", "translated_text", "max_characters", "max_tokens", "interval"]
 
 
 core_admin_site.register(OpenAITranslator, OpenAITranslatorAdmin)

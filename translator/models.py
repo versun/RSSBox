@@ -270,6 +270,7 @@ class DeepLTranslator(TranslatorEngine):
 class TestTranslator(TranslatorEngine):
     translated_text = models.TextField(default="@@Translated Text@@")
     max_characters = models.IntegerField(default=50000)
+    max_tokens = models.IntegerField(default=50000)
     interval = models.IntegerField(_("Request Interval(s)"), default=3)
     is_ai = models.BooleanField(default=True, editable=False)
 
