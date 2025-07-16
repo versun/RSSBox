@@ -17,11 +17,6 @@ services:
     ports:
       - 8000:8000
     restart: always
-    healthcheck:
-      test: ["CMD", "python", "-c", "import redis,os; r=redis.Redis.from_url(os.getenv('REDIS_URL')); r.ping()"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
     depends_on:
       - rsstranslator_redis
   
@@ -32,3 +27,9 @@ services:
     volumes:
       - ./data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
