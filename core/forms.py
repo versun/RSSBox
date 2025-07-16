@@ -1,7 +1,7 @@
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from .models import Feed, AISummaryReport
+from .models import Feed, Digest
 from utils.modelAdmin_utils import get_translator_and_summary_choices
 import logging
 
@@ -175,18 +175,18 @@ class FeedForm(forms.ModelForm):
         return instance
 
 
-class AISummaryReportForm(forms.ModelForm):
+class DigestForm(forms.ModelForm):
     filter_option = forms.ChoiceField(
         choices=(),
         required=False,
         help_text=_("Select a valid AI engine"),
         label=_("Filter"),
     )
-    reporter_option = forms.ChoiceField(
+    digester_option = forms.ChoiceField(
         choices=(),
         required=True,
         help_text=_("Select a valid AI engine"),
-        label=_("Reporter"),
+        label=_("Digester"),
     )
 
     publish_days_option = forms.MultipleChoiceField(
@@ -206,24 +206,24 @@ class AISummaryReportForm(forms.ModelForm):
     )
 
     class Meta:
-        model = AISummaryReport
+        model = Digest
         fields = [
             "name",
             "slug",
             "target_language",
             "filter_option",
             "filter_prompt",
-            "reporter_option",
-            "report_prompt",
+            "digester_option",
+            "digest_prompt",
             "publish_days_option",
             "related_feeds",
         ]
 
     def __init__(self, *args, **kwargs):
-        super(AISummaryReportForm, self).__init__(*args, **kwargs)
+        super(DigestForm, self).__init__(*args, **kwargs)
 
-        translator_choices, self.fields["reporter_option"].choices = get_translator_and_summary_choices()
-        self.fields["filter_option"].choices = self.fields["reporter_option"].choices
+        translator_choices, self.fields["digester_option"].choices = get_translator_and_summary_choices()
+        self.fields["filter_option"].choices = self.fields["digester_option"].choices
 
         self.fields["slug"].widget.attrs.update(
             {
@@ -236,10 +236,10 @@ class AISummaryReportForm(forms.ModelForm):
             self._set_initial_values(instance)
 
     def _set_initial_values(self, instance):
-        if instance.reporter_content_type and instance.reporter_object_id:
+        if instance.digester_content_type and instance.digester_object_id:
             self.fields[
-                "reporter_option"
-            ].initial = f"{instance.reporter_content_type.id}:{instance.reporter_object_id}"
+                "digester_option"
+            ].initial = f"{instance.digester_content_type.id}:{instance.digester_object_id}"
         if instance.filter_content_type and instance.filter_object_id:
             self.fields[
                 "filter_option"
@@ -258,16 +258,16 @@ class AISummaryReportForm(forms.ModelForm):
             instance.filter_content_type_id = None
             instance.filter_object_id = None
 
-    def _process_reporter(self, instance):
-        if self.cleaned_data["reporter_option"]:
+    def _process_digester(self, instance):
+        if self.cleaned_data["digester_option"]:
             content_type_id, object_id = map(
-                int, self.cleaned_data["reporter_option"].split(":")
+                int, self.cleaned_data["digester_option"].split(":")
             )
-            instance.reporter_content_type_id = content_type_id
-            instance.reporter_object_id = object_id
+            instance.digester_content_type_id = content_type_id
+            instance.digester_object_id = object_id
         else:
-            instance.reporter_content_type_id = None
-            instance.reporter_object_id = None
+            instance.digester_content_type_id = None
+            instance.digester_object_id = None
 
     def _process_publish_days_option(self, instance):
         if self.cleaned_data["publish_days_option"]:
@@ -277,12 +277,12 @@ class AISummaryReportForm(forms.ModelForm):
 
     @transaction.atomic
     def save(self, commit=True):
-        instance = super(AISummaryReportForm, self).save(commit=False)
+        instance = super(DigestForm, self).save(commit=False)
 
-        self._process_reporter(instance)
+        self._process_digester(instance)
         self._process_filter(instance)
         self._process_publish_days_option(instance)
-        logging.debug("Saving AISummaryReportForm with instance: %s", instance)
+        logging.debug("Saving DigestForm with instance: %s", instance)
         if commit:
             instance.save()
             #self.save_m2m()

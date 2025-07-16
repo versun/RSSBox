@@ -8,15 +8,15 @@ from django.utils.encoding import force_str
 from django.urls import path, reverse
 from django.db import transaction
 
-from .models import Feed, AISummaryReport
+from .models import Feed, Digest
 from .custom_admin_site import core_admin_site
-from .forms import FeedForm, AISummaryReportForm
+from .forms import FeedForm, DigestForm
 from .actions import (
     export_original_feed_as_opml,
     export_translated_feed_as_opml,
     feed_force_update,
     feed_batch_modify,
-    create_ai_summary_report,
+    create_digest,
 )
 from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
@@ -58,7 +58,7 @@ class FeedAdmin(admin.ModelAdmin):
     ]
 
     actions = [
-        create_ai_summary_report,
+        create_digest,
         feed_force_update,
         export_original_feed_as_opml,
         export_translated_feed_as_opml,
@@ -209,13 +209,13 @@ class FeedAdmin(admin.ModelAdmin):
             f"/rss/category/json/{obj.category.name}",
         )
 
-class AISummaryReportAdmin(admin.ModelAdmin):
-    form = AISummaryReportForm
+class DigestAdmin(admin.ModelAdmin):
+    form = DigestForm
     list_display = (
         "name",
         "target_language",
         "filter",
-        "reporter",
+        "digester",
         "publish_days_display",
         "total_tokens",
     )
@@ -254,7 +254,7 @@ class AISummaryReportAdmin(admin.ModelAdmin):
         return ",".join([force_str(day_map[d]) for d in ordered_days])
 
 core_admin_site.register(Feed, FeedAdmin)
-core_admin_site.register(AISummaryReport, AISummaryReportAdmin)
+core_admin_site.register(Digest, DigestAdmin)
 
 if settings.USER_MANAGEMENT:
     core_admin_site.register(User)

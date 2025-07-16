@@ -279,9 +279,9 @@ def feed_batch_modify(modeladmin, request, queryset):
     )
 
 
-@admin.display(description=_("Create AI Summary Report"))
-def create_ai_summary_report(self, request, queryset):
+@admin.display(description=_("Create Digest"))
+def create_digest(self, request, queryset):
     selected_ids = queryset.values_list("id", flat=True)
     ids_string = ",".join(str(id) for id in selected_ids)
-    url = reverse("admin:core_aisummaryreport_add")
+    url = reverse("admin:core_digest_add")
     return HttpResponseRedirect(f"{url}?feed_ids={ids_string}")

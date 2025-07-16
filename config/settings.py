@@ -283,14 +283,14 @@ Important: Do not modify, remove, or alter any HTML tags, attributes, classes, I
 """
 default_summary_prompt = "Summarize the following text in {target_language} and return markdown format."
 
-default_report_prompt = """
+default_digest_prompt = """
 ROLE: Professional News Editor
 TASK: Generate concise daily briefings
 
 # OUTPUT REQUIREMENTS
 1. FORMAT: Markdown with sections
 2. STRUCTURE:
-   ## {report_name} | {date}
+   ## {digest_name} | {date}
    ### category
    - **[Title](url)**  
      summary

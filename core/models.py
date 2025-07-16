@@ -231,7 +231,7 @@ class Feed(models.Model):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
 
-class AISummaryReport(models.Model):
+class Digest(models.Model):
     CONTENT_MODULE_CHOICES = (
         ('title', _('Original Title')),
         ('translated_title', _('Translated Title')),
@@ -241,7 +241,7 @@ class AISummaryReport(models.Model):
     )
 
     name = models.CharField(
-        _("Report Name"),
+        _("Digest Name"),
         max_length=255,
         blank=True,
         null=True,
@@ -273,24 +273,24 @@ class AISummaryReport(models.Model):
     filter_prompt = models.TextField(
         _("Filter Prompt"),
         default=settings.default_filter_prompt,
-        help_text=_("Custom prompt for filtering entries before report generation"),
+        help_text=_("Custom prompt for filtering entries before digesting."),
     )
 
-    reporter_content_type = models.ForeignKey(
+    digester_content_type = models.ForeignKey(
         ContentType,
         null=True,
         on_delete=models.SET_NULL,
-        related_name="reporter",
+        related_name="digester",
     )
-    reporter_object_id = models.PositiveIntegerField(
+    digester_object_id = models.PositiveIntegerField(
         null=True, blank=True, default=None
     )
-    reporter = GenericForeignKey("reporter_content_type", "reporter_object_id")
+    digester = GenericForeignKey("digester_content_type", "digester_object_id")
     
-    report_prompt = models.TextField(
-        _("Report Prompt"),
-        default=settings.default_report_prompt,
-        help_text=_("Custom prompt for generating AI summaries report"),
+    digest_prompt = models.TextField(
+        _("Digest Prompt"),
+        default=settings.default_digest_prompt,
+        help_text=_(""),
     )
     
     publish_days = models.CharField(
@@ -304,7 +304,7 @@ class AISummaryReport(models.Model):
     related_feeds = models.ManyToManyField(
         Feed,
         blank=True,
-        related_name="ai_summary_reports",
+        related_name="digests",
         verbose_name=_("Related Feeds"),
     )
 
@@ -313,7 +313,7 @@ class AISummaryReport(models.Model):
     total_tokens = models.IntegerField(
         _("Total Tokens"),
         default=0,
-        help_text=_("Total tokens used for AI summaries in this report"),
+        help_text=_("Total tokens used for this digest"),
     )
     log = models.TextField(
         _("Log"),
@@ -326,8 +326,8 @@ class AISummaryReport(models.Model):
         return f"{self.name} - {self.slug}"
 
     class Meta:
-        verbose_name = _("AI Summary Report")
-        verbose_name_plural = _("AI Summary Reports")
+        verbose_name = _("Digest")
+        verbose_name_plural = _("Digests")
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -339,7 +339,7 @@ class AISummaryReport(models.Model):
         # if "Output Format Requirements" not in self.filter_prompt:
         #     self.filter_prompt += settings.output_format_for_filter_prompt
         
-        super(AISummaryReport, self).save(*args, **kwargs)
+        super(Digest, self).save(*args, **kwargs)
 
 
 
@@ -347,12 +347,12 @@ class Entry(models.Model):
     feed = models.ForeignKey(
         Feed, on_delete=models.CASCADE, related_name="entries", null=True, blank=True
     )
-    ai_summary_report = models.ForeignKey(
-        AISummaryReport,
+    digest = models.ForeignKey(
+        Digest,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="reports",
+        related_name="digests",
     )
     link = models.URLField(null=False)
     author = models.CharField(max_length=255, null=True, blank=True)

@@ -38,8 +38,8 @@ msgid "Batch modification"
 msgstr "批量修改"
 
 #: core/actions.py:282
-msgid "Create AI Summary Report"
-msgstr "创建 AI 摘要报告"
+msgid "Create Digest"
+msgstr "创建简报"
 
 #: core/admin.py:53 core/forms.py:197 core/models.py:271
 msgid "Publish Days"
@@ -403,12 +403,12 @@ msgid "Total tokens used for AI summaries in this report"
 msgstr "本报告中 AI 摘要所用代币总数"
 
 #: core/models.py:311
-msgid "AI Summary Report"
-msgstr "AI 摘要报告"
+msgid "Digest"
+msgstr "简报"
 
 #: core/models.py:312
-msgid "AI Summary Reports"
-msgstr "AI 摘要报告"
+msgid "Digests"
+msgstr "简报"
 
 #: core/models.py:354
 msgid "Entry"

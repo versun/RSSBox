@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import mistune
 import newspaper
 from typing import Optional, Tuple
-from .models import Feed, Entry
+from .models import Feed, Entry, Digest
 from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
 from translator.models import TranslatorEngine
@@ -211,6 +211,29 @@ def handle_feeds_summary(feeds: list):
     # Clear the list after processing
     del feeds
 
+def handle_digests(feeds: list, digest: Digest):
+    """
+    Process feeds to generate digests with memory optimizations.
+    """
+    digest.log += f"{timezone.now()} Digest processing started <br>"
+    for feed in feeds:
+        try:
+            if not feed.entries.exists():
+                continue
+
+            logging.info("Start digest for feed %s", feed.feed_url)
+
+            feed.log += f"{timezone.now()} Digest processing started <br>"
+        except Exception as e:
+            logging.error("Task handle_digests (%s): %s", feed.feed_url, str(e))
+            feed.log += f"{timezone.now()} {str(e)}<br>"
+        finally:
+            # Explicitly clean up reference
+            del feed
+
+    Feed.objects.bulk_update(feeds, fields=["log"])
+    # Clear the list after processing
+    del feeds
 
 def translate_feed(feed: Feed, target_field: str = "title"):
     """Translate and summarize feed entries with memory optimizations."""
@@ -571,6 +594,7 @@ def summarize_feed(
         
         # Clean up large references
         del entries, entries_to_save
+
 
 
 def _save_progress(entries_to_save, feed, total_tokens):
