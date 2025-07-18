@@ -213,13 +213,11 @@ class DigestAdmin(admin.ModelAdmin):
     form = DigestForm
     list_display = (
         "name",
-        "target_language",
         "filter",
         "digester",
         "publish_days_display",
         "total_tokens",
     )
-    list_filter = ("target_language", "publish_days")
     search_fields = ("name", "slug")
     readonly_fields = ("total_tokens", "created_at", "updated_at", "log")
     filter_horizontal = ("related_feeds",)

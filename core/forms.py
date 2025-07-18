@@ -4,6 +4,8 @@ from django.utils.translation import gettext_lazy as _
 from .models import Feed, Digest
 from utils.modelAdmin_utils import get_translator_and_summary_choices
 import logging
+from config import settings
+
 
 class FeedForm(forms.ModelForm):
     # 自定义字段，使用ChoiceField生成下拉菜单
@@ -210,7 +212,6 @@ class DigestForm(forms.ModelForm):
         fields = [
             "name",
             "slug",
-            "target_language",
             "filter_option",
             "filter_prompt",
             "digester_option",
@@ -234,6 +235,10 @@ class DigestForm(forms.ModelForm):
         instance = getattr(self, "instance", None)
         if instance and instance.pk:
             self._set_initial_values(instance)
+        else:
+            # 设置初始值
+            self.fields["digest_prompt"].initial = settings.default_digest_prompt
+            self.fields["filter_prompt"].initial = settings.default_filter_prompt
 
     def _set_initial_values(self, instance):
         if instance.digester_content_type and instance.digester_object_id:

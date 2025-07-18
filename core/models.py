@@ -253,12 +253,6 @@ class Digest(models.Model):
         blank=True,
         null=True,
     )
-    target_language = models.CharField(
-        _("Language"),
-        choices=settings.TRANSLATION_LANGUAGES,
-        max_length=50,
-        default=settings.DEFAULT_TARGET_LANGUAGE,
-    )
     filter_content_type = models.ForeignKey(
         ContentType,
         null=True,
@@ -272,7 +266,7 @@ class Digest(models.Model):
     
     filter_prompt = models.TextField(
         _("Filter Prompt"),
-        default=settings.default_filter_prompt,
+        # default="",
         help_text=_("Custom prompt for filtering entries before digesting."),
     )
 
@@ -289,8 +283,8 @@ class Digest(models.Model):
     
     digest_prompt = models.TextField(
         _("Digest Prompt"),
-        default=settings.default_digest_prompt,
-        help_text=_(""),
+        # default="",
+        help_text=_("Custom prompt for digesting entries into a summary."),
     )
     
     publish_days = models.CharField(
@@ -311,7 +305,7 @@ class Digest(models.Model):
     created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
     updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
     total_tokens = models.IntegerField(
-        _("Total Tokens"),
+        _("Tokens Cost"),
         default=0,
         help_text=_("Total tokens used for this digest"),
     )
