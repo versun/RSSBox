@@ -1,7 +1,7 @@
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from .models import Feed, Digest
+from .models import Feed, AIFilter
 from utils.modelAdmin_utils import get_translator_and_summary_choices
 import logging
 from config import settings
@@ -177,54 +177,28 @@ class FeedForm(forms.ModelForm):
         return instance
 
 
-class DigestForm(forms.ModelForm):
+class AIFilterForm(forms.ModelForm):
     filter_option = forms.ChoiceField(
         choices=(),
         required=False,
         help_text=_("Select a valid AI engine"),
         label=_("Filter"),
     )
-    digester_option = forms.ChoiceField(
-        choices=(),
-        required=True,
-        help_text=_("Select a valid AI engine"),
-        label=_("Digester"),
-    )
-
-    publish_days_option = forms.MultipleChoiceField(
-        choices=(
-            ("1", _("Monday")),
-            ("2", _("Tuesday")),
-            ("3", _("Wednesday")),
-            ("4", _("Thursday")),
-            ("5", _("Friday")),
-            ("6", _("Saturday")),
-            ("7", _("Sunday")),
-        ),
-        required=True,
-        label=_("Publish Days"),
-        widget=forms.CheckboxSelectMultiple,
-        initial=["1", "2", "3", "4", "5", "6", "7"],
-    )
 
     class Meta:
-        model = Digest
+        model = AIFilter
         fields = [
             "name",
             "slug",
             "filter_option",
             "filter_prompt",
-            "digester_option",
-            "digest_prompt",
-            "publish_days_option",
             "related_feeds",
         ]
 
     def __init__(self, *args, **kwargs):
-        super(DigestForm, self).__init__(*args, **kwargs)
+        super(AIFilterForm, self).__init__(*args, **kwargs)
 
-        translator_choices, self.fields["digester_option"].choices = get_translator_and_summary_choices()
-        self.fields["filter_option"].choices = self.fields["digester_option"].choices
+        translator_choices, self.fields["filter_option"].choices = get_translator_and_summary_choices()
 
         self.fields["slug"].widget.attrs.update(
             {
@@ -237,20 +211,13 @@ class DigestForm(forms.ModelForm):
             self._set_initial_values(instance)
         else:
             # 设置初始值
-            self.fields["digest_prompt"].initial = settings.default_digest_prompt
             self.fields["filter_prompt"].initial = settings.default_filter_prompt
 
     def _set_initial_values(self, instance):
-        if instance.digester_content_type and instance.digester_object_id:
-            self.fields[
-                "digester_option"
-            ].initial = f"{instance.digester_content_type.id}:{instance.digester_object_id}"
         if instance.filter_content_type and instance.filter_object_id:
             self.fields[
                 "filter_option"
             ].initial = f"{instance.filter_content_type.id}:{instance.filter_object_id}"
-        if instance.publish_days:
-            self.fields["publish_days_option"].initial = list(instance.publish_days)
 
     def _process_filter(self, instance):
         if self.cleaned_data["filter_option"]:
@@ -263,30 +230,11 @@ class DigestForm(forms.ModelForm):
             instance.filter_content_type_id = None
             instance.filter_object_id = None
 
-    def _process_digester(self, instance):
-        if self.cleaned_data["digester_option"]:
-            content_type_id, object_id = map(
-                int, self.cleaned_data["digester_option"].split(":")
-            )
-            instance.digester_content_type_id = content_type_id
-            instance.digester_object_id = object_id
-        else:
-            instance.digester_content_type_id = None
-            instance.digester_object_id = None
-
-    def _process_publish_days_option(self, instance):
-        if self.cleaned_data["publish_days_option"]:
-            instance.publish_days = "".join(self.cleaned_data["publish_days_option"])
-        else:
-            instance.publish_days = ""
-
     @transaction.atomic
     def save(self, commit=True):
-        instance = super(DigestForm, self).save(commit=False)
+        instance = super(AIFilterForm, self).save(commit=False)
 
-        self._process_digester(instance)
         self._process_filter(instance)
-        self._process_publish_days_option(instance)
         logging.debug("Saving DigestForm with instance: %s", instance)
         if commit:
             instance.save()

@@ -292,7 +292,7 @@ TASK: Generate concise daily briefings
 2. STRUCTURE:
    ## {digest_name} | {date}
    ### category
-   - **[Title](url)**  
+   - **[Title](link)**  
      summary
 
 # CONTENT RULES

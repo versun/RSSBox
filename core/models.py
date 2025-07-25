@@ -230,123 +230,9 @@ class Feed(models.Model):
     def get_translation_display(self):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
-
-class Digest(models.Model):
-    CONTENT_MODULE_CHOICES = (
-        ('title', _('Original Title')),
-        ('translated_title', _('Translated Title')),
-        ('content', _('Original Content')),
-        ('translated_content', _('Translated Content')),
-        ('summary', _('Content Summary')),
-    )
-
-    name = models.CharField(
-        _("Digest Name"),
-        max_length=255,
-        blank=True,
-        null=True,
-    )
-    slug = models.SlugField(
-        _("URL Slug"),
-        max_length=255,
-        unique=True,
-        blank=True,
-        null=True,
-    )
-    filter_content_type = models.ForeignKey(
-        ContentType,
-        null=True,
-        on_delete=models.SET_NULL,
-        related_name="filter",
-    )
-    filter_object_id = models.PositiveIntegerField(
-        null=True, blank=True, default=None
-    )
-    filter = GenericForeignKey("filter_content_type", "filter_object_id")
-    
-    filter_prompt = models.TextField(
-        _("Filter Prompt"),
-        # default="",
-        help_text=_("Custom prompt for filtering entries before digesting."),
-    )
-
-    digester_content_type = models.ForeignKey(
-        ContentType,
-        null=True,
-        on_delete=models.SET_NULL,
-        related_name="digester",
-    )
-    digester_object_id = models.PositiveIntegerField(
-        null=True, blank=True, default=None
-    )
-    digester = GenericForeignKey("digester_content_type", "digester_object_id")
-    
-    digest_prompt = models.TextField(
-        _("Digest Prompt"),
-        # default="",
-        help_text=_("Custom prompt for digesting entries into a summary."),
-    )
-    
-    publish_days = models.CharField(
-        _("Publish Days"),
-        max_length=7,
-        default="1234567",  # Default to every day
-        help_text=_(
-            "A string of 7 characters representing days of the week (Mon-Sun), where 1 means Monday, 2 means Tuesday, etc."
-        ),
-    )
-    related_feeds = models.ManyToManyField(
-        Feed,
-        blank=True,
-        related_name="digests",
-        verbose_name=_("Related Feeds"),
-    )
-
-    created_at = models.DateTimeField(_("Created At"), auto_now_add=True)
-    updated_at = models.DateTimeField(_("Updated At"), auto_now=True)
-    total_tokens = models.IntegerField(
-        _("Tokens Cost"),
-        default=0,
-        help_text=_("Total tokens used for this digest"),
-    )
-    log = models.TextField(
-        _("Log"),
-        default="",
-        blank=True,
-        null=True,
-    )
-
-    def __str__(self):
-        return f"{self.name} - {self.slug}"
-
-    class Meta:
-        verbose_name = _("Digest")
-        verbose_name_plural = _("Digests")
-    
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = uuid.uuid4().hex
-
-        if len(self.log.encode("utf-8")) > 2048:
-            self.log = self.log[-2048:]
-        
-        # if "Output Format Requirements" not in self.filter_prompt:
-        #     self.filter_prompt += settings.output_format_for_filter_prompt
-        
-        super(Digest, self).save(*args, **kwargs)
-
-
-
 class Entry(models.Model):
     feed = models.ForeignKey(
-        Feed, on_delete=models.CASCADE, related_name="entries", null=True, blank=True
-    )
-    digest = models.ForeignKey(
-        Digest,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="digests",
+        Feed, on_delete=models.CASCADE, related_name="entries"
     )
     link = models.URLField(null=False)
     author = models.CharField(max_length=255, null=True, blank=True)
@@ -373,3 +259,88 @@ class Entry(models.Model):
         #         fields=["feed", "guid"], name="unique_entry_guid"
         #     )
         # ]
+
+
+class AIFilter(models.Model):
+    name = models.CharField(
+        _("Name"),
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+    slug = models.SlugField(
+        _("URL Slug"),
+        max_length=255,
+        unique=True,
+        blank=True,
+        null=True,
+    )
+    filter_content_type = models.ForeignKey(
+        ContentType,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="filter",
+    )
+    filter_object_id = models.PositiveIntegerField(
+        null=True, blank=True, default=None
+    )
+    filter = GenericForeignKey("filter_content_type", "filter_object_id")
+    
+    filter_prompt = models.TextField(
+        _("Filter Prompt"),
+        # default="",
+        help_text=_("Custom prompt for filtering entries."),
+    )
+
+    related_feeds = models.ManyToManyField(
+        Feed,
+        blank=True,
+        related_name="ai_filters",
+        verbose_name=_("Related Feeds"),
+    )
+
+    filtered_entries = models.ManyToManyField(
+        Entry, 
+        related_name='ai_filters',
+        blank=True,
+        verbose_name=_("Filtered Entries"),
+        help_text=_("Entries selected by this filter")
+    )
+
+    last_filter = models.DateTimeField(
+        _("Last Filter(UTC)"),
+        default=None,
+        blank=True,
+        null=True,
+        editable=False,
+        help_text=_("Last time the filter was applied"),
+    )
+    total_tokens = models.IntegerField(
+        _("Tokens Cost"),
+        default=0
+    )
+    log = models.TextField(
+        _("Log"),
+        default="",
+        blank=True,
+        null=True,
+    )
+
+    def __str__(self):
+        return f"{self.name} - {self.slug}"
+
+    class Meta:
+        verbose_name = _("AI Filter")
+        verbose_name_plural = _("AI Filter")
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = uuid.uuid4().hex
+
+        if len(self.log.encode("utf-8")) > 20480:
+            self.log = self.log[-20480:]
+        
+        # if "Output Format Requirements" not in self.filter_prompt:
+        #     self.filter_prompt += settings.output_format_for_filter_prompt
+        
+        super(AIFilter, self).save(*args, **kwargs)

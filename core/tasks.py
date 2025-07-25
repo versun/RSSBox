@@ -1,14 +1,16 @@
 import logging
 import time
+import json
 from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
 import newspaper
-from typing import Optional, Tuple
-from .models import Feed, Entry, Digest
+from .models import Feed, Entry, AIFilter
 from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
 from translator.models import TranslatorEngine
+from utils.text_handler import get_token_count, adaptive_chunking
+
 
 
 def handle_single_feed_fetch(feed: Feed):
@@ -211,29 +213,141 @@ def handle_feeds_summary(feeds: list):
     # Clear the list after processing
     del feeds
 
-def handle_digests(feeds: list, digest: Digest):
-    """
-    Process feeds to generate digests with memory optimizations.
-    """
-    digest.log += f"{timezone.now()} Digest processing started <br>"
+
+def handle_filtration(feeds: list, digest: AIFilter):
+    digest.status = None
+    # digest.save()
+    logging.info("Digest processing started: %s", digest.name)
+
     for feed in feeds:
         try:
             if not feed.entries.exists():
                 continue
 
-            logging.info("Start digest for feed %s", feed.feed_url)
+            digest.status = None
+            logging.info("Digest processing started: %s", digest.name)
 
-            feed.log += f"{timezone.now()} Digest processing started <br>"
+            filter_entries(feeds, digest)
+            generate_digest(feeds, digest)
+            digest.status = True
+            digest.log += f"{timezone.now()} Digest Completed <br>"
+            feed.log += f"{timezone.now()} Summary Completed <br>"
         except Exception as e:
-            logging.error("Task handle_digests (%s): %s", feed.feed_url, str(e))
-            feed.log += f"{timezone.now()} {str(e)}<br>"
+            logging.error(
+                "Task handle_digests %s: %s",
+                digest.name,
+                str(e),
+            )
+            digest.status = False
+            digest.log += f"{timezone.now()} {str(e)}<br>"
         finally:
             # Explicitly clean up reference
             del feed
 
-    Feed.objects.bulk_update(feeds, fields=["log"])
     # Clear the list after processing
     del feeds
+
+
+def old_handle_digests(feeds: list, digest: AIFilter):
+    """
+    Process feeds to generate digests with memory optimizations.
+    """
+    
+    digest.log += f"{timezone.now()} Digest processing started <br>"
+    digest.status = None
+    digest.save()
+    feeds_count = len(feeds)
+    
+    # 获取过滤器和摘要生成器
+    filter = digest.filter
+    
+    # 初始化用于存储所有接受和被过滤条目的列表
+    all_discarded_entries = []
+    all_accepted_entries = []
+    
+    # 遍历每个feed进行处理
+    for feed in feeds:
+        try:
+            if not feed.entries.exists():
+                continue
+
+            logging.info("[Digest]Processing feed %s", feed.feed_url)
+            
+            # 构建包含所有条目的JSON结构，最小化token使用
+            entries_data = []
+            entries = feed.entries.order_by("-pubdate")[: feed.max_posts]
+            
+            # 为每个条目创建简洁的JSON表示
+            for entry in entries:
+                entry_data = {
+                    "id": str(entry.id),
+                    "title": entry.original_title,
+                    "content": entry.ai_summary
+                }
+                # TODO: 如果没有ai_summary则进行summary并保存到entry里
+                entries_data.append(entry_data)
+            
+            # 将条目数据转换为JSON字符串用于过滤
+            entries_json = json.dumps(entries_data)
+
+            # 应用过滤器获取保留的条目ID
+            try: # TODO：根据max tokens进行分块
+                logging.info("[Digest]Applying filter for feed %s", feed.feed_url)
+                filter_result = _auto_retry(
+                    func=filter.filter,
+                    max_retries=3,
+                    text=entries_json,
+                    prompt=digest.filter_prompt,
+                    digest_name=digest.name,
+                    max_tokens=filter.max_tokens,
+                ) if filter else None
+
+                if not filter_result or not filter_result.get('text'):
+                    logging.warning(f"No filter result for feed {feed.feed_url}")
+                    digest.log += f"Filter Failure for feed {feed.feed_url}<br>"
+                    continue
+                
+                # 解析返回的JSON数组
+                retained_ids = json.loads(filter_result['text'])
+                logging.info(f"Retained IDs: {retained_ids}")
+                
+                # 收集过滤和被过滤的entries
+                for entry in entries:
+                    if str(entry.id) in retained_ids:
+                        all_accepted_entries.append(entry)
+                    else:
+                        all_discarded_entries.append(entry)
+                digest.log += f"Processed feed {feed.feed_url}: {len(retained_ids)} entries retained, {len(entries) - len(retained_ids)} discarded.<br>"
+
+            except (json.JSONDecodeError, KeyError) as e:
+                logging.error(f"JSON parsing {feed.feed_url} error: {str(e)}")
+                digest.log += f"Filter JSON {feed.feed_url} error: {str(e)}<br>"
+            
+            except Exception as e:
+                logging.error(f"Filter {feed.feed_url} error: {str(e)}")
+                digest.log += f"Filter {feed.feed_url} error: {str(e)}<br>"
+            
+            # 显式清理
+            del entries_data
+            del entries_json
+            del entries
+
+        except Exception as e:
+            logging.error(f"Feed processing error ({feed.feed_url}): {str(e)}")
+            digest.log += f"{timezone.now()} {str(e)}<br>"
+    
+    # 更新摘要日志和统计信息
+    stats = f"Total feeds processed: {feeds_count}, Accepted entries: {len(all_accepted_entries)}, Discarded entries: {len(all_discarded_entries)}"
+    
+    digest.log += f"{timezone.now()} Processing completed. {stats}<br>"
+    
+    # 保存最终状态
+    digest.save()
+    
+    # 清理引用
+    del feeds
+    del all_accepted_entries
+    del all_discarded_entries
 
 def translate_feed(feed: Feed, target_field: str = "title"):
     """Translate and summarize feed entries with memory optimizations."""

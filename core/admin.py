@@ -8,9 +8,9 @@ from django.utils.encoding import force_str
 from django.urls import path, reverse
 from django.db import transaction
 
-from .models import Feed, Digest
+from .models import Feed, AIFilter
 from .custom_admin_site import core_admin_site
-from .forms import FeedForm, DigestForm
+from .forms import FeedForm, AIFilterForm
 from .actions import (
     export_original_feed_as_opml,
     export_translated_feed_as_opml,
@@ -209,17 +209,15 @@ class FeedAdmin(admin.ModelAdmin):
             f"/rss/category/json/{obj.category.name}",
         )
 
-class DigestAdmin(admin.ModelAdmin):
-    form = DigestForm
+class AIFilterAdmin(admin.ModelAdmin):
+    form = AIFilterForm
     list_display = (
         "name",
         "filter",
-        "digester",
-        "publish_days_display",
         "total_tokens",
     )
     search_fields = ("name", "slug")
-    readonly_fields = ("total_tokens", "created_at", "updated_at", "log")
+    readonly_fields = ("total_tokens", "last_filter", "log")
     filter_horizontal = ("related_feeds",)
 
     def get_changeform_initial_data(self, request):
@@ -233,26 +231,8 @@ class DigestAdmin(admin.ModelAdmin):
                 initial["related_feeds"] = feed_ids
         return initial
 
-    @admin.display(description=_("Publish Days"))
-    def publish_days_display(self, obj):
-        day_map = {
-            "1": _("Mo"),
-            "2": _("Tu"),
-            "3": _("We"),
-            "4": _("Th"),
-            "5": _("Fr"),
-            "6": _("Sa"),
-            "7": _("Su"),
-        }
-        if not obj.publish_days:
-            return ""
-        
-        # 保持顺序 Su,Mo,Tu,We,Th,Fr,Sa
-        ordered_days = [d for d in "1234567" if d in obj.publish_days]
-        return ",".join([force_str(day_map[d]) for d in ordered_days])
-
 core_admin_site.register(Feed, FeedAdmin)
-core_admin_site.register(Digest, DigestAdmin)
+core_admin_site.register(AIFilter, AIFilterAdmin)
 
 if settings.USER_MANAGEMENT:
     core_admin_site.register(User)
