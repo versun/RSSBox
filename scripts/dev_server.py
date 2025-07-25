@@ -23,26 +23,26 @@ def setup_environment():
 
 def start_development_server():
     """启动开发服务器"""
-    print("🌐 启动Django开发服务器...")
+    print("🌐 Start DEV Server...")
     try:
         subprocess.run(["uv", "run", "python", "manage.py", "runserver"], check=True)
     except KeyboardInterrupt:
-        print("\n🛑 服务已停止")
+        print("\n🛑 Server Stopped by User")
     except subprocess.CalledProcessError as e:
-        print(f"❌ 开发服务启动失败: {e}")
+        print(f"❌ Start DEV Server Failed : {e}")
 
 
 def main():
     """主函数"""
     print("=" * 50)
-    print("🔥 Django开发环境初始化脚本")
+    print("🔥 Django development environment initialization script") # English: 
     print("=" * 50)
 
     try:
         # 检查是否在Django项目目录中
         if not Path("manage.py").exists():
-            print("❌ 错误: 未找到 manage.py 文件")
-            print("请确保在Django项目根目录中运行此脚本")
+            print("❌ Error: manage.py file not found")
+            print("Please ensure that you run this script in the root directory of your Django project.")
             sys.exit(1)
 
         # 1. 设置环境变量
@@ -54,7 +54,7 @@ def main():
         start_development_server()
 
     except Exception as e:
-        print(f"❌ 发生错误: {e}")
+        print(f"❌ ERROR: {e}")
         sys.exit(1)
 
 
