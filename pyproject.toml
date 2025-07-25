@@ -1,6 +1,6 @@
 [project]
 name = "rss-translator"
-version = "2025.7.15"
+version = "2025.7.25"
 description = "A Django-based RSS translation service. Compatible with uv/uvicorn."
 requires-python = ">=3.12"
 dependencies = [
@@ -41,8 +41,3 @@ packages = [ "config", "core", "locale", "scripts", "translator", "templates", "
 server = "scripts.prod_server:main"
 dev = "scripts.dev_server:main"
 init = "scripts.init:init_server"
-
-[dependency-groups]
-dev = [
-    "ipykernel>=6.29.5",
-]
