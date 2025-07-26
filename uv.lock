@@ -335,11 +335,15 @@ wheels = [
 ]
 
 [[package]]
-name = "django-tagulous2"
-version = "2024.5.17"
-source = { git = "https://github.com/versun/django-tagulous2#76919458ae4a9faa447440322d37591549f940b4" }
+name = "django-tagulous"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/f7/bef3d5ff4e0c7b786732ab77ca41eff8dd704f6552fb70b2fada1a0b64bc/django_tagulous-2.1.1.tar.gz", hash = "sha256:772941e0e359bb5478597fdafdb89e5619310a038e777e9599d0a5c036a05ceb", size = 291557, upload-time = "2025-06-22T23:21:34.262Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/03/e5bf7c3535f06d3962065a8e320aaca1cf6bef85e23e3fd8725e95c551be/django_tagulous-2.1.1-py3-none-any.whl", hash = "sha256:f5a6453407bcf4047f619f92be42e8b56615e00bbbd718d8810ce6fd5cf4888b", size = 286350, upload-time = "2025-06-22T23:21:32.588Z" },
 ]
 
 [[package]]
@@ -1403,7 +1407,7 @@ dependencies = [
     { name = "django" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
-    { name = "django-tagulous2" },
+    { name = "django-tagulous" },
     { name = "fake-useragent" },
     { name = "feed2json" },
     { name = "feedgen" },
@@ -1432,7 +1436,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.1" },
     { name = "django-debug-toolbar", specifier = ">=5.2.0" },
     { name = "django-encrypted-model-fields", specifier = ">=0.6.5" },
-    { name = "django-tagulous2", git = "https://github.com/versun/django-tagulous2" },
+    { name = "django-tagulous", specifier = ">=2.1.1" },
     { name = "fake-useragent", specifier = ">=2.2.0" },
     { name = "feed2json", specifier = ">=2024.4.29" },
     { name = "feedgen", specifier = ">=1.0.0" },
