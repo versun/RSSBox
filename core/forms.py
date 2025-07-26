@@ -19,7 +19,7 @@ class FeedForm(forms.ModelForm):
         choices=(),
         required=False,
         help_text=_("Select a valid AI engine"),
-        label=_("Summary Engine"),
+        label=_("Summarizer"),
     )
     simple_update_frequency = forms.ChoiceField(
         choices=(

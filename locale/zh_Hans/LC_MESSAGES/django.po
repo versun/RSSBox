@@ -137,7 +137,7 @@ msgid "Select a valid AI engine"
 msgstr "选择一个有效的AI引擎"
 
 #: core/forms.py:20
-msgid "Summary Engine"
+msgid "Summarizer"
 msgstr "摘要器"
 
 #: core/forms.py:28
