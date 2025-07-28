@@ -63,7 +63,7 @@ def handle_single_feed_fetch(feed: Feed):
                 # Get content
                 content = ""
                 if "content" in entry_data:
-                    content = entry_data.content[0].value if entry_data.content else ""
+                    content = entry_data.content[0].value or entry_data.content[1].value or ""
                 else:
                     content = entry_data.get("summary")
 
