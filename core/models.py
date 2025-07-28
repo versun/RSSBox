@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from tagulous.models import SingleTagField, TagField
 
-
 class Feed(models.Model):
     name = models.CharField(
         max_length=255, blank=True, null=True, verbose_name=_("Name")
@@ -145,7 +144,6 @@ class Feed(models.Model):
     filters = models.ManyToManyField(
         "Filter",
         blank=True,
-        null=True,
         related_name="feeds",
         verbose_name=_("Filters"),
         help_text=_("Filters to apply to the feed entries"),
@@ -313,20 +311,27 @@ class Filter(models.Model):
         help_text=_("Keywords to filter entries. Use comma to separate multiple keywords."),
     )
 
-    target_field = models.CharField(
-        verbose_name=_("Target Field"),
-        help_text=_("Select the fields to apply the filter on."),
-        choices=FIELD_CHOICES,
-        default=["original_content"],
-        blank=True,
-        null=True,
-        #widget=forms.CheckboxSelectMultiple,
-    )
-
     operation = models.BooleanField(
         choices=OPERATION_CHOICES,
         default=EXCLUDE,
         help_text=_("Action to take on matching keywords."),
+    )
+
+    filter_original_title = models.BooleanField(
+        default=True,
+        help_text="Apply filter to the original title of the entry.",
+    )
+    filter_original_content = models.BooleanField(
+        default=True,
+        help_text="Apply filter to the content of the entry.",
+    )
+    filter_translated_title = models.BooleanField(
+        default=False,
+        help_text="Apply filter to the translated title of the entry.",
+    )
+    filter_translated_content = models.BooleanField(
+        default=False,
+        help_text="Apply filter to the translated content of the entry.",
     )
 
     def __str__(self):
