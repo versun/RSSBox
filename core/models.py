@@ -1,6 +1,5 @@
 import os
 import uuid
-# import re
 from config import settings
 
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -8,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
-from tagulous.models import SingleTagField
+from tagulous.models import SingleTagField, TagField
 
 
 class Feed(models.Model):
@@ -143,6 +142,14 @@ class Feed(models.Model):
             "Level of detail of summaries of longer articles. 0: Normal, 1: Most detailed (cost more tokens)"
         ),
     )
+    filters = models.ManyToManyField(
+        "Filter",
+        blank=True,
+        null=True,
+        related_name="feeds",
+        verbose_name=_("Filters"),
+        help_text=_("Filters to apply to the feed entries"),
+    )
 
     additional_prompt = models.TextField(
         _("Addtional Prompt"),
@@ -260,87 +267,95 @@ class Entry(models.Model):
         #     )
         # ]
 
+# class Tag(models.Model):
+#     name = models.CharField(
+#         _("Tag Name"),
+#         max_length=50,
+#         unique=True,
+#     )
 
-class AIFilter(models.Model):
+#     def __str__(self):
+#         return f"{self.name}"
+
+#     class Meta:
+#         verbose_name = _("Tag")
+#         verbose_name_plural = _("Tags")
+#     constraints = [
+#         models.UniqueConstraint(
+#             fields=["name"], name="unique_tag_name"
+#         )
+#     ]
+
+class Filter(models.Model):
+    INCLUDE = True
+    EXCLUDE = False
+    OPERATION_CHOICES = (
+        (INCLUDE, _("Include - Match only these keywords")),
+        (EXCLUDE, _("Exclude - Exclude that matches these keywords")),
+    )
+
+    FIELD_CHOICES = (
+        ("original_title", _("Original_Title")),
+        ("original_content", _("Original_Content")),
+        ("translated_title", _("Translated_Title")),
+        ("translated_content", _("Translated_Content")),
+    )
+
     name = models.CharField(
         _("Name"),
         max_length=255,
         blank=True,
         null=True,
     )
-    slug = models.SlugField(
-        _("URL Slug"),
-        max_length=255,
-        unique=True,
+    keywords = TagField(
+        verbose_name=_("Keywords"),
         blank=True,
-        null=True,
-    )
-    filter_content_type = models.ForeignKey(
-        ContentType,
-        null=True,
-        on_delete=models.SET_NULL,
-        related_name="filter",
-    )
-    filter_object_id = models.PositiveIntegerField(
-        null=True, blank=True, default=None
-    )
-    filter = GenericForeignKey("filter_content_type", "filter_object_id")
-    
-    filter_prompt = models.TextField(
-        _("Filter Prompt"),
-        # default="",
-        help_text=_("Custom prompt for filtering entries."),
+        help_text=_("Keywords to filter entries. Use comma to separate multiple keywords."),
     )
 
-    related_feeds = models.ManyToManyField(
-        Feed,
-        blank=True,
-        related_name="ai_filters",
-        verbose_name=_("Related Feeds"),
-    )
-
-    filtered_entries = models.ManyToManyField(
-        Entry, 
-        related_name='ai_filters',
-        blank=True,
-        verbose_name=_("Filtered Entries"),
-        help_text=_("Entries selected by this filter")
-    )
-
-    last_filter = models.DateTimeField(
-        _("Last Filter(UTC)"),
-        default=None,
+    target_field = models.CharField(
+        verbose_name=_("Target Field"),
+        help_text=_("Select the fields to apply the filter on."),
+        choices=FIELD_CHOICES,
+        default=["original_content"],
         blank=True,
         null=True,
-        editable=False,
-        help_text=_("Last time the filter was applied"),
+        #widget=forms.CheckboxSelectMultiple,
     )
-    total_tokens = models.IntegerField(
-        _("Tokens Cost"),
-        default=0
-    )
-    log = models.TextField(
-        _("Log"),
-        default="",
-        blank=True,
-        null=True,
+
+    operation = models.BooleanField(
+        choices=OPERATION_CHOICES,
+        default=EXCLUDE,
+        help_text=_("Action to take on matching keywords."),
     )
 
     def __str__(self):
-        return f"{self.name} - {self.slug}"
+        return f"{self.name}"
 
     class Meta:
-        verbose_name = _("AI Filter")
-        verbose_name_plural = _("AI Filter")
+        verbose_name = _("Filter")
+        verbose_name_plural = _("Filter")
     
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = uuid.uuid4().hex
-
-        if len(self.log.encode("utf-8")) > 20480:
-            self.log = self.log[-20480:]
+    def apply_filter(self, queryset, target_field='original_content'):
+        """
+        应用过滤器到查询集，检查文本内容是否包含标签关键词
+        :param queryset: 要过滤的查询集
+        :param content_field: 内容模型中要检查的文本字段名，默认为'original_content'
+        :return: 过滤后的查询集
+        """
+        keywords = self.keywords.values_list('name', flat=True)
         
-        # if "Output Format Requirements" not in self.filter_prompt:
-        #     self.filter_prompt += settings.output_format_for_filter_prompt
+        if not keywords:
+            return queryset.none() if self.operation == self.INCLUDE else queryset
         
-        super(AIFilter, self).save(*args, **kwargs)
+        # 构建查询条件：内容包含任何关键词
+        query = models.Q()
+        for keyword in keywords:
+            query |= models.Q(**{f"{content_field}__icontains": keyword})
+        
+        if self.operation == self.INCLUDE:
+            # 包含模式：只显示包含任何关键词的内容
+            return queryset.filter(query).distinct()
+        else:
+            # 排除模式：隐藏包含任何关键词的内容
+            return queryset.exclude(query).distinct()

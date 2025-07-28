@@ -1,11 +1,9 @@
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from .models import Feed, AIFilter
+from .models import Feed, Filter
 from utils.modelAdmin_utils import get_translator_and_summary_choices
-import logging
-from config import settings
-
+from tagulous.forms import TagField
 
 class FeedForm(forms.ModelForm):
     # 自定义字段，使用ChoiceField生成下拉菜单
@@ -48,7 +46,12 @@ class FeedForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         initial=[],
     )
-
+    # filters = forms.ModelMultipleChoiceField(
+    #     queryset=Filter.objects.all(),
+    #     required=False,
+    #     widget=forms.SelectMultiple,
+    #     label=_("Filters"),
+    # )
     class Meta:
         model = Feed
         exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]
@@ -63,6 +66,7 @@ class FeedForm(forms.ModelForm):
             "translator_option",  # 自定义字段
             "summary_engine_option",  # 自定义字段
             "translation_display",
+            "filters",
             "fetch_article",
             "quality",
             "category",
@@ -175,69 +179,9 @@ class FeedForm(forms.ModelForm):
             instance.save()
 
         return instance
-
-
-class AIFilterForm(forms.ModelForm):
-    filter_option = forms.ChoiceField(
-        choices=(),
-        required=False,
-        help_text=_("Select a valid AI engine"),
-        label=_("Filter"),
-    )
-
+    
+class FilterForm(forms.ModelForm):
+    keywords = TagField(required=True)
     class Meta:
-        model = AIFilter
-        fields = [
-            "name",
-            "slug",
-            "filter_option",
-            "filter_prompt",
-            "related_feeds",
-        ]
-
-    def __init__(self, *args, **kwargs):
-        super(AIFilterForm, self).__init__(*args, **kwargs)
-
-        translator_choices, self.fields["filter_option"].choices = get_translator_and_summary_choices()
-
-        self.fields["slug"].widget.attrs.update(
-            {
-                "placeholder": _("Optional, default use the random slug"),
-            }
-        )
-
-        instance = getattr(self, "instance", None)
-        if instance and instance.pk:
-            self._set_initial_values(instance)
-        else:
-            # 设置初始值
-            self.fields["filter_prompt"].initial = settings.default_filter_prompt
-
-    def _set_initial_values(self, instance):
-        if instance.filter_content_type and instance.filter_object_id:
-            self.fields[
-                "filter_option"
-            ].initial = f"{instance.filter_content_type.id}:{instance.filter_object_id}"
-
-    def _process_filter(self, instance):
-        if self.cleaned_data["filter_option"]:
-            content_type_id, object_id = map(
-                int, self.cleaned_data["filter_option"].split(":")
-            )
-            instance.filter_content_type_id = content_type_id
-            instance.filter_object_id = object_id
-        else:
-            instance.filter_content_type_id = None
-            instance.filter_object_id = None
-
-    @transaction.atomic
-    def save(self, commit=True):
-        instance = super(AIFilterForm, self).save(commit=False)
-
-        self._process_filter(instance)
-        logging.debug("Saving DigestForm with instance: %s", instance)
-        if commit:
-            instance.save()
-            #self.save_m2m()
-
-        return instance
+        model = Filter
+        fields = ("name","keywords","operation","target_field")

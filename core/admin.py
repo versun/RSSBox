@@ -4,13 +4,11 @@ from django.conf import settings
 from django.contrib.auth.models import User, Group
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
-from django.utils.encoding import force_str
 from django.urls import path, reverse
 from django.db import transaction
-
-from .models import Feed, AIFilter
+from .models import Feed, Filter
 from .custom_admin_site import core_admin_site
-from .forms import FeedForm, AIFilterForm
+from .forms import FeedForm, FilterForm
 from .actions import (
     export_original_feed_as_opml,
     export_translated_feed_as_opml,
@@ -22,6 +20,7 @@ from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
 from .views import import_opml
 from .management.commands.update_feeds import update_single_feed
+
 
 class FeedAdmin(admin.ModelAdmin):
     form = FeedForm
@@ -56,6 +55,7 @@ class FeedAdmin(admin.ModelAdmin):
         "last_translate",
         "show_log",
     ]
+    autocomplete_fields = ["filters"]
 
     actions = [
         create_digest,
@@ -209,30 +209,28 @@ class FeedAdmin(admin.ModelAdmin):
             f"/rss/category/json/{obj.category.name}",
         )
 
-class AIFilterAdmin(admin.ModelAdmin):
-    form = AIFilterForm
-    list_display = (
-        "name",
-        "filter",
-        "total_tokens",
-    )
-    search_fields = ("name", "slug")
-    readonly_fields = ("total_tokens", "last_filter", "log")
-    filter_horizontal = ("related_feeds",)
+class FilterAdmin(admin.ModelAdmin):
+    list_display = ("name", "show_keywords")
+    search_fields = ("name", "keywords__name")
+    form = FilterForm
 
-    def get_changeform_initial_data(self, request):
-        initial = super().get_changeform_initial_data(request)
-        if "feed_ids" in request.GET:
-            feed_ids_str = request.GET.get("feed_ids")
-            if feed_ids_str:
-                feed_ids = [
-                    int(fid) for fid in feed_ids_str.split(",") if fid.isdigit()
-                ]
-                initial["related_feeds"] = feed_ids
-        return initial
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('keywords')
+
+    def show_keywords(self, obj):
+        if not obj.keywords:
+            return ""
+        # keywords = ", ".join([force_str(keyword) for keyword in obj.keywords.all()])
+        keywords = obj.keywords.all().values_list('name', flat=True)
+        return format_html(
+            "<span title='{}'>{}</span>",
+            ", ".join(keywords),  # Full list as tooltip
+            ", ".join(keywords[:10]) + ("..." if len(keywords) > 10 else ""),
+        )
+    show_keywords.short_description = _("Keywords")
 
 core_admin_site.register(Feed, FeedAdmin)
-core_admin_site.register(AIFilter, AIFilterAdmin)
+core_admin_site.register(Filter, FilterAdmin)
 
 if settings.USER_MANAGEMENT:
     core_admin_site.register(User)
