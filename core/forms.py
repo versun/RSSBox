@@ -52,12 +52,7 @@ class FeedForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         initial=[],
     )
-    # filters = forms.ModelMultipleChoiceField(
-    #     queryset=Filter.objects.all(),
-    #     required=False,
-    #     widget=forms.SelectMultiple,
-    #     label=_("Filters"),
-    # )
+    
     class Meta:
         model = Feed
         exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]
