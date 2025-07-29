@@ -22,7 +22,9 @@ def handle_single_feed_fetch(feed: Feed):
         if fetch_results["error"]:
             raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
         elif not fetch_results["update"]:
-            raise Exception("Feed is up to date, Skip")
+            feed.fetch_status = True
+            feed.log = f"{timezone.now()} Feed is up to date, Skip <br>"
+            return
 
         latest_feed = fetch_results.get("feed")
         # Update feed meta

@@ -13,7 +13,7 @@ import mistune
 from feedgen.feed import FeedGenerator
 from core.models import Feed, Entry
 from utils.text_handler import set_translation_display
-
+from fake_useragent import UserAgent
 
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
@@ -25,7 +25,6 @@ def convert_struct_time_to_datetime(time_str):
 
 def manual_fetch_feed(url: str, etag: str = "") -> Dict:
     import httpx
-    from fake_useragent import UserAgent
 
     update = False
     feed = {}
@@ -82,7 +81,15 @@ def manual_fetch_feed(url: str, etag: str = "") -> Dict:
 
 def fetch_feed(url: str, etag: str = "") -> Dict:
     try:
-        feed = feedparser.parse(url)
+        ua = UserAgent()
+        feed = feedparser.parse(url, etag=etag, agent=ua.random.strip())
+        if feed.status == 304:
+            logging.info(f"Feed {url} not modified, using cached version.")
+            return {
+                "feed": None,
+                "update": False,
+                "error": None,
+            }
         if feed.bozo and not feed.entries:
             logging.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
             results = manual_fetch_feed(url, etag)
