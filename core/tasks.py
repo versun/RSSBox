@@ -26,7 +26,8 @@ def handle_single_feed_fetch(feed: Feed):
 
         latest_feed = fetch_results.get("feed")
         # Update feed meta
-        feed.name = latest_feed.feed.get("title") if feed.name is None else feed.name
+        feed_name_is_the_default = feed.name is None or feed.name == "Loading" or feed.name == "Empty"
+        feed.name = latest_feed.feed.get("title") if feed_name_is_the_default else feed.name
         feed.subtitle = latest_feed.feed.get("subtitle")
         feed.language = latest_feed.feed.get("language")
         feed.author = latest_feed.feed.get("author") or "Unknown"
