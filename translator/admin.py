@@ -60,6 +60,7 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
         "frequency_penalty",
         "presence_penalty",
         "max_tokens",
+        "rate_limit_rpm",
     ]
     list_display = [
         "name",

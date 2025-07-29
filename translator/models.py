@@ -4,7 +4,9 @@ from django.utils.translation import gettext_lazy as _
 from config import settings
 from openai import OpenAI
 from encrypted_model_fields.fields import EncryptedCharField
-from time import sleep
+import time
+import datetime
+from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 
 
@@ -68,6 +70,11 @@ class OpenAITranslator(TranslatorEngine):
     frequency_penalty = models.FloatField(default=0)
     presence_penalty = models.FloatField(default=0)
     max_tokens = models.IntegerField(default=1000000)
+    rate_limit_rpm = models.IntegerField(
+        _("Rate Limit (RPM)"), 
+        default=0,
+        help_text=_("Maximum requests per minute (0 = no limit)")
+    )
 
     summary_prompt = models.TextField(default=settings.default_summary_prompt)
 
@@ -99,6 +106,36 @@ class OpenAITranslator(TranslatorEngine):
             except Exception as e:
                 logging.error("OpenAIInterface validate ->%s", e)
                 return False
+    def _wait_for_rate_limit(self):
+        """等待直到满足速率限制条件"""
+        if self.rate_limit_rpm <= 0:
+            return  # 无速率限制
+        
+        # 生成基于当前分钟的缓存键
+        current_minute = datetime.datetime.now().strftime("%Y%m%d%H%M")
+        cache_key = f"openai_rate_limit_{self.id}_{current_minute}"
+        
+        # 获取当前计数或初始化为0
+        request_count = cache.get(cache_key, 0)
+        
+        # 计算等待时间（如果超过限制）
+        if request_count >= self.rate_limit_rpm:
+            # 计算到下一分钟开始的时间
+            now = datetime.datetime.now()
+            next_minute = now.replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)
+            wait_seconds = (next_minute - now).total_seconds()
+            
+            # 添加一点缓冲确保时间窗口切换
+            wait_seconds += 0.1
+            logging.info(f"Rate limit reached. Waiting {wait_seconds:.2f} seconds...")
+            time.sleep(wait_seconds)
+            
+            # 重置计数（新分钟开始）
+            cache.delete(cache_key)
+            return
+        
+        # 增加计数并设置过期时间（确保在下一分钟开始时过期）
+        cache.set(cache_key, request_count + 1, timeout=60)
 
     def translate(
         self,
@@ -124,6 +161,9 @@ class OpenAITranslator(TranslatorEngine):
             if user_prompt:
                 system_prompt += f"\n\n{user_prompt}"
 
+            # 应用速率限制
+            self._wait_for_rate_limit()
+            
             # 计算系统提示的token占用
             system_prompt_tokens = get_token_count(system_prompt)
             # 计算最大可用token数（保留buffer）
@@ -283,7 +323,7 @@ class TestTranslator(TranslatorEngine):
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         logging.info(">>> Test Translate [%s]: %s", target_language, text)
-        sleep(self.interval)
+        time.sleep(self.interval)
         return {"text": self.translated_text, "tokens": 0, "characters": len(text)}
 
     def summarize(self, text: str, target_language: str) -> dict:
