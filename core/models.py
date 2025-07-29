@@ -235,6 +235,13 @@ class Feed(models.Model):
     def get_translation_display(self):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
+    @property
+    def filtered_entries(self):
+        queryset = self.entries.all()
+        for filter_obj in self.filters.all():
+            queryset = filter_obj.apply_filter(queryset)
+        return queryset
+
 class Entry(models.Model):
     feed = models.ForeignKey(
         Feed, on_delete=models.CASCADE, related_name="entries"
@@ -341,11 +348,10 @@ class Filter(models.Model):
         verbose_name = _("Filter")
         verbose_name_plural = _("Filter")
     
-    def apply_filter(self, queryset, target_field='original_content'):
+    def apply_filter(self, queryset):
         """
         应用过滤器到查询集，检查文本内容是否包含标签关键词
         :param queryset: 要过滤的查询集
-        :param content_field: 内容模型中要检查的文本字段名，默认为'original_content'
         :return: 过滤后的查询集
         """
         keywords = self.keywords.values_list('name', flat=True)
@@ -356,7 +362,14 @@ class Filter(models.Model):
         # 构建查询条件：内容包含任何关键词
         query = models.Q()
         for keyword in keywords:
-            query |= models.Q(**{f"{content_field}__icontains": keyword})
+            if self.filter_original_title:
+                query |= models.Q(original_title__icontains=keyword)
+            if self.filter_original_content:
+                query |= models.Q(original_content__icontains=keyword)
+            if self.filter_translated_title:
+                query |= models.Q(translated_title__icontains=keyword)
+            if self.filter_translated_content:
+                query |= models.Q(translated_content__icontains=keyword)
         
         if self.operation == self.INCLUDE:
             # 包含模式：只显示包含任何关键词的内容
