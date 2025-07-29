@@ -266,30 +266,6 @@ class Entry(models.Model):
     class Meta:
         verbose_name = _("Entry")
         verbose_name_plural = _("Entries")
-        # constraints = [
-        #     models.UniqueConstraint(
-        #         fields=["feed", "guid"], name="unique_entry_guid"
-        #     )
-        # ]
-
-# class Tag(models.Model):
-#     name = models.CharField(
-#         _("Tag Name"),
-#         max_length=50,
-#         unique=True,
-#     )
-
-#     def __str__(self):
-#         return f"{self.name}"
-
-#     class Meta:
-#         verbose_name = _("Tag")
-#         verbose_name_plural = _("Tags")
-#     constraints = [
-#         models.UniqueConstraint(
-#             fields=["name"], name="unique_tag_name"
-#         )
-#     ]
 
 class Filter(models.Model):
     INCLUDE = True
