@@ -67,13 +67,7 @@ class Feed(models.Model):
         default=os.getenv("default_max_posts", 20),
         help_text=_("Max number of posts to be fetched"),
     )
-    quality = models.BooleanField(
-        _("Best Quality"),
-        default=False,
-        help_text=_(
-            "Formatting such as hyperlinks, bold, italics, etc. will be lost for optimal translation quality."
-        ),
-    )
+    
     fetch_article = models.BooleanField(
         _("Fetch Original Article"),
         default=False,
@@ -276,10 +270,10 @@ class Filter(models.Model):
     )
 
     FIELD_CHOICES = (
-        ("original_title", _("Original_Title")),
-        ("original_content", _("Original_Content")),
-        ("translated_title", _("Translated_Title")),
-        ("translated_content", _("Translated_Content")),
+        ("original_title", _("Original Title")),
+        ("original_content", _("Original Content")),
+        ("translated_title", _("Translated Title")),
+        ("translated_content", _("Translated Content")),
     )
 
     name = models.CharField(
@@ -291,7 +285,7 @@ class Filter(models.Model):
     keywords = TagField(
         verbose_name=_("Keywords"),
         blank=True,
-        help_text=_("Keywords to filter entries. Use comma to separate multiple keywords."),
+        help_text=_("Keywords to filter entries. "),
     )
 
     operation = models.BooleanField(
