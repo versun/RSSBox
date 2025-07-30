@@ -23,6 +23,7 @@ from .management.commands.update_feeds import update_single_feed
 
 
 class FeedAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/change_form_with_tabs.html'
     form = FeedForm
     list_display = [
         "name",
@@ -56,7 +57,40 @@ class FeedAdmin(admin.ModelAdmin):
         "show_log",
     ]
     autocomplete_fields = ["filters"]
-
+    fieldsets = (
+        # 基础信息组（始终可见）
+        (_("Feed Information"), {
+            "fields": (
+                "feed_url",
+                "name",
+                "max_posts",
+                "simple_update_frequency",
+                "category",
+                "fetch_article",
+            ),
+            # "description": "内容源的基本识别信息和限制设置"
+        }),
+        
+        # 内容处理组
+        (_("Content Processing"), {
+            "fields": (
+                "target_language",
+                "translation_options",
+                "translator_option",
+                "summary_engine_option",
+                "summary_detail",
+                "additional_prompt",
+            ),
+        }),
+        # 输出控制组
+        (_("Output Control"), {
+            "fields": (
+                "slug",
+                "translation_display",
+                "filters",
+            ),
+        })
+    )
     actions = [
         create_digest,
         feed_force_update,
@@ -144,9 +178,13 @@ class FeedAdmin(admin.ModelAdmin):
     def translated_feed(
         self, obj
     ):  # 显示3个元素：translated_status、feed_url、json_url
+        if not obj.translate_title and not obj.translate_content and not obj.summary:
+            translation_status_icon = "-"
+        else:
+            translation_status_icon = status_icon(obj.translation_status)
         return format_html(
             "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
-            status_icon(obj.translation_status),  # 0
+            translation_status_icon,  # 0
             f"/rss/{obj.slug}",  # 1
             "rss",  # 2
             f"/rss/json/{obj.slug}",  # 3

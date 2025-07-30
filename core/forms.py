@@ -56,24 +56,6 @@ class FeedForm(forms.ModelForm):
     class Meta:
         model = Feed
         exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]
-        fields = [
-            "feed_url",
-            "name",
-            "slug",
-            "max_posts",
-            "simple_update_frequency",  # 自定义字段
-            "translation_options",
-            "target_language",
-            "translator_option",  # 自定义字段
-            "summary_engine_option",  # 自定义字段
-            "translation_display",
-            "filters",
-            "fetch_article",
-            "quality",
-            "category",
-            "summary_detail",
-            "additional_prompt",
-        ]
 
     def __init__(self, *args, **kwargs):
         super(FeedForm, self).__init__(*args, **kwargs)
