@@ -1,13 +1,10 @@
 import logging
 from django.contrib import admin
 from core.admin import core_admin_site
-
+from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.shortcuts import redirect
 from .models import *
-
-# from django.utils.translation import gettext_lazy  as _
-
 from utils.modelAdmin_utils import status_icon
 
 
@@ -61,7 +58,7 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
     ]
     fieldsets = (
         (
-            "Model Information",
+            _("Model Information"),
             {
                 "fields": (
                     "name",
@@ -72,7 +69,7 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
             },
         ),
         (
-            "Prompts",
+            _("Prompts"),
             {
                 "fields": (
                     "translate_prompt",
@@ -82,7 +79,7 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
             },
         ),
         (
-            "Advanced",
+            _("Advanced"),
             {
                 "fields": (
                     "temperature",
