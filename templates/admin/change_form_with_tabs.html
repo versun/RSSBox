@@ -1,0 +1,92 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+.fieldset-heading {
+    display: none;
+}
+/* Tab 样式 */
+.custom-tabs {
+    margin: 20px 0;
+}
+.tab-nav {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 0;
+}
+.tab-nav li {
+    list-style: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    position: relative;
+    bottom: -1px;
+}
+.tab-nav li.active {
+    border-color: #ddd;
+    border-bottom: 1px solid #fff;
+}
+.tab-content .tab-pane {
+    display: none;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-top: none;
+}
+.tab-content .tab-pane.active {
+    display: block;
+}
+</style>
+{% endblock %}
+
+{% block after_field_sets %}
+{{ block.super }}
+<script>
+// Tab 切换逻辑
+document.addEventListener('DOMContentLoaded', function() {
+    const tabNavItems = document.querySelectorAll('.tab-nav li');
+    const tabPanes = document.querySelectorAll('.tab-content .tab-pane');
+    
+    tabNavItems.forEach((item, index) => {
+        item.addEventListener('click', () => {
+            // 移除所有激活状态
+            tabNavItems.forEach(i => i.classList.remove('active'));
+            tabPanes.forEach(p => p.classList.remove('active'));
+            
+            // 添加当前激活状态
+            item.classList.add('active');
+            tabPanes[index].classList.add('active');
+        });
+    });
+    
+    // 默认激活第一个 Tab
+    if (tabNavItems.length > 0) {
+        tabNavItems[0].click();
+    }
+});
+</script>
+{% endblock %}
+
+{% block field_sets %}
+<div class="custom-tabs">
+    <!-- Tab 导航 -->
+    <ul class="tab-nav">
+        {% for fieldset in adminform %}
+        <li {% if forloop.first %}class="active"{% endif %}>
+            {{ fieldset.name|default:"基本信息" }}
+        </li>
+        {% endfor %}
+    </ul>
+    
+    <!-- Tab 内容 -->
+    <div class="tab-content">
+        {% for fieldset in adminform %}
+        <div class="tab-pane {% if forloop.first %}active{% endif %}">
+            {% include "admin/includes/fieldset.html" %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

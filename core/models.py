@@ -1,15 +1,13 @@
 import os
 import uuid
-# import re
+from config import settings
 
-from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
-from tagulous.models import SingleTagField
-
+from tagulous.models import SingleTagField, TagField
 
 class Feed(models.Model):
     name = models.CharField(
@@ -69,13 +67,7 @@ class Feed(models.Model):
         default=os.getenv("default_max_posts", 20),
         help_text=_("Max number of posts to be fetched"),
     )
-    quality = models.BooleanField(
-        _("Best Quality"),
-        default=False,
-        help_text=_(
-            "Formatting such as hyperlinks, bold, italics, etc. will be lost for optimal translation quality."
-        ),
-    )
+    
     fetch_article = models.BooleanField(
         _("Fetch Original Article"),
         default=False,
@@ -142,6 +134,13 @@ class Feed(models.Model):
         help_text=_(
             "Level of detail of summaries of longer articles. 0: Normal, 1: Most detailed (cost more tokens)"
         ),
+    )
+    filters = models.ManyToManyField(
+        "Filter",
+        blank=True,
+        related_name="feeds",
+        verbose_name=_("Filters"),
+        help_text=_("Filters to apply to the feed entries"),
     )
 
     additional_prompt = models.TextField(
@@ -230,9 +229,17 @@ class Feed(models.Model):
     def get_translation_display(self):
         return dict(self.TRANSLATION_DISPLAY_CHOICES)[self.translation_display]
 
+    @property
+    def filtered_entries(self):
+        queryset = self.entries.all()
+        for filter_obj in self.filters.all():
+            queryset = filter_obj.apply_filter(queryset)
+        return queryset
 
 class Entry(models.Model):
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE, related_name="entries")
+    feed = models.ForeignKey(
+        Feed, on_delete=models.CASCADE, related_name="entries"
+    )
     link = models.URLField(null=False)
     author = models.CharField(max_length=255, null=True, blank=True)
     pubdate = models.DateTimeField(null=True, blank=True)
@@ -253,8 +260,90 @@ class Entry(models.Model):
     class Meta:
         verbose_name = _("Entry")
         verbose_name_plural = _("Entries")
-        # constraints = [
-        #     models.UniqueConstraint(
-        #         fields=["feed", "guid"], name="unique_entry_guid"
-        #     )
-        # ]
+
+class Filter(models.Model):
+    INCLUDE = True
+    EXCLUDE = False
+    OPERATION_CHOICES = (
+        (INCLUDE, _("Include - Match only these keywords")),
+        (EXCLUDE, _("Exclude - Exclude that matches these keywords")),
+    )
+
+    FIELD_CHOICES = (
+        ("original_title", _("Original Title")),
+        ("original_content", _("Original Content")),
+        ("translated_title", _("Translated Title")),
+        ("translated_content", _("Translated Content")),
+    )
+
+    name = models.CharField(
+        _("Name"),
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+    keywords = TagField(
+        verbose_name=_("Keywords"),
+        blank=True,
+        help_text=_("Keywords to filter entries. "),
+    )
+
+    operation = models.BooleanField(
+        choices=OPERATION_CHOICES,
+        default=EXCLUDE,
+        help_text=_("Action to take on matching keywords."),
+    )
+
+    filter_original_title = models.BooleanField(
+        default=True,
+        help_text="Apply filter to the original title of the entry.",
+    )
+    filter_original_content = models.BooleanField(
+        default=True,
+        help_text="Apply filter to the content of the entry.",
+    )
+    filter_translated_title = models.BooleanField(
+        default=False,
+        help_text="Apply filter to the translated title of the entry.",
+    )
+    filter_translated_content = models.BooleanField(
+        default=False,
+        help_text="Apply filter to the translated content of the entry.",
+    )
+
+    def __str__(self):
+        return f"{self.name}"
+
+    class Meta:
+        verbose_name = _("Filter")
+        verbose_name_plural = _("Filter")
+    
+    def apply_filter(self, queryset):
+        """
+        应用过滤器到查询集，检查文本内容是否包含标签关键词
+        :param queryset: 要过滤的查询集
+        :return: 过滤后的查询集
+        """
+        keywords = self.keywords.values_list('name', flat=True)
+        
+        if not keywords:
+            return queryset.none() if self.operation == self.INCLUDE else queryset
+        
+        # 构建查询条件：内容包含任何关键词
+        query = models.Q()
+        for keyword in keywords:
+            if self.filter_original_title:
+                query |= models.Q(original_title__icontains=keyword)
+            if self.filter_original_content:
+                query |= models.Q(original_content__icontains=keyword)
+            if self.filter_translated_title:
+                query |= models.Q(translated_title__icontains=keyword)
+            if self.filter_translated_content:
+                query |= models.Q(translated_content__icontains=keyword)
+        
+        if self.operation == self.INCLUDE:
+            # 包含模式：只显示包含任何关键词的内容
+            return queryset.filter(query).distinct()
+        else:
+            # 排除模式：隐藏包含任何关键词的内容
+            return queryset.exclude(query).distinct()

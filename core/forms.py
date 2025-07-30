@@ -1,8 +1,14 @@
+from typing import Mapping
 from django import forms
+from django.core.files.base import File
 from django.db import transaction
+from django.db.models.base import Model
+from django.forms.utils import ErrorList
 from django.utils.translation import gettext_lazy as _
-from .models import Feed
+from .models import Feed, Filter
 from utils.modelAdmin_utils import get_translator_and_summary_choices
+from tagulous.forms import TagField
+from django.forms import CheckboxSelectMultiple
 
 
 class FeedForm(forms.ModelForm):
@@ -17,7 +23,7 @@ class FeedForm(forms.ModelForm):
         choices=(),
         required=False,
         help_text=_("Select a valid AI engine"),
-        label=_("Summary Engine"),
+        label=_("Summarizer"),
     )
     simple_update_frequency = forms.ChoiceField(
         choices=(
@@ -46,27 +52,10 @@ class FeedForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         initial=[],
     )
-
+    
     class Meta:
         model = Feed
         exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]
-        fields = [
-            "feed_url",
-            "name",
-            "slug",
-            "max_posts",
-            "simple_update_frequency",  # 自定义字段
-            "translation_options",
-            "target_language",
-            "translator_option",  # 自定义字段
-            "summary_engine_option",  # 自定义字段
-            "translation_display",
-            "fetch_article",
-            "quality",
-            "category",
-            "summary_detail",
-            "additional_prompt",
-        ]
 
     def __init__(self, *args, **kwargs):
         super(FeedForm, self).__init__(*args, **kwargs)
@@ -173,3 +162,70 @@ class FeedForm(forms.ModelForm):
             instance.save()
 
         return instance
+    
+class FilterForm(forms.ModelForm):
+    FIELD_CHOICES = (
+        ("original_title", _("Original Title")),
+        ("original_content", _("Original Content")),
+        ("translated_title", _("Translated Title")),
+        ("translated_content", _("Translated Content")),
+    )
+    keywords = TagField(required=True)
+    class Meta:
+        model = Filter
+        fields = ("name","keywords","operation","target_field")
+
+    target_field = forms.MultipleChoiceField(
+        widget=CheckboxSelectMultiple,
+        choices=FIELD_CHOICES,
+        required=True,
+        label=_("Target Field"),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super(FilterForm, self).__init__(*args, **kwargs)
+        # 如果是已创建的对象，设置默认值
+        instance = getattr(self, "instance", None)
+        if instance and instance.pk:
+            self.fields["target_field"].initial = []
+            if instance.filter_original_title:
+                self.fields["target_field"].initial.append("original_title")
+            if instance.filter_original_content:
+                self.fields["target_field"].initial.append("original_content")
+            if instance.filter_translated_title:
+                self.fields["target_field"].initial.append("translated_title")
+            if instance.filter_translated_content:
+                self.fields["target_field"].initial.append("translated_content")
+    
+    def _process_target_field(self, instance):
+        # 清空之前的字段状态
+        instance.filter_original_title = False
+        instance.filter_original_content = False
+        instance.filter_translated_title = False
+        instance.filter_translated_content = False
+
+        # 获取选中的字段
+        selected_fields = self.cleaned_data.get("target_field", [])
+
+        # 根据选中的字段设置状态
+        if "original_title" in selected_fields:
+            instance.filter_original_title = True
+        if "original_content" in selected_fields:
+            instance.filter_original_content = True
+        if "translated_title" in selected_fields:
+            instance.filter_translated_title = True
+        if "translated_content" in selected_fields:
+            instance.filter_translated_content = True
+    
+    @transaction.atomic
+    def save(self, commit=True):
+        instance = super(FilterForm, self).save(commit=False)
+
+        # 处理目标字段
+        self._process_target_field(instance)
+
+        if commit:
+            instance.save()
+
+        return instance
+    

@@ -9,6 +9,7 @@ from utils.modelAdmin_utils import (
     get_all_app_models,
     status_icon,
 )
+from core.models import Feed, Filter
 
 
 class CoreAdminSite(AdminSite):
@@ -25,21 +26,56 @@ class CoreAdminSite(AdminSite):
         return custom_urls + urls
 
     def get_app_list(self, request, app_label=None):
-        app_list = super().get_app_list(request, app_label)
-        app_list += [
+        # app_list = super().get_app_list(request, app_label)
+        app_list = [
+            {
+                "name": "",
+                "app_label": "core",
+                "app_url": "/core/",
+                "has_module_perms": True,
+                "models": [
+                    {
+                        "model": Feed,
+                        "name": "Feeds",
+                        "object_name": "Feed",
+                        "perms": {
+                            "add": True,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/feed/",
+                        "add_url": "/core/feed/add/",
+                        "view_only": False,
+                    }
+                ],
+            },
             {
                 "name": "",
                 "app_label": "engine",
                 "models": [
                     {
-                        "name": _("Translator"),
+                        "name": "Translator",
                         "object_name": "Translator",
                         "admin_url": "/translator/list",
                         "add_url": "/translator/add",
-                        # "view_only": False,
-                    }
+                    },
+                    {
+                        "model": Filter,
+                        "name": "Filter",
+                        "object_name": "Filter",
+                        "perms": {
+                            "add": True,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/filter/",
+                        "add_url": "/core/filter/add/",
+                        "view_only": False,
+                    },
                 ],
-            }
+            },
         ]
 
         return app_list

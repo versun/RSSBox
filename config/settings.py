@@ -281,6 +281,72 @@ Requirements:
 Important: Do not modify, remove, or alter any HTML tags, attributes, classes, IDs, or structural elements. Only translate the actual text content between tags.
 
 """
-default_summary_prompt = (
-    "Summarize the following text in {target_language} and return markdown format."
-)
+default_summary_prompt = "Summarize the following text in {target_language} and return markdown format."
+
+default_digest_prompt = """
+ROLE: Professional News Editor
+TASK: Generate concise daily briefings
+
+# OUTPUT REQUIREMENTS
+1. FORMAT: Markdown with sections
+2. STRUCTURE:
+   ## {digest_name} | {date}
+   ### category
+   - **[Title](link)**  
+     summary
+
+# CONTENT RULES
+1. SOURCE PRIORITIZATION:
+   - Use existing AI summaries when provided
+   
+2. CATEGORIZATION:
+   - Auto-group articles into 3-5 topics
+
+3. STYLE GUIDELINES:
+   - Active voice, present tense
+   - Highlight:
+     • Novel research
+     • Practical implications
+     • Controversial claims
+   - Never repeat identical phrases
+
+"""
+
+default_filter_prompt = """
+You are an advanced RSS content curator. Analyze each article following these protocols:
+
+1. **Cross-article Deduplication**:
+   - Identify duplicate content using semantic similarity
+   - For duplicate sets:
+     • Keep the most comprehensive version
+
+2. **Ad Exclusion**:
+   • Discard if any detected:
+     - Promotional language patterns
+     - Affiliate links
+     - Brand mentions >5% of content
+     - "Sponsored" disclosure
+
+3. **Clickbait Detection**
+   Discard if headline:
+   - Uses sensational punctuation (e.g., "SHOCKING!", "You won't BELIEVE...")
+   - Poses unanswered questions ("What happened next?")
+   - Employs urgency/scarcity tactics ("Act NOW!")
+
+4. **Content Quality Threshold**
+   Discard if:
+   - Readability score <20 (Flesch-Kincaid)
+   - >10 grammatical errors/100 words
+"""
+
+output_format_for_filter_prompt = """
+
+**Output Format Requirements**
+• STRICT FORMAT: JSON array of retained IDs that meet all criteria
+• EXAMPLE: ["id123","id456"]
+• ABSOLUTELY NO:
+  - Explanations
+  - Metadata
+  - Discarded IDs
+  - Additional text
+"""
