@@ -265,8 +265,8 @@ class Filter(models.Model):
     INCLUDE = True
     EXCLUDE = False
     OPERATION_CHOICES = (
-        (INCLUDE, _("Include - Match only these keywords")),
-        (EXCLUDE, _("Exclude - Exclude that matches these keywords")),
+        (INCLUDE, _("Include - Only show items containing these keywords")),
+        (EXCLUDE, _("Exclude - Hide items containing these keywords")),
     )
 
     FIELD_CHOICES = (

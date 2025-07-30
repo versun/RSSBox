@@ -334,12 +334,12 @@ msgid "Entries"
 msgstr "条目"
 
 #: core/models.py:268
-msgid "Include - Match only these keywords"
-msgstr "包含 - 匹配关键词的内容"
+msgid "Include - Only show items containing these keywords"
+msgstr "包含 - 只显示包含这些关键词的条目"
 
 #: core/models.py:269
-msgid "Exclude - Exclude that matches these keywords"
-msgstr "排除 - 匹配关键词的内容"
+msgid "Exclude - Hide items containing these keywords"
+msgstr "排除 - 隐藏包含这些关键词的条目"
 
 #: core/models.py:288
 msgid "Keywords to filter entries. "

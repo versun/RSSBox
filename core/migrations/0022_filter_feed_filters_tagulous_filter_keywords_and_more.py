@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(blank=True, max_length=255, null=True, verbose_name='Name')),
-                ('operation', models.BooleanField(choices=[(True, 'Include - Match only these keywords'), (False, 'Exclude - Exclude that matches these keywords')], default=False, help_text='Action to take on matching keywords.')),
+                ('operation', models.BooleanField(choices=[(True, 'Include - Only show items containing these keywords'), (False, 'Exclude - Hide items containing these keywords')], default=False, help_text='Action to take on matching keywords.')),
                 ('filter_original_title', models.BooleanField(default=True, help_text='Apply filter to the original title of the entry.')),
                 ('filter_original_content', models.BooleanField(default=True, help_text='Apply filter to the content of the entry.')),
                 ('filter_translated_title', models.BooleanField(default=False, help_text='Apply filter to the translated title of the entry.')),
