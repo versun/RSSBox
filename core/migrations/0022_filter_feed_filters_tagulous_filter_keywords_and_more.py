@@ -52,6 +52,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='filter',
             name='keywords',
-            field=tagulous.models.fields.TagField(_set_tag_meta=True, blank=True, help_text='Keywords to filter entries. Use comma to separate multiple keywords.', to='core.tagulous_filter_keywords', verbose_name='Keywords'),
+            field=tagulous.models.fields.TagField(_set_tag_meta=True, blank=True, help_text='Keywords to filter entries. ', to='core.tagulous_filter_keywords', verbose_name='Keywords'),
         ),
     ]
