@@ -47,21 +47,7 @@ class BaseTranslatorAdmin(admin.ModelAdmin):
 
 
 class OpenAITranslatorAdmin(BaseTranslatorAdmin):
-    fields = [
-        "name",
-        "api_key",
-        "base_url",
-        "model",
-        "translate_prompt",
-        "content_translate_prompt",
-        "summary_prompt",
-        "temperature",
-        "top_p",
-        "frequency_penalty",
-        "presence_penalty",
-        "max_tokens",
-        "rate_limit_rpm",
-    ]
+    change_form_template = 'admin/change_form_with_tabs.html'
     list_display = [
         "name",
         "is_valid",
@@ -73,6 +59,42 @@ class OpenAITranslatorAdmin(BaseTranslatorAdmin):
         "max_tokens",
         "base_url",
     ]
+    fieldsets = (
+        (
+            "Model Information",
+            {
+                "fields": (
+                    "name",
+                    "api_key",
+                    "base_url",
+                    "model",
+                )
+            },
+        ),
+        (
+            "Prompts",
+            {
+                "fields": (
+                    "translate_prompt",
+                    "content_translate_prompt",
+                    "summary_prompt",
+                )
+            },
+        ),
+        (
+            "Advanced",
+            {
+                "fields": (
+                    "temperature",
+                    "top_p",
+                    "frequency_penalty",
+                    "presence_penalty",
+                    "max_tokens",
+                    "rate_limit_rpm",
+                )
+            },
+        ),
+    )
 
 
 class DeepLTranslatorAdmin(BaseTranslatorAdmin):
