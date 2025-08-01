@@ -64,7 +64,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "translator.apps.TranslatorConfig",
     "core.apps.CoreConfig",
     "encrypted_model_fields",  # must set FIELD_ENCRYPTION_KEY value
     "tagulous",
