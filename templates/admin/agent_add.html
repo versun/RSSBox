@@ -1,0 +1,15 @@
+{% extends 'admin/base_site.html' %}
+{% load i18n %}
+{% block content %}
+<p>{% trans "Which service provider you want to add?" %}</p>
+    <form action="{% url 'admin:agent_add' %}" method="post">
+        {% csrf_token %}
+        <select name="agent_name">
+            {% for agent in agent_choices %}
+            <option value="{{ agent.table_name }}">{{ agent.provider  }}</option>
+            {% endfor %}
+        </select><br /><br />
+
+        <input type="submit" name="apply" value="Confirm" />
+    </form>
+{% endblock %}

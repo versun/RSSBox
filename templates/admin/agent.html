@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <table style="width: 80%">
+    <thead>
+    <tr>
+      <th>Name</th>
+      <th>Valid</th>
+      <th>Provider</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for agent in agents %}
+      <tr>
+        <td><a href="/core/{{ agent.table_name }}/{{ agent.id }}/change/">{{ agent.name }}</a></td>
+        <td>{{ agent.valid }}</td>
+        <td>{{ agent.provider }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+{% endblock %}
