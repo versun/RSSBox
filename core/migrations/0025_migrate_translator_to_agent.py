@@ -2,7 +2,7 @@ from django.db import migrations, connection
 from utils.backup_db import backup_db
 from django.contrib.contenttypes.models import ContentType
 
-def check_table_exists(apps, schema_editor):
+def check_table_exists():
      # 检查两个表是否存在
     cursor = connection.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='translator_openaitranslator'")
@@ -19,24 +19,42 @@ def check_table_exists(apps, schema_editor):
         return True
 
 def migrate_translator_data(apps, schema_editor):
+    # 检查表是否存在
+    if not check_table_exists():
+        print("No tables to migrate, skipping migration.")
+        return
+
+    OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
+    DeepLAgent = apps.get_model('core', 'DeepLAgent')
+
     # 使用原始SQL查询迁移数据
     with connection.cursor() as cursor:
         # 1. 迁移OpenAI数据
         cursor.execute("""
                 SELECT name, valid, api_key, base_url, model, translate_prompt,
                        content_translate_prompt, summary_prompt, temperature, top_p,
-                       frequency_penalty, presence_penalty, max_tokens, is_ai, 0
+                       frequency_penalty, presence_penalty, max_tokens, is_ai
                 FROM translator_openaitranslator
             """)
 
         for row in cursor.fetchall():
-            cursor.execute("""
-                INSERT INTO core_openaiagent (
-                    name, valid, api_key, base_url, model, title_translate_prompt,
-                    content_translate_prompt, summary_prompt, temperature, top_p,
-                    frequency_penalty, presence_penalty, max_tokens, is_ai, rate_limit_rpm
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, row)
+            OpenAIAgent.objects.create(
+                name=row[0],
+                valid=row[1],
+                api_key=row[2],
+                base_url=row[3],
+                model=row[4],
+                title_translate_prompt=row[5],
+                content_translate_prompt=row[6],
+                summary_prompt=row[7],
+                temperature=row[8],
+                top_p=row[9],
+                frequency_penalty=row[10],
+                presence_penalty=row[11],
+                max_tokens=row[12],
+                is_ai=row[13],
+                rate_limit_rpm=0  # Default value
+            )
         
         # 2. 迁移DeepL数据
         cursor.execute("""
@@ -44,30 +62,23 @@ def migrate_translator_data(apps, schema_editor):
             FROM translator_deepltranslator
         """)
         for row in cursor.fetchall():
-            cursor.execute("""
-                INSERT INTO core_deeplagent (
-                    name, valid, api_key, max_characters, server_url, proxy
-                ) VALUES (?, ?, ?, ?, ?, ?)
-            """, row)
+            DeepLAgent.objects.create(
+                name=row[0],
+                valid=row[1],
+                api_key=row[2],
+                max_characters=row[3],
+                server_url=row[4],
+                proxy=row[5]
+            )
         
-        # 3. 迁移Test数据
-        cursor.execute("""
-            SELECT name, valid, translated_text, max_characters, interval, is_ai
-            FROM translator_testtranslator
-        """)
-        for row in cursor.fetchall():
-            cursor.execute("""
-                INSERT INTO core_testagent (
-                    name, valid, translated_text, max_characters, interval, is_ai
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, row)
+
     # 删除旧的translator表
     with connection.cursor() as cursor:
         cursor.execute("DROP TABLE IF EXISTS translator_openaitranslator")
         cursor.execute("DROP TABLE IF EXISTS translator_deepltranslator")
         cursor.execute("DROP TABLE IF EXISTS translator_testtranslator")
 
-def update_feed_foreign_keys(apps, schema_editor):
+def update_feed_foreign_keys(apps, schema_editor): 
     # 获取新agent模型的ContentType
     Feed = apps.get_model('core', 'Feed')
     OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
@@ -88,12 +99,16 @@ def update_feed_foreign_keys(apps, schema_editor):
             old_model = feed.translator_content_type.model
             if old_model in content_type_map:
                 feed.translator_content_type_id = content_type_map[old_model]
+            else:
+                feed.translator_content_type_id = None
         
         # 更新摘要器
         if feed.summarizer_content_type:
             old_model = feed.summarizer_content_type.model
             if old_model in content_type_map:
                 feed.summarizer_content_type_id = content_type_map[old_model]
+            else:
+                feed.summarizer_content_type_id = None
         
         # 保存更新
         feed.save()
@@ -104,12 +119,8 @@ class Migration(migrations.Migration):
         ('core', '0024_deeplagent_openaiagent_testagent'),
         ('contenttypes', '__latest__'),  # 确保ContentType是最新的
     ]
-    if not check_table_exists(None, None):
-        operations = []
-    else:
-        print("Migration will proceed as at least one table exists")
-        operations = [
+    operations = [
             migrations.RunPython(backup_db),
             migrations.RunPython(migrate_translator_data),
-            migrations.RunPython(update_feed_foreign_keys),  # 新增的外键更新步骤
+            migrations.RunPython(update_feed_foreign_keys),
         ]
