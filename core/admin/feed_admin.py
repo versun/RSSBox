@@ -1,29 +1,26 @@
 import logging
 from django.contrib import admin
-from django.conf import settings
-from django.contrib.auth.models import User, Group
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.urls import path, reverse
 from django.db import transaction
-from .models import Feed, Filter
-from .custom_admin_site import core_admin_site
-from .forms import FeedForm, FilterForm
-from .actions import (
+from core.models import Feed
+from core.forms import FeedForm
+from core.actions import (
     export_original_feed_as_opml,
     export_translated_feed_as_opml,
     feed_force_update,
     feed_batch_modify,
-    create_digest,
 )
 from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
-from .views import import_opml
-from .management.commands.update_feeds import update_single_feed
+from core.views import import_opml
+from core.management.commands.update_feeds import update_single_feed
+from core.admin import core_admin_site
 
 
 class FeedAdmin(admin.ModelAdmin):
-    change_form_template = 'admin/change_form_with_tabs.html'
+    change_form_template = "admin/change_form_with_tabs.html"
     form = FeedForm
     list_display = [
         "name",
@@ -59,40 +56,47 @@ class FeedAdmin(admin.ModelAdmin):
     autocomplete_fields = ["filters"]
     fieldsets = (
         # 基础信息组（始终可见）
-        (_("Feed Information"), {
-            "fields": (
-                "feed_url",
-                "name",
-                "max_posts",
-                "simple_update_frequency",
-                "category",
-                "fetch_article",
-            ),
-            # "description": "内容源的基本识别信息和限制设置"
-        }),
-        
+        (
+            _("Feed Information"),
+            {
+                "fields": (
+                    "feed_url",
+                    "name",
+                    "max_posts",
+                    "simple_update_frequency",
+                    "category",
+                    "fetch_article",
+                ),
+                # "description": "内容源的基本识别信息和限制设置"
+            },
+        ),
         # 内容处理组
-        (_("Content Processing"), {
-            "fields": (
-                "target_language",
-                "translation_options",
-                "translator_option",
-                "summary_engine_option",
-                "summary_detail",
-                "additional_prompt",
-            ),
-        }),
+        (
+            _("Content Processing"),
+            {
+                "fields": (
+                    "target_language",
+                    "translation_options",
+                    "translator_option",
+                    "summary_engine_option",
+                    "summary_detail",
+                    "additional_prompt",
+                ),
+            },
+        ),
         # 输出控制组
-        (_("Output Control"), {
-            "fields": (
-                "slug",
-                "translation_display",
-                "filters",
-            ),
-        })
+        (
+            _("Output Control"),
+            {
+                "fields": (
+                    "slug",
+                    "translation_display",
+                    "filters",
+                ),
+            },
+        ),
     )
     actions = [
-        create_digest,
         feed_force_update,
         export_original_feed_as_opml,
         export_translated_feed_as_opml,
@@ -247,29 +251,5 @@ class FeedAdmin(admin.ModelAdmin):
             f"/rss/category/json/{obj.category.name}",
         )
 
-class FilterAdmin(admin.ModelAdmin):
-    list_display = ("name", "show_keywords")
-    search_fields = ("name", "keywords__name")
-    form = FilterForm
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related('keywords')
-
-    def show_keywords(self, obj):
-        if not obj.keywords:
-            return ""
-        # keywords = ", ".join([force_str(keyword) for keyword in obj.keywords.all()])
-        keywords = obj.keywords.all().values_list('name', flat=True)
-        return format_html(
-            "<span title='{}'>{}</span>",
-            ", ".join(keywords),  # Full list as tooltip
-            ", ".join(keywords[:10]) + ("..." if len(keywords) > 10 else ""),
-        )
-    show_keywords.short_description = _("Keywords")
 
 core_admin_site.register(Feed, FeedAdmin)
-core_admin_site.register(Filter, FilterAdmin)
-
-if settings.USER_MANAGEMENT:
-    core_admin_site.register(User)
-    core_admin_site.register(Group)

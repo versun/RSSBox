@@ -1,16 +1,16 @@
 from django.contrib.admin import AdminSite
-from django.urls import path
 from django.utils.translation import gettext_lazy as _
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.paginator import Paginator
-from django.shortcuts import render, redirect
-
+from django.urls import path
+from django.conf import settings
+from django.utils.http import url_has_allowed_host_and_scheme
+from core.models.agent import OpenAIAgent, DeepLAgent, TestAgent
 from utils.modelAdmin_utils import (
-    get_all_app_models,
     status_icon,
 )
-from core.models import Feed, Filter
+from django.shortcuts import redirect,render
 
+from core.models import Feed, Filter
 
 class CoreAdminSite(AdminSite):
     site_header = _("RSS Translator Admin")
@@ -20,8 +20,8 @@ class CoreAdminSite(AdminSite):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path("translator/add", translator_add_view, name="translator_add"),
-            path("translator/list", translator_list_view, name="translator_list"),
+            path("agent/add", agent_add, name="agent_add"),
+            path("agent/list", agent_list, name="agent_list"),
         ]
         return custom_urls + urls
 
@@ -47,22 +47,26 @@ class CoreAdminSite(AdminSite):
                         "admin_url": "/core/feed/",
                         "add_url": "/core/feed/add/",
                         "view_only": False,
-                    }
+                    },
                 ],
             },
             {
                 "name": "",
-                "app_label": "engine",
+                "app_label": "core",
+                # "app_url": "/agent/",
+                # "has_module_perms": True,
                 "models": [
                     {
-                        "name": "Translator",
-                        "object_name": "Translator",
-                        "admin_url": "/translator/list",
-                        "add_url": "/translator/add",
+                        # "model": " 'core.models.agent.DeepLAgent",
+                        "name": "Agents",
+                        "object_name": "Agent",
+                        "admin_url": "/agent/list",
+                        "add_url": "/agent/add",
+                        # "view_only": False,
                     },
                     {
                         "model": Filter,
-                        "name": "Filter",
+                        "name": "Filters",
                         "object_name": "Filter",
                         "perms": {
                             "add": True,
@@ -77,19 +81,17 @@ class CoreAdminSite(AdminSite):
                 ],
             },
         ]
-
         return app_list
 
 
-class TranslatorPaginator(Paginator):
+class AgentPaginator(Paginator):
     def __init__(self):
         super().__init__(self, 100)
 
-        self.translator_count = len(get_all_app_models("translator"))
-
+        self.agent_count = 3 if settings.DEBUG else 2
     @property
     def count(self):
-        return self.translator_count
+        return self.agent_count
 
     def page(self, number):
         limit = self.per_page
@@ -102,16 +104,16 @@ class TranslatorPaginator(Paginator):
 
     # Copied from Huey's SqliteStorage with some modifications to allow pagination
     def enqueued_items(self, limit, offset):
-        translators = get_all_app_models("translator")
-        translator_list = []
-        for model in translators:
+        agents = [OpenAIAgent, DeepLAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent]
+        agent_list = []
+        for model in agents:
             objects = (
                 model.objects.all()
                 .order_by("name")
                 .values_list("id", "name", "valid")[offset : offset + limit]
             )
             for obj_id, obj_name, obj_valid in objects:
-                translator_list.append(
+                agent_list.append(
                     {
                         "id": obj_id,
                         "table_name": model._meta.db_table.split("_")[1],
@@ -121,40 +123,40 @@ class TranslatorPaginator(Paginator):
                     }
                 )
 
-        return translator_list
+        return agent_list
 
 
-def translator_list_view(request):
+def agent_list(request):
     page_number = int(request.GET.get("p", 1))
-    paginator = TranslatorPaginator()
+    paginator = AgentPaginator()
     page = paginator.get_page(page_number)
     page_range = paginator.get_elided_page_range(page_number, on_each_side=2, on_ends=2)
 
     context = {
         **core_admin_site.each_context(request),
-        "title": "Translator",
+        "title": "Agent",
         "page": page,
         "page_range": page_range,
-        "translators": page.object_list,
+        "agents": page.object_list,
     }
-    return render(request, "admin/translator.html", context)
+    return render(request, "admin/agent.html", context)
 
 
-def translator_add_view(request):
+def agent_add(request):
     if request.method == "POST":
-        translator_name = request.POST.get("translator_name", "/")
-        # redirect to example.com/translator/translator_name/add
-        target = f"/translator/{translator_name}/add"
+        agent_name = request.POST.get("agent_name", "/")
+        # redirect to example.com/agent/agent_name/add
+        target = f"/core/{agent_name}/add"
         return (
             redirect(target)
             if url_has_allowed_host_and_scheme(target, allowed_hosts=None)
             else redirect("/")
         )
     else:
-        models = get_all_app_models("translator")
-        translator_list = []
+        models = [OpenAIAgent, DeepLAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent]
+        agent_list = []
         for model in models:
-            translator_list.append(
+            agent_list.append(
                 {
                     "table_name": model._meta.db_table.split("_")[1],
                     "provider": model._meta.verbose_name,
@@ -162,9 +164,8 @@ def translator_add_view(request):
             )
         context = {
             **core_admin_site.each_context(request),
-            "translator_choices": translator_list,
+            "agent_choices": agent_list,
         }
-        return render(request, "admin/translator_add.html", context)
-
+        return render(request, "admin/agent_add.html", context)
 
 core_admin_site = CoreAdminSite()
