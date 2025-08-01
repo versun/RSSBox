@@ -1,6 +1,6 @@
 [project]
 name = "rss-translator"
-version = "2025.7.30"
+version = "2025.8.1"
 description = "A Django-based RSS translation service. Compatible with uv/uvicorn."
 requires-python = ">=3.12"
 dependencies = [
@@ -11,7 +11,6 @@ dependencies = [
     "bs4>=0.0.2",
     "deepl>=1.22.0",
     "openai>=1.82.0",
-    "translators>=6.0.0",
     "feed2json>=2024.4.29",
     "feedgen>=1.0.0",
     "feedparser>=6.0.11",
@@ -35,7 +34,7 @@ dependencies = [
 package = true
 
 [tool.setuptools]
-packages = [ "config", "core", "locale", "scripts", "translator", "templates", "utils" ] 
+packages = [ "config", "core", "locale", "scripts", "templates", "utils" ] 
 
 [project.scripts]
 server = "scripts.prod_server:main"
