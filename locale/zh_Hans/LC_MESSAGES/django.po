@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-30 13:40+0800\n"
+"POT-Creation-Date: 2025-08-01 13:08+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -37,79 +37,96 @@ msgstr "强制更新"
 msgid "Batch modification"
 msgstr "批量修改"
 
-#: core/actions.py:282
-msgid "Create Digest"
-msgstr "创建简报"
+#: core/admin/admin_site.py:16
+msgid "RSS Translator Admin"
+msgstr "RSS翻译器管理后台"
 
-#: core/admin.py:62
+#: core/admin/admin_site.py:17
+msgid "RSS Translator"
+msgstr "RSS翻译器"
+
+#: core/admin/admin_site.py:18
+msgid "Dashboard"
+msgstr "仪表盘"
+
+#: core/admin/admin_site.py:61
+msgid "Agents"
+msgstr "助理"
+
+#: core/admin/agent_admin.py:61
+#, fuzzy
+#| msgid "Feed Information"
+msgid "Model Information"
+msgstr "源信息"
+
+#: core/admin/agent_admin.py:72
+#, fuzzy
+#| msgid "Report Prompt"
+msgid "Prompts"
+msgstr "报告提示词"
+
+#: core/admin/agent_admin.py:82
+msgid "Advanced"
+msgstr "高级"
+
+#: core/admin/feed_admin.py:60
 msgid "Feed Information"
 msgstr "源信息"
 
-#: core/admin.py:75
+#: core/admin/feed_admin.py:75
 msgid "Content Processing"
 msgstr "内容处理"
 
-#: core/admin.py:86
+#: core/admin/feed_admin.py:89
 msgid "Output Control"
 msgstr "输出控制"
 
-#: core/admin.py:158 core/forms.py:41 core/models.py:61
+#: core/admin/feed_admin.py:162 core/forms.py:41 core/models/feed.py:61
 #: templates/admin/feed_batch_modify.html:13
 msgid "Update Frequency"
 msgstr "更新频率(分钟)"
 
-#: core/admin.py:173 core/forms.py:20 templates/admin/feed_batch_modify.html:45
+#: core/admin/feed_admin.py:177 core/forms.py:20
+#: templates/admin/feed_batch_modify.html:45
 msgid "Translator"
 msgstr "翻译器"
 
-#: core/admin.py:177
+#: core/admin/feed_admin.py:181
 msgid "Translated Feed"
 msgstr "翻译源"
 
-#: core/admin.py:194
+#: core/admin/feed_admin.py:198
 msgid "Fetch Feed"
 msgstr "获取源"
 
-#: core/admin.py:205
+#: core/admin/feed_admin.py:209
 msgid "Options"
 msgstr "选项"
 
-#: core/admin.py:210 core/forms.py:46
+#: core/admin/feed_admin.py:214 core/forms.py:46
 msgid "Title"
 msgstr "标题"
 
-#: core/admin.py:211 core/forms.py:47
+#: core/admin/feed_admin.py:215 core/forms.py:47
 msgid "Content"
 msgstr "内容"
 
-#: core/admin.py:212 core/forms.py:48 core/models.py:94
+#: core/admin/feed_admin.py:216 core/forms.py:48 core/models/feed.py:94
 #: templates/admin/feed_batch_modify.html:73
 msgid "Summary"
 msgstr "摘要"
 
-#: core/admin.py:224 core/models.py:185
+#: core/admin/feed_admin.py:228 core/models/feed.py:185
 msgid "Log"
 msgstr "日志"
 
-#: core/admin.py:238
+#: core/admin/feed_admin.py:242
 msgid "Category"
 msgstr "类别"
 
-#: core/admin.py:268 core/models.py:286
+#: core/admin/filter_admin.py:29 core/models/filter.py:28
 msgid "Keywords"
 msgstr "关键词"
-
-#: core/custom_admin_site.py:16
-msgid "RSS Translator Admin"
-msgstr "RSS翻译器管理后台"
-
-#: core/custom_admin_site.py:17
-msgid "RSS Translator"
-msgstr "RSS翻译器"
-
-#: core/custom_admin_site.py:18
-msgid "Dashboard"
-msgstr "仪表盘"
 
 #: core/forms.py:19
 msgid "Select a valid translator"
@@ -151,19 +168,19 @@ msgstr "可选，默认使用源标题"
 msgid "Optional, default use the random slug"
 msgstr "可选，默认随机生成"
 
-#: core/forms.py:168 core/models.py:273
+#: core/forms.py:168 core/models/filter.py:15
 msgid "Original Title"
 msgstr "原始的标题"
 
-#: core/forms.py:169 core/models.py:274
+#: core/forms.py:169 core/models/filter.py:16
 msgid "Original Content"
 msgstr "原始的内容"
 
-#: core/forms.py:170 core/models.py:275
+#: core/forms.py:170 core/models/filter.py:17
 msgid "Translated Title"
 msgstr "翻译的标题"
 
-#: core/forms.py:171 core/models.py:276
+#: core/forms.py:171 core/models/filter.py:18
 msgid "Translated Content"
 msgstr "翻译的内容"
 
@@ -171,185 +188,225 @@ msgstr "翻译的内容"
 msgid "Target Field"
 msgstr "目标字段"
 
-#: core/models.py:14 core/models.py:280 translator/models.py:14
+#: core/models/agent.py:14 core/models/feed.py:14 core/models/filter.py:22
 msgid "Name"
 msgstr "名称"
 
-#: core/models.py:17
+#: core/models/agent.py:15
+msgid "Valid"
+msgstr "验证"
+
+#: core/models/agent.py:52 core/models/agent.py:282
+msgid "API Key"
+msgstr ""
+
+#: core/models/agent.py:53
+msgid "API URL"
+msgstr ""
+
+#: core/models/agent.py:60
+msgid "Title Translate Prompt"
+msgstr "标题翻译提示词"
+
+#: core/models/agent.py:63
+msgid "Content Translate Prompt"
+msgstr "内容翻译提示词"
+
+#: core/models/agent.py:73
+msgid "Rate Limit (RPM)"
+msgstr ""
+
+#: core/models/agent.py:75
+msgid "Maximum requests per minute (0 = no limit)"
+msgstr ""
+
+#: core/models/agent.py:284
+msgid "API URL(optional)"
+msgstr ""
+
+#: core/models/agent.py:285
+msgid "Proxy(optional)"
+msgstr ""
+
+#: core/models/agent.py:353
+msgid "Request Interval(s)"
+msgstr "请求间隔"
+
+#: core/models/entry.py:26
+msgid "Entry"
+msgstr "条目"
+
+#: core/models/entry.py:27
+msgid "Entries"
+msgstr "条目"
+
+#: core/models/feed.py:17
 msgid "Subtitle"
 msgstr "子标题"
 
-#: core/models.py:20
+#: core/models/feed.py:20
 msgid "URL Slug"
 msgstr "URL别名"
 
-#: core/models.py:27
+#: core/models/feed.py:27
 msgid "Link"
 msgstr "链接"
 
-#: core/models.py:32
+#: core/models/feed.py:32
 msgid "Author"
 msgstr "作者"
 
-#: core/models.py:38 core/models.py:87
+#: core/models/feed.py:38 core/models/feed.py:87
 msgid "Language"
 msgstr "语言"
 
-#: core/models.py:44
+#: core/models/feed.py:44
 msgid "Pubdate"
 msgstr "发布日期"
 
-#: core/models.py:49
+#: core/models/feed.py:49
 msgid "Updated"
 msgstr "更新日期"
 
-#: core/models.py:53
+#: core/models/feed.py:53
 msgid "Feed URL"
 msgstr "订阅链接"
 
-#: core/models.py:55
+#: core/models/feed.py:55
 msgid "Fetch Status"
 msgstr "订阅状态"
 
-#: core/models.py:63
+#: core/models/feed.py:63
 msgid "Minutes"
 msgstr "分钟"
 
-#: core/models.py:66 templates/admin/feed_batch_modify.html:22
+#: core/models/feed.py:66 templates/admin/feed_batch_modify.html:22
 msgid "Max Posts"
 msgstr "最大条目"
 
-#: core/models.py:68
+#: core/models/feed.py:68
 msgid "Max number of posts to be fetched"
 msgstr "要获取的最大条目数"
 
-#: core/models.py:72 templates/admin/feed_batch_modify.html:89
+#: core/models/feed.py:72 templates/admin/feed_batch_modify.html:89
 msgid "Fetch Original Article"
 msgstr "获取全文"
 
-#: core/models.py:74
+#: core/models/feed.py:74
 msgid "Fetch original article from the website."
 msgstr "从原网站获取全文"
 
-#: core/models.py:78 templates/admin/feed_batch_modify.html:40
+#: core/models/feed.py:78 templates/admin/feed_batch_modify.html:40
 msgid "Only Translation"
 msgstr "仅译文"
 
-#: core/models.py:79 templates/admin/feed_batch_modify.html:41
+#: core/models/feed.py:79 templates/admin/feed_batch_modify.html:41
 msgid "Translation | Original"
 msgstr "译文 | 原文"
 
-#: core/models.py:80 templates/admin/feed_batch_modify.html:42
+#: core/models/feed.py:80 templates/admin/feed_batch_modify.html:42
 msgid "Original | Translation"
 msgstr "原文 | 译文"
 
-#: core/models.py:83 templates/admin/feed_batch_modify.html:36
+#: core/models/feed.py:83 templates/admin/feed_batch_modify.html:36
 msgid "Translation Display"
 msgstr "译文显示"
 
-#: core/models.py:92 templates/admin/feed_batch_modify.html:63
+#: core/models/feed.py:92 templates/admin/feed_batch_modify.html:63
 msgid "Translate Title"
 msgstr "翻译标题"
 
-#: core/models.py:93 templates/admin/feed_batch_modify.html:68
+#: core/models/feed.py:93 templates/admin/feed_batch_modify.html:68
 msgid "Translate Content"
 msgstr "翻译内容"
 
-#: core/models.py:97
+#: core/models/feed.py:97
 msgid "Translation Status"
 msgstr "翻译状态"
 
-#: core/models.py:129 templates/admin/feed_batch_modify.html:78
+#: core/models/feed.py:129 templates/admin/feed_batch_modify.html:78
 msgid "Summary Detail"
 msgstr "摘要细粒度"
 
-#: core/models.py:135
+#: core/models/feed.py:135
 msgid ""
 "Level of detail of summaries of longer articles. 0: Normal, 1: Most detailed "
 "(cost more tokens)"
 msgstr "较长文章摘要的详细程度。0：正常，1：最详细(花费更多token)"
 
-#: core/models.py:142
+#: core/models/feed.py:142
 msgid "Filters"
 msgstr "过滤器"
 
-#: core/models.py:143
+#: core/models/feed.py:143
 msgid "Filters to apply to the feed entries"
 msgstr "过滤文章内容"
 
-#: core/models.py:147 templates/admin/feed_batch_modify.html:83
+#: core/models/feed.py:147 templates/admin/feed_batch_modify.html:83
 msgid "Addtional Prompt"
 msgstr "额外的提示词"
 
-#: core/models.py:151
+#: core/models/feed.py:151
 msgid "Addtional Prompt for translation and summary"
 msgstr "用于AI翻译和摘要"
 
-#: core/models.py:154
+#: core/models/feed.py:154
 msgid "Enter a category string"
 msgstr "输入类别"
 
-#: core/models.py:157
+#: core/models/feed.py:157
 msgid "Tokens Cost"
 msgstr "花费Token数"
 
-#: core/models.py:158
+#: core/models/feed.py:158
 msgid "Characters Cost"
 msgstr "花费字符数"
 
-#: core/models.py:161
+#: core/models/feed.py:161
 msgid "Last translate"
 msgstr "最后翻译"
 
-#: core/models.py:165
+#: core/models/feed.py:165
 msgid "Last time the feed was translated"
 msgstr "最后翻译的时间"
 
-#: core/models.py:169
+#: core/models/feed.py:169
 msgid "Last Fetch(UTC)"
 msgstr "最后获取(UTC)"
 
-#: core/models.py:174
+#: core/models/feed.py:174
 msgid "Last time the feed was fetched"
 msgstr "最后获取订阅源的时间"
 
-#: core/models.py:189
+#: core/models/feed.py:189
 msgid "Log for the feed, useful for debugging"
 msgstr "日志，用于调试"
 
-#: core/models.py:196
+#: core/models/feed.py:196
 msgid "Feed"
 msgstr "源"
 
-#: core/models.py:197
+#: core/models/feed.py:197
 msgid "Feeds"
 msgstr "源"
 
-#: core/models.py:261
-msgid "Entry"
-msgstr "条目"
-
-#: core/models.py:262
-msgid "Entries"
-msgstr "条目"
-
-#: core/models.py:268
+#: core/models/filter.py:10
 msgid "Include - Only show items containing these keywords"
 msgstr "包含 - 只显示包含这些关键词的条目"
 
-#: core/models.py:269
+#: core/models/filter.py:11
 msgid "Exclude - Hide items containing these keywords"
 msgstr "排除 - 隐藏包含这些关键词的条目"
 
-#: core/models.py:288
+#: core/models/filter.py:30
 msgid "Keywords to filter entries. "
 msgstr "用于过滤的关键词"
 
-#: core/models.py:294
+#: core/models/filter.py:36
 msgid "Action to take on matching keywords."
 msgstr "匹配关键词的动作"
 
-#: core/models.py:318 core/models.py:319
+#: core/models/filter.py:60 core/models/filter.py:61
 msgid "Filter"
 msgstr "过滤器"
 
@@ -372,6 +429,10 @@ msgstr "OPML导入失败"
 #: core/views.py:110
 msgid "Please upload a valid OPML file."
 msgstr "请上传有效的OPML文件"
+
+#: templates/admin/agent_add.html:4
+msgid "Which service provider you want to add?"
+msgstr "您想添加哪个服务提供商？"
 
 #: templates/admin/core/feed/change_list.html:14
 msgid "Import OPML"
@@ -438,65 +499,8 @@ msgstr "最佳质量"
 msgid "category"
 msgstr "类别"
 
-#: templates/admin/translator_add.html:4
-msgid "Which service provider you want to add?"
-msgstr "您想添加哪个服务提供商？"
-
-#: translator/admin.py:61
-#, fuzzy
-#| msgid "Feed Information"
-msgid "Model Information"
-msgstr "源信息"
-
-#: translator/admin.py:72
-#, fuzzy
-#| msgid "Report Prompt"
-msgid "Prompts"
-msgstr "报告提示词"
-
-#: translator/admin.py:82
-msgid "Advanced"
-msgstr "高级"
-
-#: translator/models.py:15
-msgid "Valid"
-msgstr "验证"
-
-#: translator/models.py:54 translator/models.py:252
-msgid "API Key"
-msgstr ""
-
-#: translator/models.py:55
-msgid "API URL"
-msgstr ""
-
-#: translator/models.py:62
-msgid "Title Translate Prompt"
-msgstr "标题翻译提示词"
-
-#: translator/models.py:65
-msgid "Content Translate Prompt"
-msgstr "内容翻译提示词"
-
-#: translator/models.py:74
-msgid "Rate Limit (RPM)"
-msgstr ""
-
-#: translator/models.py:76
-msgid "Maximum requests per minute (0 = no limit)"
-msgstr ""
-
-#: translator/models.py:254
-msgid "API URL(optional)"
-msgstr ""
-
-#: translator/models.py:255
-msgid "Proxy(optional)"
-msgstr ""
-
-#: translator/models.py:323
-msgid "Request Interval(s)"
-msgstr "请求间隔"
+#~ msgid "Create Digest"
+#~ msgstr "创建简报"
 
 #~ msgid "Original_Title"
 #~ msgstr "获取全文"

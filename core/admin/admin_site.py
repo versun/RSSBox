@@ -58,7 +58,7 @@ class CoreAdminSite(AdminSite):
                 "models": [
                     {
                         # "model": " 'core.models.agent.DeepLAgent",
-                        "name": "Agents",
+                        "name": _("Agents"),
                         "object_name": "Agent",
                         "admin_url": "/agent/list",
                         "add_url": "/agent/add",
