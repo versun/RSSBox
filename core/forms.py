@@ -1,9 +1,5 @@
-from typing import Mapping
 from django import forms
-from django.core.files.base import File
 from django.db import transaction
-from django.db.models.base import Model
-from django.forms.utils import ErrorList
 from django.utils.translation import gettext_lazy as _
 from .models import Feed, Filter
 from utils.modelAdmin_utils import get_translator_and_summary_choices
