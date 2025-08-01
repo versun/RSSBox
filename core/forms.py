@@ -16,13 +16,13 @@ class FeedForm(forms.ModelForm):
     translator_option = forms.ChoiceField(
         choices=(),
         required=False,
-        help_text=_("Select a valid translator"),
+        help_text=_("Select a valid agent for translation"),
         label=_("Translator"),
     )
     summary_engine_option = forms.ChoiceField(
         choices=(),
         required=False,
-        help_text=_("Select a valid AI engine"),
+        help_text=_("Select a valid agent for summarization"),
         label=_("Summarizer"),
     )
     simple_update_frequency = forms.ChoiceField(
