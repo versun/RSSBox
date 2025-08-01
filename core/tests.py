@@ -98,7 +98,7 @@ class CategoryViewTest(TestCase):
 
 class AdminSiteTest(TestCase):
     def setUp(self):
-        from core.custom_admin_site import core_admin_site
+        from core.admin.admin_site import core_admin_site
         from .models import Feed, Entry
         self.site = core_admin_site
         self.feed = Feed

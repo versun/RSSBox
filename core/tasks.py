@@ -8,7 +8,7 @@ import newspaper
 from .models import Feed, Entry, Filter
 from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
-from translator.models import TranslatorEngine
+from core.models.agent import Agent
 from utils.text_handler import get_token_count, adaptive_chunking
 
 
@@ -318,7 +318,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 def _translate_title(
     entry: Entry,
     target_language: str,
-    engine: TranslatorEngine,
+    engine: Agent,
 ) -> dict:
     """Translate entry title with memory optimization."""
     total_tokens = 0
@@ -351,7 +351,7 @@ def _translate_title(
 def _translate_content(
     entry: Entry,
     target_language: str,
-    engine: TranslatorEngine,
+    engine: Agent,
     quality: bool = False,
 ) -> dict:
     """Translate entry content with memory optimization."""
