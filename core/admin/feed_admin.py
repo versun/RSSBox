@@ -95,6 +95,20 @@ class FeedAdmin(admin.ModelAdmin):
                 ),
             },
         ),
+        (
+            _("Status"),
+            {
+                "fields": (
+                   "fetch_status",
+                    "translation_status",
+                    "total_tokens",
+                    "total_characters",
+                    "last_fetch",
+                    "last_translate",
+                    "show_log",
+                ),
+            },
+        ),
     )
     actions = [
         feed_force_update,
