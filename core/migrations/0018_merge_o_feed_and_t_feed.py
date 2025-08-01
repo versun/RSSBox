@@ -2,7 +2,7 @@
 from django.db import migrations
 import uuid
 from django.conf import settings
-from utils.back_db import backup_db
+from utils.backup_db import backup_db
 
 
 def merge_feeds_data(apps, schema_editor):

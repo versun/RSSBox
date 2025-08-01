@@ -1,4 +1,5 @@
 from django.db import migrations, connection
+from utils.backup_db import backup_db
 
 def check_table_exists(apps, schema_editor):
      # 检查两个表是否存在
@@ -84,5 +85,6 @@ class Migration(migrations.Migration):
     else:
         print("Migration will proceed as at least one table exists")
         operations = [
+            migrations.RunPython(backup_db),
             migrations.RunPython(migrate_translator_data),
         ]
