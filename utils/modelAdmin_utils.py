@@ -1,33 +1,20 @@
-from django.conf import settings
 from django.utils.html import format_html
-from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
+from core.models import OpenAIAgent, DeepLAgent, TestAgent
 
 
-def get_all_app_models(app_name):
-    app = apps.get_app_config(app_name)
-    models = app.get_models()
-    # exclude Translated_Content
-    exclude_models = []
-    if not settings.DEBUG:
-        exclude_models.append("TestTranslator")
-
-    models = [model for model in models if model.__name__ not in exclude_models]
-
-    return models
-
+AGENT_MODELS = [OpenAIAgent, DeepLAgent, TestAgent]
 
 def get_translator_and_summary_choices():
-    translator_models = get_all_app_models("translator")
     # Cache ContentTypes to avoid repetitive database calls
     content_types = {
-        model: ContentType.objects.get_for_model(model) for model in translator_models
+        model: ContentType.objects.get_for_model(model) for model in AGENT_MODELS
     }
 
     # Build all choices in one list comprehension
     translator_choices = [
         (f"{content_types[model].id}:{obj_id}", obj_name)
-        for model in translator_models
+        for model in AGENT_MODELS
         for obj_id, obj_name in model.objects.filter(valid=True).values_list(
             "id", "name"
         )
@@ -35,7 +22,7 @@ def get_translator_and_summary_choices():
 
     summary_engine_choices = [
         (f"{content_types[model].id}:{obj_id}", obj_name)
-        for model in translator_models
+        for model in AGENT_MODELS
         for obj_id, obj_name in model.objects.filter(
             valid=True, is_ai=True
         ).values_list("id", "name")

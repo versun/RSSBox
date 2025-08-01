@@ -56,7 +56,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0020_entry'),
-        ('translator', '0045_alter_openaitranslator_max_tokens'),
     ]
 
     operations = [

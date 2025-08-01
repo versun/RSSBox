@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from lxml import etree
 from utils.modelAdmin_utils import get_translator_and_summary_choices
-from .custom_admin_site import core_admin_site
+from core.admin import core_admin_site
 from .models import Feed
 from utils.task_manager import task_manager
 from .management.commands.update_feeds import update_multiple_feeds
@@ -279,7 +279,7 @@ def feed_batch_modify(modeladmin, request, queryset):
     )
 
 
-@admin.display(description=_("Create Digest"))
+#@admin.display(description=_("Create Digest"))
 def create_digest(self, request, queryset):
     selected_ids = queryset.values_list("id", flat=True)
     ids_string = ",".join(str(id) for id in selected_ids)
