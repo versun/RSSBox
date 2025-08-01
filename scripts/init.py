@@ -62,9 +62,9 @@ def init_server():
 
         print("Creating migrations...")
         call_command("makemigrations", verbosity=1)
-
+        
         print("Running migrations...")
-        call_command("migrate", verbosity=1)
+        call_command("migrate", verbosity=0, interactive=False)
 
         print("Creating default superuser...")
         create_superuser()
@@ -78,7 +78,8 @@ def init_server():
         print("Server initialization completed successfully!")
 
     except Exception as e:
-        print(f"Error during initialization: {e}")
+        import traceback
+        print(f"Error: {e}\n{traceback.format_exc()}")
         raise
 
 
