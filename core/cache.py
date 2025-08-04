@@ -23,21 +23,22 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     return atom_feed
 
 
-def cache_category(category: str, feed_type="t", format="xml"):
+def cache_tag(tag: str, feed_type="t", format="xml"):
     logging.debug(
-        f"Start cache_category for {category} with type {feed_type} and format {format}"
+        f"Start cache_tag for {tag} with type {feed_type} and format {format}"
     )
     # 生成唯一的缓存键
-    cache_key = f"cache_category_{category}_{feed_type}_{format}"
+    cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
 
-    feeds = Feed.objects.filter(category=category)
+    feeds = Feed.objects.filter(tags__name=tag)
     max_frequency_feed = feeds.order_by('-update_frequency').first()
-    atom_feed = merge_feeds_into_one_atom(category, feeds, feed_type)
+    atom_feed = merge_feeds_into_one_atom(tag, feeds, feed_type)
 
     if not atom_feed:
         return None
 
     # 缓存
-    cache.set(cache_key, atom_feed, max_frequency_feed.update_frequency or 86400)
+    max_frequency = max_frequency_feed.update_frequency if max_frequency_feed else 86400
+    cache.set(cache_key, atom_feed,max_frequency)
     logging.debug(f"Cached successfully with key {cache_key}")
     return atom_feed

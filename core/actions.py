@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from ast import literal_eval
-from django.contrib import admin
+from django.contrib import admin,messages
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpResponseRedirect
 from django.db import transaction
@@ -9,143 +9,141 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from lxml import etree
-from utils.modelAdmin_utils import get_translator_and_summary_choices
+from utils.modelAdmin_utils import get_all_agent_choices, get_ai_agent_choices
 from core.admin import core_admin_site
-from .models import Feed
+from core.models import Feed, Filter, Tag
 from utils.task_manager import task_manager
 from .management.commands.update_feeds import update_multiple_feeds
 
 
+
 @admin.display(description=_("Clean translated content"))
 def clean_translated_content(modeladmin, request, queryset):
-    pass
+    for feed in queryset:
+        # 更新该feed下所有entry的翻译相关字段为None或空字符串
+        feed.entries.all().update(
+            translated_title=None,
+            translated_content=None
+        )
+    modeladmin.message_user(
+        request,
+        _("Successfully cleaned translated content for selected feeds."),
+        messages.SUCCESS
+    )
+
+@admin.display(description=_("Clean ai summary"))
+def clean_ai_summary(modeladmin, request, queryset):
+    for feed in queryset:
+        # 更新该feed下所有entry的翻译相关字段为None或空字符串
+        feed.entries.all().update(
+            ai_summary=None
+        )
+    modeladmin.message_user(
+        request,
+        _("Successfully cleaned ai summary for selected feeds."),
+        messages.SUCCESS
+    )
+
+def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_prefix):
+    """
+    生成OPML文件的通用函数
+    
+    Args:
+        title_prefix (str): OPML标题前缀
+        queryset (QuerySet): 要导出的数据集合
+        get_feed_url_func (function): 获取feed URL的函数
+        filename_prefix (str): 导出文件名前缀
+        
+    Returns:
+        HttpResponse: 包含OPML文件的响应或错误响应
+    """
+    try:
+        # 创建根元素 <opml> 并设置版本
+        root = etree.Element("opml", version="2.0")
+
+        # 创建头部 <head>
+        head = etree.SubElement(root, "head")
+        etree.SubElement(head, "title").text = f"{title_prefix} | RSS Translator"
+        etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
+            "%a, %d %b %Y %H:%M:%S %z"
+        )
+        etree.SubElement(head, "ownerName").text = "RSS Translator"
+
+        # 创建主体 <body>
+        body = etree.SubElement(root, "body")
+
+        # 按分类组织订阅源
+        categories = {}
+        for feed in queryset:
+            feed_tags = list(feed.tags.all()) or [None]  # 如果没有tag，用None表示默认分类
+
+            for tag in feed_tags:
+                tag_name = tag.name if tag else "uncategorized"
+                
+                # 获取或创建分类大纲
+                if tag_name not in categories:
+                    tag_outline = etree.SubElement(
+                        body, "outline", 
+                        text=tag_name, 
+                        title=tag_name
+                    )
+                    categories[tag_name] = tag_outline
+                else:
+                    tag_outline = categories[tag_name]
+                
+                # 获取feed URL
+                feed_url = get_feed_url_func(feed)
+                
+                # 添加feed条目
+                etree.SubElement(
+                    tag_outline,
+                    "outline",
+                    {
+                        "title": feed.name,
+                        "text": feed.name,
+                        "type": "rss",
+                        "xmlUrl": feed_url,
+                        "htmlUrl": feed_url,
+                    },
+                )
+
+        # 生成XML内容
+        xml_content = etree.tostring(
+            root, encoding="utf-8", xml_declaration=True, pretty_print=True
+        )
+
+        # 创建HTTP响应
+        response = HttpResponse(xml_content, content_type="application/xml")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{filename_prefix}_feeds_from_rsstranslator.opml"'
+        )
+        return response
+
+    except Exception as e:
+        logging.error("OPML export error: %s", str(e), exc_info=True)
+        return HttpResponse("An error occurred during OPML export", status=500)
 
 
 @admin.display(description=_("Export selected original feeds as OPML"))
 def export_original_feed_as_opml(modeladmin, request, queryset):
-    try:
-        # 创建根元素 <opml> 并设置版本
-        root = etree.Element("opml", version="2.0")
-
-        # 创建头部 <head>
-        head = etree.SubElement(root, "head")
-        etree.SubElement(head, "title").text = "Original Feeds | RSS Translator"
-        etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
-            "%a, %d %b %Y %H:%M:%S %z"
-        )
-        etree.SubElement(head, "ownerName").text = "RSS Translator"
-
-        # 创建主体 <body>
-        body = etree.SubElement(root, "body")
-
-        # 按分类组织订阅源
-        categories = {}
-        for item in queryset:
-            category_name = item.category.name if item.category else "default"
-
-            # 获取或创建分类大纲
-            if category_name not in categories:
-                category_outline = etree.Element(
-                    "outline", text=category_name, title=category_name
-                )
-                categories[category_name] = category_outline
-                body.append(category_outline)
-            else:
-                category_outline = categories[category_name]
-
-            # 添加订阅源条目
-            etree.SubElement(
-                category_outline,
-                "outline",
-                {
-                    "title": item.name,
-                    "text": item.name,
-                    "type": "rss",
-                    "xmlUrl": item.feed_url,
-                    "htmlUrl": item.feed_url,
-                },
-            )
-
-        # 生成 XML 内容
-        xml_content = etree.tostring(
-            root, encoding="utf-8", xml_declaration=True, pretty_print=True
-        )
-
-        # 创建 HTTP 响应
-        response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = (
-            'attachment; filename="original_feeds_from_rsstranslator.opml"'
-        )
-        return response
-
-    except Exception as e:
-        logging.error("export_original_feed_as_opml: %s", str(e))
-        return HttpResponse("An error occurred", status=500)
+    """导出原始订阅源为OPML文件"""
+    return _generate_opml_feed(
+        title_prefix="Original Feeds",
+        queryset=queryset,
+        get_feed_url_func=lambda feed: feed.feed_url,
+        filename_prefix="original"
+    )
 
 
 @admin.display(description=_("Export selected translated feeds as OPML"))
 def export_translated_feed_as_opml(modeladmin, request, queryset):
-    try:
-        # 创建根元素 <opml> 并设置版本
-        root = etree.Element("opml", version="2.0")
-
-        # 创建头部 <head>
-        head = etree.SubElement(root, "head")
-        etree.SubElement(head, "title").text = "Translated Feeds | RSS Translator"
-        etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
-            "%a, %d %b %Y %H:%M:%S %z"
-        )
-        etree.SubElement(head, "ownerName").text = "RSS Translator"
-
-        # 创建主体 <body>
-        body = etree.SubElement(root, "body")
-
-        # 按分类组织订阅源
-        categories = {}
-        for item in queryset:
-            category_name = item.category.name if item.category else "default"
-
-            # 获取或创建分类大纲
-            if category_name not in categories:
-                category_outline = etree.Element(
-                    "outline", text=category_name, title=category_name
-                )
-                categories[category_name] = category_outline
-                body.append(category_outline)
-            else:
-                category_outline = categories[category_name]
-
-            translated_feed_url = f"{settings.SITE_URL}/feed/rss/{item.slug}"
-
-            # 添加订阅源条目
-            etree.SubElement(
-                category_outline,
-                "outline",
-                {
-                    "title": item.name,
-                    "text": item.name,
-                    "type": "rss",
-                    "xmlUrl": translated_feed_url,
-                    "htmlUrl": translated_feed_url,
-                },
-            )
-
-        # 生成 XML 内容
-        xml_content = etree.tostring(
-            root, encoding="utf-8", xml_declaration=True, pretty_print=True
-        )
-
-        # 创建 HTTP 响应
-        response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = (
-            'attachment; filename="translated_feeds_from_rsstranslator.opml"'
-        )
-        return response
-
-    except Exception as e:
-        logging.error("export_original_feed_as_opml: %s", str(e))
-        return HttpResponse("An error occurred", status=500)
-
+    """导出翻译后的订阅源为OPML文件"""
+    return _generate_opml_feed(
+        title_prefix="Translated Feeds",
+        queryset=queryset,
+        get_feed_url_func=lambda feed: f"{settings.SITE_URL}/feed/rss/{feed.slug}",
+        filename_prefix="translated"
+    )
 
 @admin.display(description=_("Force update"))
 def feed_force_update(modeladmin, request, queryset):
@@ -176,11 +174,11 @@ def feed_batch_modify(modeladmin, request, queryset):
             "summary_detail": "summary_detail_value",
             "additional_prompt": "additional_prompt_value",
             "fetch_article": "fetch_article",
-            "quality": "quality",
-            "category": "category_value",
+            "tags": "tags_value",
             "translate_title": "translate_title",
             "translate_content": "translate_content",
             "summary": "summary",
+            "filter": "filter_value",
         }
         field_types = {
             "update_frequency": int,
@@ -190,7 +188,6 @@ def feed_batch_modify(modeladmin, request, queryset):
             "summary_detail": float,
             "additional_prompt": str,
             "fetch_article": literal_eval,
-            "quality": literal_eval,
             "translate_title": literal_eval,
             "translate_content": literal_eval,
             "summary": literal_eval,
@@ -240,11 +237,18 @@ def feed_batch_modify(modeladmin, request, queryset):
                             summarizer_content_type_id=content_type_summary_id
                         )
                         queryset.update(summarizer_object_id=object_id_summary)
-                    case "category":
-                        tag_model = Feed.category.tag_model
-                        category_o, _ = tag_model.objects.get_or_create(name=value)
-                        queryset.update(category=category_o)
-
+                    case "tags":
+                        tag_values = post_data.getlist("tags_value")  # 获取所有选中的 tag IDs（可能是多选）
+                        if tag_values:
+                            tag_ids = [int(id) for id in tag_values]  # 转换成整数列表
+                            for feed in queryset:
+                                feed.tags.set(tag_ids)  # 批量更新每个 Feed 的 tags
+                    case "filter":
+                        filter_values = post_data.getlist("filter_value")
+                        if filter_values:
+                            filter_ids = [int(id) for id in filter_values]
+                            for obj in queryset:
+                                obj.filters.set(filter_ids)
                     case _:
                         update_fields[field] = field_types.get(field, str)(value)
 
@@ -252,12 +256,14 @@ def feed_batch_modify(modeladmin, request, queryset):
             queryset.update(**update_fields)
         return redirect(request.get_full_path())
 
-    translator_choices, summary_engine_choices = get_translator_and_summary_choices()
-    logging.info(
-        "translator_choices: %s, summary_engine_choices: %s",
-        translator_choices,
-        summary_engine_choices,
-    )
+    translator_choices = get_all_agent_choices()
+    summary_engine_choices = get_ai_agent_choices()
+    filter_choices = [
+        (f"{filter.id}", filter.name) for filter in Filter.objects.all()
+    ]
+    tags_choices = [
+        (f"{tag.id}", tag.name) for tag in Tag.objects.all()
+    ]
     return render(
         request,
         "admin/feed_batch_modify.html",
@@ -267,6 +273,8 @@ def feed_batch_modify(modeladmin, request, queryset):
             "translator_choices": translator_choices,
             "target_language_choices": settings.TRANSLATION_LANGUAGES,
             "summary_engine_choices": summary_engine_choices,
+            "filter_choices": filter_choices,
+            "tags_choices": tags_choices,
             "update_frequency_choices": [
                 (5, "5 min"),
                 (15, "15 min"),

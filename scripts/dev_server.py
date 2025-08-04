@@ -11,7 +11,7 @@ def setup_environment():
     """设置环境变量"""
     os.environ["DEMO"] = "1"
     os.environ["DEBUG"] = "1"
-    os.environ["LOG_LEVEL"] = "INFO"
+    os.environ["LOG_LEVEL"] = "DEBUG"
     # 合并已存在的 CSRF_TRUSTED_ORIGINS
     default_origins = (
         "http://localhost,http://localhost:8000,http://127.0.0.1,http://127.0.0.1:8000,"

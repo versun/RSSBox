@@ -267,7 +267,6 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     entry=entry,
                     target_language=feed.target_language,
                     engine=feed.translator,
-                    quality=feed.quality,
                 )
                 total_tokens += metrics["tokens"]
                 total_characters += metrics["characters"]
@@ -352,7 +351,6 @@ def _translate_content(
     entry: Entry,
     target_language: str,
     engine: Agent,
-    quality: bool = False,
 ) -> dict:
     """Translate entry content with memory optimization."""
     total_tokens = 0

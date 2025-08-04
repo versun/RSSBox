@@ -6,33 +6,33 @@ app_name = "core"
 urlpatterns = [
     # path("filter/<str:name>", views.filter, name="filter"),
     path(
-        "category/proxy/<str:category>",
-        views.category,
+        "tag/proxy/<str:tag>",
+        views.tag,
         kwargs={"feed_type": "o", "format": "xml"},
     ),
     path(
-        "category/proxy/<str:category>/",
-        views.category,
+        "tag/proxy/<str:tag>/",
+        views.tag,
         kwargs={"feed_type": "o", "format": "xml"},
     ),
     path(
-        "category/json/<str:category>",
-        views.category,
+        "tag/json/<str:tag>",
+        views.tag,
         kwargs={"feed_type": "t", "format": "json"},
     ),
     path(
-        "category/json/<str:category>/",
-        views.category,
+        "tag/json/<str:tag>/",
+        views.tag,
         kwargs={"feed_type": "t", "format": "json"},
     ),
     path(
-        "category/<str:category>",
-        views.category,
+        "tag/<str:tag>",
+        views.tag,
         kwargs={"feed_type": "t", "format": "xml"},
     ),
     path(
-        "category/<str:category>/",
-        views.category,
+        "tag/<str:tag>/",
+        views.tag,
         kwargs={"feed_type": "t", "format": "xml"},
     ),
     path(

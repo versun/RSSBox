@@ -8,9 +8,42 @@ from core.admin import core_admin_site
 
 
 class FilterAdmin(admin.ModelAdmin):
-    list_display = ("name", "show_keywords")
+    change_form_template = "admin/change_form_with_tabs.html"
+    list_display = ("name", "filter_method", "operation", "total_tokens")
     search_fields = ("name", "keywords__name")
+    readonly_fields = ("total_tokens",)
     form = FilterForm
+    fieldsets = (
+        (
+            _("Filter Information"),
+            {
+                "fields": (
+                    "name",
+                    "filter_method",
+                    "operation",
+                    "target_field",
+                    "total_tokens",
+                )
+            },
+        ),
+         (
+            _("Keywords"),
+            {
+                "fields": (
+                    "keywords",
+                )
+            },
+        ),
+         (
+            _("AI"),
+            {
+                "fields": (
+                    "agent_option",
+                    "filter_prompt",
+                )
+            },
+        ),
+    )   
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("keywords")

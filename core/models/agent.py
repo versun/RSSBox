@@ -270,11 +270,18 @@ class OpenAIAgent(Agent):
 
     def filter(
         self, text: str, system_prompt: str, max_tokens: int = None, **kwargs
-    ) -> dict:
+    ) -> bool:
         logging.info(">>> Start Filter: %s", text)
-        return self.completions(
-            text, system_prompt=system_prompt, max_tokens=max_tokens, **kwargs
+        
+        results = self.completions(
+            text, system_prompt=system_prompt+settings.output_format_for_filter_prompt, max_tokens=max_tokens, **kwargs
         )
+        if results["text"] and "Passed" in results["text"]:
+            logging.info(">>> Filter Passed: %s", text)
+            return True
+        else:
+            logging.info(">>> Filter Blocked: %s", text)
+            return False
 
 
 class DeepLAgent(Agent):

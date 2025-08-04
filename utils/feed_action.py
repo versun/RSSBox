@@ -223,7 +223,11 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         )
 
         # 添加所有条目
-        for entry in reversed(feed.filtered_entries.order_by("-pubdate")[: feed.max_posts]):
+        entries = feed.filtered_entries
+        if entries is None:
+            return []
+        
+        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
             _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
         # 生成最终XML
@@ -234,11 +238,11 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         return None
 
 
-def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
+def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     """合并多个Feeds生成单个Atom Feed"""
     type_str = "Original" if feed_type == "o" else "Translated"
-    feed_id = f"urn:merged-category-{category}-{type_str}-feeds"
-    feed_title = f"{type_str} Category {category} Feeds"
+    feed_id = f"urn:merged-tag-{tag}-{type_str}-feeds"
+    feed_title = f"{type_str} #{tag} tag  Feeds"
 
     # 构建基础Feed
     fg = _build_atom_feed(
@@ -246,7 +250,7 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
         title=feed_title,
         author=feed_title,
         link=settings.SITE_URL,
-        subtitle=f"Combined {type_str} {category} Feeds",
+        subtitle=f"Combined {type_str} {tag} Feeds",
         language="en",
         updated=timezone.now(),
     )
@@ -257,7 +261,11 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
         # 收集当前feed的条目
-        for entry in reversed(feed.filtered_entries.order_by("-pubdate")[: feed.max_posts]):
+        entries = feed.filtered_entries
+        if entries is None:
+            continue
+
+        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
 

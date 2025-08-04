@@ -6,7 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
-from tagulous.models import SingleTagField
+from tagulous.models import TagField
 
 
 class Feed(models.Model):
@@ -150,8 +150,14 @@ class Feed(models.Model):
         null=True,
         help_text=_("Addtional Prompt for translation and summary"),
     )
-    category = SingleTagField(
-        force_lowercase=True, blank=True, help_text=_("Enter a category string")
+    # category = SingleTagField(
+    #     force_lowercase=True, blank=True, help_text=_("Enter a category string")
+    # )
+    tags = models.ManyToManyField(
+        "Tag",
+        blank=True,
+        related_name="feeds",
+        verbose_name=_("Tags")
     )
 
     total_tokens = models.IntegerField(_("Tokens Cost"), default=0)

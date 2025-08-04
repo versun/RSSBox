@@ -76,23 +76,23 @@ class RSSViewTest(TestCase):
         response = self.client.get(url, follow=True)
         self.assertEqual(response.status_code, 404)
 
-class CategoryViewTest(TestCase):
+class tagViewTest(TestCase):
     def setUp(self):
         self.client = Client()
         self.feed = Feed.objects.create(
             name="Test Feed",
             feed_url="https://example.com/feed.xml",
             target_language="en",
-            category="testcat"
+            tag="testcat"
         )
 
-    def test_category_view_200_or_404(self):
-        url = "/rss/category/testcat"
+    def test_tag_view_200_or_404(self):
+        url = "/rss/tag/testcat"
         response = self.client.get(url, follow=True)
         self.assertIn(response.status_code, [200, 404])
 
-    def test_category_view_404(self):
-        url = "/rss/category/notexistcat"
+    def test_tag_view_404(self):
+        url = "/rss/tag/notexistcat"
         response = self.client.get(url, follow=True)
         self.assertEqual(response.status_code, 404)
 
@@ -128,7 +128,7 @@ class CacheFunctionTest(TestCase):
             name="Test Feed",
             feed_url="https://example.com/feed.xml",
             target_language="en",
-            category="testcat"
+            tag="testcat"
         )
         self.slug = self.feed.slug or "test-feed-slug"
         if not self.feed.slug:
@@ -152,18 +152,18 @@ class CacheFunctionTest(TestCase):
         self.assertIsNone(result)
 
     @patch("core.cache.merge_feeds_into_one_atom")
-    def test_cache_category_success(self, mock_merge):
+    def test_cache_tag_success(self, mock_merge):
         mock_merge.return_value = "<feed>merged</feed>"
-        result = cache_module.cache_category("testcat")
-        cache_key = "cache_category_testcat_t_xml"
+        result = cache_module.cache_tag("testcat")
+        cache_key = "cache_tag_testcat_t_xml"
         self.assertEqual(result, "<feed>merged</feed>")
         self.assertEqual(cache.get(cache_key), "<feed>merged</feed>")
         mock_merge.assert_called_once()
 
     @patch("core.cache.merge_feeds_into_one_atom")
-    def test_cache_category_none(self, mock_merge):
+    def test_cache_tag_none(self, mock_merge):
         mock_merge.return_value = None
-        result = cache_module.cache_category("testcat")
+        result = cache_module.cache_tag("testcat")
         self.assertIsNone(result)
 
 

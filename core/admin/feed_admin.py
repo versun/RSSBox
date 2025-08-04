@@ -11,13 +11,14 @@ from core.actions import (
     export_translated_feed_as_opml,
     feed_force_update,
     feed_batch_modify,
+    clean_translated_content,
+    clean_ai_summary
 )
 from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
 from core.views import import_opml
 from core.management.commands.update_feeds import update_single_feed
 from core.admin import core_admin_site
-
 
 class FeedAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
@@ -29,17 +30,16 @@ class FeedAdmin(admin.ModelAdmin):
         "translator",
         "target_language",
         "translation_options",
-        "simple_update_frequency",
-        "last_fetch",
-        "total_tokens",
-        "total_characters",
-        "show_category",
+        "show_filters",
+        "fetch_info",
+        "cost_info",
+        "show_tags",
     ]
-    search_fields = ["name", "feed_url", "category__name", "slug", "author", "link"]
+    search_fields = ["name", "feed_url", "slug", "author", "link"]
     list_filter = [
+        "tags",
         "fetch_status",
         "translation_status",
-        "category",
         "translate_title",
         "translate_content",
         "summary",
@@ -53,7 +53,7 @@ class FeedAdmin(admin.ModelAdmin):
         "last_translate",
         "show_log",
     ]
-    autocomplete_fields = ["filters"]
+    autocomplete_fields = ["filters","tags"]
     fieldsets = (
         # 基础信息组（始终可见）
         (
@@ -64,7 +64,7 @@ class FeedAdmin(admin.ModelAdmin):
                     "name",
                     "max_posts",
                     "simple_update_frequency",
-                    "category",
+                    "tags",
                     "fetch_article",
                 ),
                 # "description": "内容源的基本识别信息和限制设置"
@@ -115,6 +115,8 @@ class FeedAdmin(admin.ModelAdmin):
         export_original_feed_as_opml,
         export_translated_feed_as_opml,
         feed_batch_modify,
+        clean_translated_content,
+        clean_ai_summary,
     ]
     list_per_page = 20
 
@@ -192,7 +194,7 @@ class FeedAdmin(admin.ModelAdmin):
     def translator(self, obj):
         return obj.translator
 
-    @admin.display(description=_("Translated Feed"))
+    @admin.display(description=_("Translated Status"))
     def translated_feed(
         self, obj
     ):  # 显示3个元素：translated_status、feed_url、json_url
@@ -209,7 +211,7 @@ class FeedAdmin(admin.ModelAdmin):
             "json",  # 4
         )
 
-    @admin.display(description=_("Fetch Feed"))
+    @admin.display(description=_("Fetch Status"))
     def fetch_feed(self, obj):  # 显示3个元素：fetch状态、原url、代理feed
         return format_html(
             "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
@@ -252,18 +254,42 @@ class FeedAdmin(admin.ModelAdmin):
             """,
             mark_safe(obj.log),
         )
-
-    @admin.display(description=_("Category"))
-    def show_category(self, obj):
-        if not obj.category:
-            return ""
+    
+    @admin.display(description=_("Fetch Info"))
+    def fetch_info(self, obj):
         return format_html(
-            "<a href='{0}' target='_blank'>{1}</a><br><a href='{2}' target='_blank'>rss</a> | <a href='{3}' target='_blank'>json</a>",
-            f"/rss/category/proxy/{obj.category.name}",
-            obj.category.name,
-            f"/rss/category/{obj.category.name}",
-            f"/rss/category/json/{obj.category.name}",
+            "<span>{0}</span><br><span>{1}</span>",
+            self.simple_update_frequency(obj),
+            obj.last_fetch.strftime("%Y-%m-%d %H:%M:%S") if obj.last_fetch else "-",
         )
+
+    @admin.display(description=_("Cost Info"))
+    def cost_info(self, obj):
+        return format_html(
+            "<span>tokens:{0}</span><br><span>characters:{1}</span>",
+            obj.total_tokens,
+            obj.total_characters,
+        )
+
+    @admin.display(description=_("Filters"))
+    def show_filters(self, obj):
+        if not obj.filters.exists():
+            return "-"
+        filters_html = "<br>".join(
+            f"<a href='{reverse('admin:core_filter_change', args=[f.id])}'>{f.name}</a>"
+            for f in obj.filters.all()
+        )
+        return format_html(filters_html)
+    
+    @admin.display(description=_("tags"))
+    def show_tags(self, obj):
+        if not obj.tags:
+            return "-"
+        tags_html = "<br>".join(
+            f"<a href='{reverse('admin:core_tag_change', args=[t.id])}'>#{t.name}</a>"
+            for t in obj.tags.all()
+        )
+        return format_html(tags_html)
 
 
 core_admin_site.register(Feed, FeedAdmin)

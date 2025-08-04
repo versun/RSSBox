@@ -312,7 +312,7 @@ TASK: Generate concise daily briefings
 """
 
 default_filter_prompt = """
-You are an advanced RSS content curator. Analyze each article following these protocols:
+You are an advanced RSS content curator. Analyze the article following these protocols:
 
 1. **Cross-article Deduplication**:
    - Identify duplicate content using semantic similarity
@@ -331,18 +331,12 @@ You are an advanced RSS content curator. Analyze each article following these pr
    - Uses sensational punctuation (e.g., "SHOCKING!", "You won't BELIEVE...")
    - Poses unanswered questions ("What happened next?")
    - Employs urgency/scarcity tactics ("Act NOW!")
-
-4. **Content Quality Threshold**
-   Discard if:
-   - Readability score <20 (Flesch-Kincaid)
-   - >10 grammatical errors/100 words
 """
 
 output_format_for_filter_prompt = """
 
-**Output Format Requirements**
-• STRICT FORMAT: JSON array of retained IDs that meet all criteria
-• EXAMPLE: ["id123","id456"]
+**Output Requirements**
+• Only return "Passed" or "Blocked" based on the above checks.
 • ABSOLUTELY NO:
   - Explanations
   - Metadata

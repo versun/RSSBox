@@ -157,7 +157,7 @@ msgid "Translation Options"
 msgstr "翻译选项"
 
 #: core/forms.py:71
-msgid "Optonal, default use the feed title"
+msgid "Optional, default use the feed title"
 msgstr "可选，默认使用源标题"
 
 #: core/forms.py:77

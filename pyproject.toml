@@ -1,6 +1,6 @@
 [project]
 name = "rss-translator"
-version = "2025.8.1"
+version = "2025.8.4"
 description = "A Django-based RSS translation service. Compatible with uv/uvicorn."
 requires-python = ">=3.12"
 dependencies = [
@@ -28,6 +28,7 @@ dependencies = [
     "bx_django_utils>=89",
     "fake-useragent>=2.2.0",
     "httpx>=0.28.1",
+    "django-autoslug>=1.9.9",
 ]
 
 [tool.uv]

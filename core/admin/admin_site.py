@@ -10,7 +10,7 @@ from utils.modelAdmin_utils import (
 )
 from django.shortcuts import redirect,render
 
-from core.models import Feed, Filter
+from core.models import Feed, Filter, Tag
 
 class CoreAdminSite(AdminSite):
     site_header = _("RSS Translator Admin")
@@ -48,8 +48,23 @@ class CoreAdminSite(AdminSite):
                         "add_url": "/core/feed/add/",
                         "view_only": False,
                     },
+                     {
+                        "model": Tag,
+                        "name": "Tags",
+                        "object_name": "Tag",
+                        "perms": {
+                            "add": True,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/tag/",
+                        "add_url": "/core/tag/add/",
+                        "view_only": False,
+                    },
                 ],
             },
+            
             {
                 "name": "",
                 "app_label": "core",
