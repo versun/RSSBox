@@ -45,6 +45,4 @@ class Tag(models.Model):
             old_instance = Tag.objects.get(pk=self.pk)
             if old_instance.name != self.name:  # 如果name被修改
                 self.slug = None  # 设置slug为None，让AutoSlugField重新生成
-        #执行cache tag？还是添加force update
-        
         super().save(*args, **kwargs)

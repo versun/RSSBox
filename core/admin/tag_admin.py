@@ -6,13 +6,15 @@ from django.urls import  reverse
 from core.models import Tag
 from utils.task_manager import task_manager
 from core.admin import core_admin_site
+from core.actions import tag_force_update
 
 class TagAdmin(admin.ModelAdmin):
-    list_display = ("name","show_url","show_filters",)
+    list_display = ("name","show_url","show_filters","last_updated",)
     search_fields = ["name","slug"]
     readonly_fields = ["total_tokens","last_updated","etag","show_url"]
     autocomplete_fields = ["filters",]
-    fields = ["name","filters","show_url"]
+    fields = ["name","filters","show_url","last_updated"]
+    actions = [tag_force_update]
 
     @admin.display(description=_("Filters"))
     def show_filters(self, obj):

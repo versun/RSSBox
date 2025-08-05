@@ -1,5 +1,7 @@
 import logging
 from datetime import datetime
+from django.utils import timezone
+
 from ast import literal_eval
 from django.contrib import admin,messages
 from django.shortcuts import render, redirect
@@ -14,6 +16,7 @@ from core.admin import core_admin_site
 from core.models import Feed, Filter, Tag
 from utils.task_manager import task_manager
 from .management.commands.update_feeds import update_multiple_feeds
+from core.cache import cache_tag
 
 
 
@@ -156,8 +159,19 @@ def feed_force_update(modeladmin, request, queryset):
             instance.save()
 
     feeds = queryset
-    task_manager.submit_task(f"Force Update Feeds", update_multiple_feeds, feeds)
+    task_manager.submit_task("Force Update Feeds", update_multiple_feeds, feeds)
 
+@admin.display(description=_("Force update"))
+def tag_force_update(modeladmin, request, queryset):
+    logging.info("Call tag_force_update: %s", queryset)
+
+    with transaction.atomic():
+        for instance in queryset:
+            # cache_tag(instance.slug,"t","xml")
+            # cache_tag(instance.slug,"t","json")
+            task_manager.submit_task("Force Update Tags", cache_tag, instance.slug,"t","xml")
+            instance.last_updated = timezone.now()
+            instance.save()
 
 @admin.display(description=_("Batch modification"))
 def feed_batch_modify(modeladmin, request, queryset):

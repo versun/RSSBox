@@ -156,6 +156,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
 
             translate_feed(feed, target_field=target_field)
             feed.translation_status = True
+            feed.last_translate = timezone.now()
             feed.log += f"{timezone.now()} Translate Completed <br>"
         except Exception as e:
             logging.error(
@@ -171,7 +172,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             del feed
 
     Feed.objects.bulk_update(
-        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+        feeds, fields=["translation_status", "log", "total_tokens", "total_characters", "last_translate"]
     )
     # Clear the list after processing
     del feeds
