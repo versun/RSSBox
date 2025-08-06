@@ -106,6 +106,16 @@ class DeepLAgentAdmin(AgentAdmin):
     ]
 
 
+class LibreTranslateAgentAdmin(AgentAdmin):  
+    fields = ["name", "api_key", "server_url", "max_characters"]
+    list_display = [
+        "name",
+        "is_valid",
+        "masked_api_key",
+        "server_url",
+        "max_characters",
+    ]
+
 class TestAgentAdmin(AgentAdmin):
     fields = ["name", "translated_text", "max_characters", "max_tokens", "interval"]
     list_display = [
@@ -120,6 +130,7 @@ class TestAgentAdmin(AgentAdmin):
 
 core_admin_site.register(OpenAIAgent, OpenAIAgentAdmin)
 core_admin_site.register(DeepLAgent, DeepLAgentAdmin)
+core_admin_site.register(LibreTranslateAgent, LibreTranslateAgentAdmin)
 
 if settings.DEBUG:
     core_admin_site.register(TestAgent, TestAgentAdmin)

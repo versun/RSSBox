@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -539,6 +539,15 @@ wheels = [
 ]
 
 [[package]]
+name = "libretranslatepy"
+version = "2.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/d3/dd02a586e021d088c8de7eba641dedca54f71ca81c913e390d2f45068c2c/libretranslatepy-2.1.4.tar.gz", hash = "sha256:800e902eed1b8b32d310ec72b204c6cfdcf3e4aa7cda5bfbcb7bbce8933e6369", size = 3446, upload-time = "2024-04-16T21:48:06.256Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/d0/02e0d5c591bdb6cb8431c94b26f5b62e4b1a3b8f72eec35f18f82ecd10b2/libretranslatepy-2.1.4-py3-none-any.whl", hash = "sha256:84fd16181e021e87c2d34351d928c01d66dba36e01814500aee8731dd138b822", size = 3525, upload-time = "2024-04-16T21:48:02.188Z" },
+]
+
+[[package]]
 name = "lxml"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1059,7 +1068,7 @@ wheels = [
 
 [[package]]
 name = "rss-translator"
-version = "2025.8.1"
+version = "2025.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },
@@ -1077,6 +1086,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "html2text" },
     { name = "httpx" },
+    { name = "libretranslatepy" },
     { name = "lxml" },
     { name = "lxml-html-clean" },
     { name = "mistune" },
@@ -1105,6 +1115,7 @@ requires-dist = [
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "html2text", specifier = ">=2025.4.15" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "libretranslatepy", specifier = ">=2.1.4" },
     { name = "lxml", specifier = ">=5.4.0" },
     { name = "lxml-html-clean", specifier = ">=0.4.2" },
     { name = "mistune", specifier = ">=3.1.3" },

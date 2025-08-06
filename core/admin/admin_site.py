@@ -104,7 +104,7 @@ class AgentPaginator(Paginator):
 
     # Copied from Huey's SqliteStorage with some modifications to allow pagination
     def enqueued_items(self, limit, offset):
-        agents = [OpenAIAgent, DeepLAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent]
+        agents = [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
         agent_list = []
         for model in agents:
             objects = (

@@ -9,7 +9,8 @@ import datetime
 from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
-from libretranslatepy import LibreTranslateAPI
+from core.models._libretranslate import LibreTranslateAPI
+#from libretranslatepy import LibreTranslateAPI
 
 class Agent(models.Model):
     name = models.CharField(_("Name"), max_length=100, unique=True)
@@ -371,7 +372,7 @@ class LibreTranslateAgent(Agent):
         'Russian': 'ru',
         'Japanese': 'ja'
     }
-    
+
     def _init(self):
         return LibreTranslateAPI(
             api_key=self.api_key,
@@ -382,7 +383,7 @@ class LibreTranslateAgent(Agent):
         verbose_name = "LibreTranslate"
         verbose_name_plural = "LibreTranslate"
 
-    def translate(self, text: str, target_language: str, **kwargs) -> dict:
+    def translate(self, text: str, target_language: str, text_type: str = "html", **kwargs) -> dict:
         """
         Translate text using LibreTranslate API
         Returns dict with 'text', 'tokens', 'characters' keys
@@ -391,7 +392,7 @@ class LibreTranslateAgent(Agent):
         target_lang = self.language_map.get(target_language, 'en')
 
         try:
-            translated_text = translator.translate(text, "auto", target_lang)
+            translated_text = translator.translate(text, "auto", target_lang, "html")
             return {"text": translated_text, "characters": len(text)}
 
         except Exception as e:
