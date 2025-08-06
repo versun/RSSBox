@@ -8,6 +8,7 @@ env*
 *.csv
 .idea/
 .DS_Store
+.vscode/settings.json
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
