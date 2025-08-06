@@ -370,8 +370,41 @@ class LibreTranslateAgent(Agent):
         'Italian': 'it',
         'Portuguese': 'pt',
         'Russian': 'ru',
-        'Japanese': 'ja'
+        'Japanese': 'ja',
+        'Dutch': 'nl',
+        'Korean': 'ko',
+        'Czech': 'cs',
+        'Danish': 'da',
+        'Indonesian': 'id',
+        'Polish': 'pl',
+        'Hunarian': 'hu',
+        'Norwegian Bokmål': 'nb',
+        'Swedish': 'sv',
+        'Turkish': 'tr'
     }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.available_languages = self._get_available_languages()
+
+    def _get_available_languages(self):
+        try:
+            translator = self._init()
+            available_codes = [lang['code'] for lang in translator.languages()]
+
+            # Create a reverse map for easier lookup
+            reverse_language_map = {v: k for k, v in self.language_map.items()}
+
+            # Build the new dictionary
+            available_dict = {
+                reverse_language_map[code]: code
+                for code in available_codes
+                if code in reverse_language_map
+            }
+            return available_dict
+        except Exception as e:
+            logging.error(f"Error fetching available languages: {e}")
+            return {}
 
     def _init(self):
         return LibreTranslateAPI(
@@ -389,7 +422,7 @@ class LibreTranslateAgent(Agent):
         Returns dict with 'text', 'tokens', 'characters' keys
         """
         translator = self._init()
-        target_lang = self.language_map.get(target_language, 'en')
+        target_lang = self.available_languages.get(target_language, 'en')
 
         try:
             translated_text = translator.translate(text, "auto", target_lang, "html")
