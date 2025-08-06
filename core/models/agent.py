@@ -9,6 +9,7 @@ import datetime
 from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
+from libretranslatepy import LibreTranslateAPI
 
 class Agent(models.Model):
     name = models.CharField(_("Name"), max_length=100, unique=True)
@@ -345,6 +346,67 @@ class DeepLAgent(Agent):
             logging.error("DeepLTranslator->%s: %s", e, text)
         return {"text": translated_text, "characters": len(text)}
 
+
+class LibreTranslateAgent(Agent):
+    api_key = EncryptedCharField(_("API Key"), max_length=255, blank=True)
+    server_url = models.URLField(
+        verbose_name='Server URL',
+        default='https://libretranslate.com',
+        help_text='LibreTranslate server endpoint'
+    )
+    max_characters = models.IntegerField(
+        default=5000,
+        verbose_name='Max Characters',
+        help_text='Maximum characters per translation request'
+    )
+    language_map = {
+        'Chinese Simplified': 'zh',
+        'Chinese Traditional': 'zh',
+        'English': 'en',
+        'Spanish': 'es',
+        'French': 'fr',
+        'German': 'de',
+        'Italian': 'it',
+        'Portuguese': 'pt',
+        'Russian': 'ru',
+        'Japanese': 'ja'
+    }
+    
+    def _init(self):
+        return LibreTranslateAPI(
+            api_key=self.api_key,
+            url=self.server_url
+        )
+
+    class Meta:
+        verbose_name = "LibreTranslate"
+        verbose_name_plural = "LibreTranslate"
+
+    def translate(self, text: str, target_language: str, **kwargs) -> dict:
+        """
+        Translate text using LibreTranslate API
+        Returns dict with 'text', 'tokens', 'characters' keys
+        """
+        translator = self._init()
+        target_lang = self.language_map.get(target_language, 'en')
+
+        try:
+            translated_text = translator.translate(text, "auto", target_lang)
+            return {"text": translated_text, "characters": len(text)}
+
+        except Exception as e:
+            logging.error(f"LibreTranslate API error: {e}")
+            return {'text': text,'characters': len(text)}
+
+    def validate(self) -> bool:
+        """Validate LibreTranslate connection"""
+        try:
+            tester = self._init()
+            test = tester.translate("Hello World", "en", "es")
+            return True
+        except Exception as e:
+            logging.error(f"LibreTranslate validation error: {e}")
+            return False
 
 class TestAgent(Agent):
     translated_text = models.TextField(default="@@Translated Text@@")

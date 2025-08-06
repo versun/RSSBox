@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.shortcuts import redirect
-from core.models.agent import OpenAIAgent, DeepLAgent, TestAgent
+from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 from utils.modelAdmin_utils import status_icon
 from core.admin import core_admin_site
 

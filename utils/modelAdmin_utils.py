@@ -1,9 +1,9 @@
 from django.utils.html import format_html
 from django.contrib.contenttypes.models import ContentType
-from core.models import OpenAIAgent, DeepLAgent, TestAgent
+from core.models import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 
 
-AGENT_MODELS = [OpenAIAgent, DeepLAgent, TestAgent]
+AGENT_MODELS = [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent]
 
 def get_translator_and_summary_choices():
     # Cache ContentTypes to avoid repetitive database calls

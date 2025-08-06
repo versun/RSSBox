@@ -4,7 +4,7 @@ from django.core.paginator import Paginator
 from django.urls import path
 from django.conf import settings
 from django.utils.http import url_has_allowed_host_and_scheme
-from core.models.agent import OpenAIAgent, DeepLAgent, TestAgent
+from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 from utils.modelAdmin_utils import (
     status_icon,
 )
@@ -153,7 +153,7 @@ def agent_add(request):
             else redirect("/")
         )
     else:
-        models = [OpenAIAgent, DeepLAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent]
+        models = [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
         agent_list = []
         for model in models:
             agent_list.append(
