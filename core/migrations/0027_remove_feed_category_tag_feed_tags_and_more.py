@@ -2,6 +2,7 @@
 
 import autoslug.fields
 from django.db import migrations, models, connection
+from utils.backup_db import backup_db
 
 
 def table_exists(schema_editor, table_name):
@@ -73,6 +74,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(backup_db),
         migrations.CreateModel(
             name="Tag",
             fields=[
