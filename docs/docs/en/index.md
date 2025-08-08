@@ -20,6 +20,8 @@ Official website: [rsstranslator.com](https://rsstranslator.com)
 7. View token/character usage per source
 8. AI content summarization
 9. Full-text fetching
+10. Keyword Filtering and AI Intelligent Filtering
+11. Combine multiple RSS feeds into one unified feed via tag, and apply filters too!
    
 Supported translation engines:
 - DeepL
