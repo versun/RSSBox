@@ -11,6 +11,7 @@ from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
 
+
 class Agent(models.Model):
     name = models.CharField(_("Name"), max_length=100, unique=True)
     valid = models.BooleanField(_("Valid"), null=True)
@@ -21,7 +22,6 @@ class Agent(models.Model):
         blank=True,
         null=True,
     )
-
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         raise NotImplementedError(
@@ -290,7 +290,10 @@ class OpenAIAgent(Agent):
         passed = False
         tokens = 0
         results = self.completions(
-            text, system_prompt=system_prompt+settings.output_format_for_filter_prompt, max_tokens=max_tokens, **kwargs
+            text,
+            system_prompt=system_prompt + settings.output_format_for_filter_prompt,
+            max_tokens=max_tokens,
+            **kwargs,
         )
 
         if results["text"] and "Passed" in results["text"]:
@@ -300,7 +303,7 @@ class OpenAIAgent(Agent):
         else:
             logging.info(">>> Filter Blocked: %s", text)
             passed = False
-        
+
         return {"passed": passed, "tokens": tokens}
 
 
@@ -352,7 +355,7 @@ class DeepLAgent(Agent):
             self.log = f"{timezone.now()}: {str(e)}"
             return False
         finally:
-                self.save()
+            self.save()
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         logging.info(">>> DeepL Translate [%s]: %s", target_language, text)
@@ -404,8 +407,8 @@ class TestAgent(Agent):
         logging.info(">>> Test Summarize [%s]: %s", target_language, text)
         return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
 
-    
-    def filter(self,text: str, **kwargs):
+    def filter(self, text: str, **kwargs):
         logging.info(">>> Test Filter")
         import random
+
         return {"passed": random.choice([True, False]), "tokens": 10}

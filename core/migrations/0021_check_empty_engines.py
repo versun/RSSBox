@@ -2,10 +2,11 @@
 
 from django.db import migrations
 
+
 def verify_generic_fks(apps, schema_editor):
-    Feed = apps.get_model('core', 'Feed')
-    ContentType = apps.get_model('contenttypes', 'ContentType')
-    
+    Feed = apps.get_model("core", "Feed")
+    ContentType = apps.get_model("contenttypes", "ContentType")
+
     for feed in Feed.objects.all():
         # 检查翻译器外键
         if feed.translator_content_type_id:
@@ -15,7 +16,9 @@ def verify_generic_fks(apps, schema_editor):
                 try:
                     model_class = apps.get_model(ct.app_label, ct.model)
                     # 检查对象是否存在
-                    if not model_class.objects.filter(pk=feed.translator_object_id).exists():
+                    if not model_class.objects.filter(
+                        pk=feed.translator_object_id
+                    ).exists():
                         feed.translator_content_type = None
                         feed.translator_object_id = None
                 except LookupError:  # 模型不存在
@@ -24,7 +27,7 @@ def verify_generic_fks(apps, schema_editor):
             except ContentType.DoesNotExist:
                 feed.translator_content_type = None
                 feed.translator_object_id = None
-        
+
         # 检查摘要生成器外键
         if feed.summarizer_content_type_id:
             try:
@@ -33,7 +36,9 @@ def verify_generic_fks(apps, schema_editor):
                 try:
                     model_class = apps.get_model(ct.app_label, ct.model)
                     # 检查对象是否存在
-                    if not model_class.objects.filter(pk=feed.summarizer_object_id).exists():
+                    if not model_class.objects.filter(
+                        pk=feed.summarizer_object_id
+                    ).exists():
                         feed.summarizer_content_type = None
                         feed.summarizer_object_id = None
                 except LookupError:  # 模型不存在
@@ -42,20 +47,21 @@ def verify_generic_fks(apps, schema_editor):
             except ContentType.DoesNotExist:
                 feed.summarizer_content_type = None
                 feed.summarizer_object_id = None
-        
+
         # 只保存有变化的字段
-        feed.save(update_fields=[
-            'translator_content_type', 
-            'translator_object_id',
-            'summarizer_content_type',
-            'summarizer_object_id'
-        ])
+        feed.save(
+            update_fields=[
+                "translator_content_type",
+                "translator_object_id",
+                "summarizer_content_type",
+                "summarizer_object_id",
+            ]
+        )
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0020_entry'),
+        ("core", "0020_entry"),
     ]
 
     operations = [

@@ -7,6 +7,7 @@ from django.core.cache import cache
 from . import cache as cache_module
 from .tasks import handle_single_feed_fetch, handle_feeds_fetch
 
+
 class FeedModelTest(TestCase):
     def test_create_feed(self):
         feed = Feed.objects.create(
@@ -26,6 +27,7 @@ class FeedModelTest(TestCase):
             target_language="en",
         )
         self.assertEqual(str(feed), feed.feed_url)
+
 
 class EntryModelTest(TestCase):
     def setUp(self):
@@ -57,6 +59,7 @@ class EntryModelTest(TestCase):
         )
         self.assertEqual(str(entry), "Title2")
 
+
 class RSSViewTest(TestCase):
     def setUp(self):
         self.client = Client()
@@ -76,10 +79,12 @@ class RSSViewTest(TestCase):
         response = self.client.get(url, follow=True)
         self.assertEqual(response.status_code, 404)
 
+
 class AdminSiteTest(TestCase):
     def setUp(self):
         from core.admin.admin_site import core_admin_site
         from .models import Feed, Entry
+
         self.site = core_admin_site
         self.feed = Feed
         self.entry = Entry
@@ -91,16 +96,17 @@ class AdminSiteTest(TestCase):
 
     def test_custom_admin_urls(self):
         # 测试自定义 admin url 是否可访问（未登录会重定向）
-        response_list = self.client.get('/admin/translator/list', follow=True)
-        response_add = self.client.get('/admin/translator/add', follow=True)
+        response_list = self.client.get("/admin/translator/list", follow=True)
+        response_add = self.client.get("/admin/translator/add", follow=True)
         self.assertIn(response_list.status_code, [200, 302, 403])
         self.assertIn(response_add.status_code, [200, 302, 403])
 
     def test_site_titles(self):
         # 测试自定义 admin 的站点标题属性
-        self.assertEqual(str(self.site.site_header), 'RSS Translator Admin')
-        self.assertEqual(str(self.site.site_title), 'RSS Translator')
-        self.assertEqual(str(self.site.index_title), 'Dashboard')
+        self.assertEqual(str(self.site.site_header), "RSS Translator Admin")
+        self.assertEqual(str(self.site.site_title), "RSS Translator")
+        self.assertEqual(str(self.site.index_title), "Dashboard")
+
 
 # class tagViewTest(TestCase):
 #     def setUp(self):
@@ -166,7 +172,6 @@ class AdminSiteTest(TestCase):
 #         self.assertIsNone(result)
 
 
-
 class TasksTestCase(TestCase):
     def setUp(self):
         self.feed = Feed.objects.create(
@@ -191,18 +196,22 @@ class TasksTestCase(TestCase):
                     "published_parsed": None,
                     "updated_parsed": None,
                 },
-                entries=[{
-                    "id": "guid1",
-                    "link": "https://example.com/post1",
-                    "author": "Author",
-                    "title": "Title1",
-                    "summary": "Summary1",
-                    "enclosures_xml": None,
-                    "published_parsed": None,
-                    "updated_parsed": None,
-                }],
-                get=lambda k, default=None: None if k == "etag" else mock_fetch_feed.return_value["feed"].feed.get(k, default)
-            )
+                entries=[
+                    {
+                        "id": "guid1",
+                        "link": "https://example.com/post1",
+                        "author": "Author",
+                        "title": "Title1",
+                        "summary": "Summary1",
+                        "enclosures_xml": None,
+                        "published_parsed": None,
+                        "updated_parsed": None,
+                    }
+                ],
+                get=lambda k, default=None: None
+                if k == "etag"
+                else mock_fetch_feed.return_value["feed"].feed.get(k, default),
+            ),
         }
         self.feed.max_posts = 5
         handle_single_feed_fetch(self.feed)
@@ -213,7 +222,11 @@ class TasksTestCase(TestCase):
 
     @patch("core.tasks.fetch_feed")
     def test_handle_single_feed_fetch_error(self, mock_fetch_feed):
-        mock_fetch_feed.return_value = {"error": "Network error", "update": False, "feed": None}
+        mock_fetch_feed.return_value = {
+            "error": "Network error",
+            "update": False,
+            "feed": None,
+        }
         handle_single_feed_fetch(self.feed)
         self.feed.refresh_from_db()
         self.assertFalse(self.feed.fetch_status)
@@ -221,7 +234,9 @@ class TasksTestCase(TestCase):
 
     @patch("core.tasks.handle_single_feed_fetch")
     def test_handle_feeds_fetch(self, mock_handle_single):
-        feed2 = Feed.objects.create(name="Feed2", feed_url="https://example.com/2.xml", target_language="en")
+        feed2 = Feed.objects.create(
+            name="Feed2", feed_url="https://example.com/2.xml", target_language="en"
+        )
         feeds = [self.feed, feed2]
         handle_feeds_fetch(feeds)
         self.assertEqual(mock_handle_single.call_count, 2)

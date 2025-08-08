@@ -5,36 +5,51 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('contenttypes', '0002_remove_content_type_name'),
-        ('core', '0025_migrate_translator_to_agent'),
+        ("contenttypes", "0002_remove_content_type_name"),
+        ("core", "0025_migrate_translator_to_agent"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='filter',
-            name='agent_content_type',
-            field=models.ForeignKey(blank=True, default=None, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='filter_agent', to='contenttypes.contenttype'),
+            model_name="filter",
+            name="agent_content_type",
+            field=models.ForeignKey(
+                blank=True,
+                default=None,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="filter_agent",
+                to="contenttypes.contenttype",
+            ),
         ),
         migrations.AddField(
-            model_name='filter',
-            name='agent_object_id',
+            model_name="filter",
+            name="agent_object_id",
             field=models.PositiveIntegerField(blank=True, default=None, null=True),
         ),
         migrations.AddField(
-            model_name='filter',
-            name='filter_method',
-            field=models.PositiveSmallIntegerField(choices=[(0, 'Keyword Only'), (1, 'AI Only'), (2, 'Both Keyword and AI (First Keyword, then AI)')], default=0, help_text='Choose which filtering method to apply', verbose_name='Filter Method'),
+            model_name="filter",
+            name="filter_method",
+            field=models.PositiveSmallIntegerField(
+                choices=[
+                    (0, "Keyword Only"),
+                    (1, "AI Only"),
+                    (2, "Both Keyword and AI (First Keyword, then AI)"),
+                ],
+                default=0,
+                help_text="Choose which filtering method to apply",
+                verbose_name="Filter Method",
+            ),
         ),
         migrations.AddField(
-            model_name='filter',
-            name='filter_prompt',
-            field=models.TextField(blank=True, null=True, verbose_name='Filter Prompt'),
+            model_name="filter",
+            name="filter_prompt",
+            field=models.TextField(blank=True, null=True, verbose_name="Filter Prompt"),
         ),
         migrations.AddField(
-            model_name='filter',
-            name='total_tokens',
-            field=models.PositiveIntegerField(default=0, verbose_name='Tokens Cost'),
+            model_name="filter",
+            name="total_tokens",
+            field=models.PositiveIntegerField(default=0, verbose_name="Tokens Cost"),
         ),
     ]

@@ -72,9 +72,7 @@ class Command(BaseCommand):
                 )
             )
         except Exception as e:
-            logging.exception(
-                f"Command update_feeds_for_frequency failed: {str(e)}"
-            )
+            logging.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
             self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
             sys.exit(1)
         finally:
@@ -124,7 +122,9 @@ def update_multiple_feeds(feeds: list):
     try:
         # 先执行所有feed更新任务
         futures = [
-            task_manager.submit_task(f"update_feed_{feed.name}", update_single_feed, feed)
+            task_manager.submit_task(
+                f"update_feed_{feed.name}", update_single_feed, feed
+            )
             for feed in feeds
         ]
 
@@ -157,7 +157,11 @@ def update_multiple_feeds(feeds: list):
                 )
 
         # 获取所有 feeds 关联的 tags（去重）
-        tag_ids = set(chain.from_iterable(feed.tags.values_list('id', flat=True) for feed in feeds))
+        tag_ids = set(
+            chain.from_iterable(
+                feed.tags.values_list("id", flat=True) for feed in feeds
+            )
+        )
         tags = Tag.objects.filter(id__in=tag_ids)
         for tag in tags:
             try:
@@ -189,12 +193,12 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         # Use iterator to reduce initial memory load, then convert to list for multiple uses.
         feeds_iterator = Feed.objects.filter(update_frequency=frequency_val).iterator()
         feeds_list = list(feeds_iterator)
-        
+
         log = f"{current_time}: Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds_list)}"
         logging.info(log)
         # output to stdout
         print(log)
-        
+
         update_multiple_feeds(feeds_list)
 
     except KeyError:

@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from autoslug import AutoSlugField
 
+
 class Tag(models.Model):
     name = models.CharField(
         max_length=255, blank=True, null=True, verbose_name=_("Name")
@@ -16,7 +17,7 @@ class Tag(models.Model):
 
     slug = AutoSlugField(
         verbose_name=_("URL Slug"),
-        populate_from='name',
+        populate_from="name",
         unique=True,
     )
 

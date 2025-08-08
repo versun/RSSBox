@@ -12,13 +12,14 @@ from core.actions import (
     feed_force_update,
     feed_batch_modify,
     clean_translated_content,
-    clean_ai_summary
+    clean_ai_summary,
 )
 from utils.modelAdmin_utils import status_icon
 from utils.task_manager import task_manager
 from core.views import import_opml
 from core.management.commands.update_feeds import update_single_feed
 from core.admin import core_admin_site
+
 
 class FeedAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
@@ -53,7 +54,7 @@ class FeedAdmin(admin.ModelAdmin):
         "last_translate",
         "show_log",
     ]
-    autocomplete_fields = ["filters","tags"]
+    autocomplete_fields = ["filters", "tags"]
     fieldsets = (
         # 基础信息组（始终可见）
         (
@@ -100,7 +101,7 @@ class FeedAdmin(admin.ModelAdmin):
             _("Status"),
             {
                 "fields": (
-                   "fetch_status",
+                    "fetch_status",
                     "translation_status",
                     "total_tokens",
                     "total_characters",
@@ -254,7 +255,7 @@ class FeedAdmin(admin.ModelAdmin):
             """,
             mark_safe(obj.log),
         )
-    
+
     @admin.display(description=_("Fetch Info"))
     def fetch_info(self, obj):
         return format_html(
@@ -270,15 +271,15 @@ class FeedAdmin(admin.ModelAdmin):
                 return str(n)
             elif n < 1000000:
                 # 避免显示不必要的小数点
-                return f"{n/1000:.1f}K".replace(".0K", "K")
+                return f"{n / 1000:.1f}K".replace(".0K", "K")
             else:
                 # 百万单位格式化
-                return f"{n/1000000:.1f}M".replace(".0M", "M")
-        
+                return f"{n / 1000000:.1f}M".replace(".0M", "M")
+
         return format_html(
             "<span>tokens:{}</span><br><span>characters:{}</span>",
             format_number(obj.total_tokens),
-            format_number(obj.total_characters)
+            format_number(obj.total_characters),
         )
 
     @admin.display(description=_("Filters"))
@@ -290,7 +291,7 @@ class FeedAdmin(admin.ModelAdmin):
             for f in obj.filters.all()
         )
         return format_html(filters_html)
-    
+
     @admin.display(description=_("tags"))
     def show_tags(self, obj):
         if not obj.tags:

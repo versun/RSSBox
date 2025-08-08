@@ -11,7 +11,10 @@ from core.admin import core_admin_site
 
 class AgentAdmin(admin.ModelAdmin):
     # get_model_perms = lambda self, request: {}  # 不显示在admin页面
-    readonly_fields = ["show_log",]
+    readonly_fields = [
+        "show_log",
+    ]
+
     def save_model(self, request, obj, form, change):
         logging.info("Call save_model: %s", obj)
         # obj.valid = None
@@ -74,15 +77,7 @@ class OpenAIAgentAdmin(AgentAdmin):
     fieldsets = (
         (
             _("Model Information"),
-            {
-                "fields": (
-                    "name",
-                    "api_key",
-                    "base_url",
-                    "model",
-                    "show_log"
-                )
-            },
+            {"fields": ("name", "api_key", "base_url", "model", "show_log")},
         ),
         (
             _("Prompts"),

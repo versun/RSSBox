@@ -18,7 +18,7 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
         return None
 
     # 缓存
-    cache.set(cache_key, atom_feed, feed.update_frequency or 86400) # default to 1 day
+    cache.set(cache_key, atom_feed, feed.update_frequency or 86400)  # default to 1 day
     logging.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
 
@@ -31,7 +31,7 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
     cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
 
     feeds = Feed.objects.filter(tags__name=tag)
-    max_frequency_feed = feeds.order_by('-update_frequency').first()
+    max_frequency_feed = feeds.order_by("-update_frequency").first()
     atom_feed = merge_feeds_into_one_atom(tag, feeds, feed_type)
 
     if not atom_feed:
@@ -39,6 +39,6 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
 
     # 缓存
     max_frequency = max_frequency_feed.update_frequency if max_frequency_feed else 86400
-    cache.set(cache_key, atom_feed,max_frequency)
+    cache.set(cache_key, atom_feed, max_frequency)
     logging.debug(f"Cached successfully with key {cache_key}")
     return atom_feed

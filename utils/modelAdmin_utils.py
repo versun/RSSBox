@@ -5,6 +5,7 @@ from core.models import OpenAIAgent, DeepLAgent, TestAgent
 
 AGENT_MODELS = [OpenAIAgent, DeepLAgent, TestAgent]
 
+
 def get_all_agent_choices():
     """
     获取所有代理选择项，包括翻译器和摘要引擎
@@ -24,6 +25,7 @@ def get_all_agent_choices():
     ]
     return agent_choices
 
+
 def get_ai_agent_choices():
     """
     获取所有AI代理选择项
@@ -42,6 +44,7 @@ def get_ai_agent_choices():
         ).values_list("id", "name")
     ]
     return ai_agent_choices
+
 
 def status_icon(status):
     match status:

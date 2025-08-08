@@ -281,7 +281,9 @@ Requirements:
 Important: Do not modify, remove, or alter any HTML tags, attributes, classes, IDs, or structural elements. Only translate the actual text content between tags.
 
 """
-default_summary_prompt = "Summarize the following text in {target_language} and return markdown format."
+default_summary_prompt = (
+    "Summarize the following text in {target_language} and return markdown format."
+)
 
 default_digest_prompt = """
 ROLE: Professional News Editor

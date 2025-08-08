@@ -26,7 +26,7 @@ class FilterAdmin(admin.ModelAdmin):
                 )
             },
         ),
-         (
+        (
             _("Keywords"),
             {
                 "fields": (
@@ -35,17 +35,11 @@ class FilterAdmin(admin.ModelAdmin):
                 )
             },
         ),
-         (
+        (
             _("AI"),
-            {
-                "fields": (
-                    "agent_option",
-                    "filter_prompt",
-                    "tokens_info"
-                )
-            },
+            {"fields": ("agent_option", "filter_prompt", "tokens_info")},
         ),
-    )   
+    )
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("keywords")
@@ -69,11 +63,11 @@ class FilterAdmin(admin.ModelAdmin):
                 return str(n)
             elif n < 1000000:
                 # 避免显示不必要的小数点
-                return f"{n/1000:.1f}K".replace(".0K", "K")
+                return f"{n / 1000:.1f}K".replace(".0K", "K")
             else:
                 # 百万单位格式化
-                return f"{n/1000000:.1f}M".replace(".0M", "M")
-        
+                return f"{n / 1000000:.1f}M".replace(".0M", "M")
+
         return format_html(
             "<span>{}</span>",
             format_number(obj.total_tokens),

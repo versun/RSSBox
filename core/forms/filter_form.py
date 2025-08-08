@@ -5,7 +5,8 @@ from core.models import Filter
 from utils.modelAdmin_utils import get_ai_agent_choices
 from tagulous.forms import TagField
 from django.forms import CheckboxSelectMultiple
- 
+
+
 class FilterForm(forms.ModelForm):
     FIELD_CHOICES = (
         ("original_title", _("Original Title")),
@@ -23,8 +24,13 @@ class FilterForm(forms.ModelForm):
 
     class Meta:
         model = Filter
-        exclude=["agent","filter_original_title", "filter_original_content",
-                 "filter_translated_title", "filter_translated_content"]
+        exclude = [
+            "agent",
+            "filter_original_title",
+            "filter_original_content",
+            "filter_translated_title",
+            "filter_translated_content",
+        ]
 
     target_field = forms.MultipleChoiceField(
         widget=CheckboxSelectMultiple,
@@ -35,12 +41,12 @@ class FilterForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(FilterForm, self).__init__(*args, **kwargs)
-         # 获取过滤器的代理选择项
+        # 获取过滤器的代理选择项
         self.fields["agent_option"].choices = get_ai_agent_choices()
-        
+
         # 如果是已创建的对象，设置默认值
         instance = getattr(self, "instance", None)
-        
+
         if instance and instance.pk:
             self.fields["target_field"].initial = []
             if instance.filter_original_title:
@@ -52,10 +58,12 @@ class FilterForm(forms.ModelForm):
             if instance.filter_translated_content:
                 self.fields["target_field"].initial.append("translated_content")
             if instance.agent_content_type and instance.agent_object_id:
-                self.fields["agent_option"].initial = (
+                self.fields[
+                    "agent_option"
+                ].initial = (
                     f"{instance.agent_content_type.id}:{instance.agent_object_id}"
                 )
-       
+
     def _process_agent(self, instance):
         if self.cleaned_data["agent_option"]:
             content_type_id, object_id = map(
@@ -86,7 +94,7 @@ class FilterForm(forms.ModelForm):
             instance.filter_translated_title = True
         if "translated_content" in selected_fields:
             instance.filter_translated_content = True
-    
+
     @transaction.atomic
     def save(self, commit=True):
         instance = super(FilterForm, self).save(commit=False)
@@ -98,4 +106,3 @@ class FilterForm(forms.ModelForm):
             instance.save()
 
         return instance
-    

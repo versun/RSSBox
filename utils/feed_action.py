@@ -15,6 +15,7 @@ from core.models import Feed, Entry, Tag
 from utils.text_handler import set_translation_display
 from fake_useragent import UserAgent
 
+
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
         return None
@@ -226,7 +227,7 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         entries = feed.filtered_entries if feed_type == "t" else feed.entries.all()
         if entries is None:
             return []
-        
+
         for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
             _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
@@ -276,7 +277,7 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
 
     # 获取tag filter对象
     tag_filters = Tag.objects.get(slug=tag).filters.all()
-    
+
     # 开始过滤 - 使用批量查询优化性能
     if not tag_filters:
         # 没有过滤器，直接使用所有条目
@@ -284,19 +285,18 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     else:
         # 批量获取所有条目ID的QuerySet
         base_qs = Entry.objects.filter(id__in=entry_ids)
-        
+
         # 应用所有过滤器（链式应用）
         filtered_qs = base_qs
         for filter_obj in tag_filters:
             filtered_qs = filter_obj.apply_filter(filtered_qs)
-        
+
         # 获取通过过滤的条目ID集合
-        passed_ids = set(filtered_qs.values_list('id', flat=True))
-        
+        passed_ids = set(filtered_qs.values_list("id", flat=True))
+
         # 构建过滤后的条目列表（保持原排序）
         filtered_entries = [
-            entry for (_, entry) in all_entries 
-            if entry.id in passed_ids
+            entry for (_, entry) in all_entries if entry.id in passed_ids
         ]
 
     # 更新Feed时间为最新条目时间

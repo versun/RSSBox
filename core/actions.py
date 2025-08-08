@@ -3,7 +3,7 @@ from datetime import datetime
 from django.utils import timezone
 
 from ast import literal_eval
-from django.contrib import admin,messages
+from django.contrib import admin, messages
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpResponseRedirect
 from django.db import transaction
@@ -19,33 +19,29 @@ from .management.commands.update_feeds import update_multiple_feeds
 from core.cache import cache_tag
 
 
-
 @admin.display(description=_("Clean translated content"))
 def clean_translated_content(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
-        feed.entries.all().update(
-            translated_title=None,
-            translated_content=None
-        )
+        feed.entries.all().update(translated_title=None, translated_content=None)
     modeladmin.message_user(
         request,
         _("Successfully cleaned translated content for selected feeds."),
-        messages.SUCCESS
+        messages.SUCCESS,
     )
+
 
 @admin.display(description=_("Clean ai summary"))
 def clean_ai_summary(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
-        feed.entries.all().update(
-            ai_summary=None
-        )
+        feed.entries.all().update(ai_summary=None)
     modeladmin.message_user(
         request,
         _("Successfully cleaned ai summary for selected feeds."),
-        messages.SUCCESS
+        messages.SUCCESS,
     )
+
 
 @admin.display(description=_("Clean filter results"))
 def clean_filter_results(modeladmin, request, queryset):
@@ -55,20 +51,20 @@ def clean_filter_results(modeladmin, request, queryset):
     modeladmin.message_user(
         request,
         _("Successfully cleaned all filter results for selected filters."),
-        messages.SUCCESS
+        messages.SUCCESS,
     )
 
 
 def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_prefix):
     """
     生成OPML文件的通用函数
-    
+
     Args:
         title_prefix (str): OPML标题前缀
         queryset (QuerySet): 要导出的数据集合
         get_feed_url_func (function): 获取feed URL的函数
         filename_prefix (str): 导出文件名前缀
-        
+
     Returns:
         HttpResponse: 包含OPML文件的响应或错误响应
     """
@@ -90,25 +86,25 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
         # 按分类组织订阅源
         categories = {}
         for feed in queryset:
-            feed_tags = list(feed.tags.all()) or [None]  # 如果没有tag，用None表示默认分类
+            feed_tags = list(feed.tags.all()) or [
+                None
+            ]  # 如果没有tag，用None表示默认分类
 
             for tag in feed_tags:
                 tag_name = tag.name if tag else "uncategorized"
-                
+
                 # 获取或创建分类大纲
                 if tag_name not in categories:
                     tag_outline = etree.SubElement(
-                        body, "outline", 
-                        text=tag_name, 
-                        title=tag_name
+                        body, "outline", text=tag_name, title=tag_name
                     )
                     categories[tag_name] = tag_outline
                 else:
                     tag_outline = categories[tag_name]
-                
+
                 # 获取feed URL
                 feed_url = get_feed_url_func(feed)
-                
+
                 # 添加feed条目
                 etree.SubElement(
                     tag_outline,
@@ -146,7 +142,7 @@ def export_original_feed_as_opml(modeladmin, request, queryset):
         title_prefix="Original Feeds",
         queryset=queryset,
         get_feed_url_func=lambda feed: feed.feed_url,
-        filename_prefix="original"
+        filename_prefix="original",
     )
 
 
@@ -157,8 +153,9 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
         title_prefix="Translated Feeds",
         queryset=queryset,
         get_feed_url_func=lambda feed: f"{settings.SITE_URL}/feed/rss/{feed.slug}",
-        filename_prefix="translated"
+        filename_prefix="translated",
     )
+
 
 @admin.display(description=_("Force update"))
 def feed_force_update(modeladmin, request, queryset):
@@ -173,16 +170,22 @@ def feed_force_update(modeladmin, request, queryset):
     feeds = queryset
     task_manager.submit_task("Force Update Feeds", update_multiple_feeds, feeds)
 
+
 @admin.display(description=_("Recombine related feeds."))
 def tag_force_update(modeladmin, request, queryset):
     logging.info("Call tag_force_update: %s", queryset)
 
     with transaction.atomic():
         for instance in queryset:
-            task_manager.submit_task("Force Update Tags", cache_tag, instance.slug,"t","xml")
-            task_manager.submit_task("Force Update Tags", cache_tag, instance.slug,"t","json")
+            task_manager.submit_task(
+                "Force Update Tags", cache_tag, instance.slug, "t", "xml"
+            )
+            task_manager.submit_task(
+                "Force Update Tags", cache_tag, instance.slug, "t", "json"
+            )
             instance.last_updated = timezone.now()
             instance.save()
+
 
 @admin.display(description=_("Batch modification"))
 def feed_batch_modify(modeladmin, request, queryset):
@@ -263,7 +266,9 @@ def feed_batch_modify(modeladmin, request, queryset):
                         )
                         queryset.update(summarizer_object_id=object_id_summary)
                     case "tags":
-                        tag_values = post_data.getlist("tags_value")  # 获取所有选中的 tag IDs（可能是多选）
+                        tag_values = post_data.getlist(
+                            "tags_value"
+                        )  # 获取所有选中的 tag IDs（可能是多选）
                         if tag_values:
                             tag_ids = [int(id) for id in tag_values]  # 转换成整数列表
                             for feed in queryset:
@@ -283,12 +288,8 @@ def feed_batch_modify(modeladmin, request, queryset):
 
     translator_choices = get_all_agent_choices()
     summary_engine_choices = get_ai_agent_choices()
-    filter_choices = [
-        (f"{filter.id}", filter.name) for filter in Filter.objects.all()
-    ]
-    tags_choices = [
-        (f"{tag.id}", tag.name) for tag in Tag.objects.all()
-    ]
+    filter_choices = [(f"{filter.id}", filter.name) for filter in Filter.objects.all()]
+    tags_choices = [(f"{tag.id}", tag.name) for tag in Tag.objects.all()]
     return render(
         request,
         "admin/feed_batch_modify.html",
@@ -312,7 +313,7 @@ def feed_batch_modify(modeladmin, request, queryset):
     )
 
 
-#@admin.display(description=_("Create Digest"))
+# @admin.display(description=_("Create Digest"))
 def create_digest(self, request, queryset):
     selected_ids = queryset.values_list("id", flat=True)
     ids_string = ",".join(str(id) for id in selected_ids)

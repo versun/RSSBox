@@ -133,12 +133,15 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
         return _make_response(content, feed_slug, format)
     except Exception as e:
         logging.warning(f"Feed not found {feed_slug}: {str(e)}")
-        return HttpResponse(status=404, content="Feed not found, Maybe it's still in progress, Please try again later.")
+        return HttpResponse(
+            status=404,
+            content="Feed not found, Maybe it's still in progress, Please try again later.",
+        )
 
 
 def tag(request, tag: str, feed_type="t", format="xml"):
     tag = smart_str(tag)
-    all_tag = list(Tag.objects.values_list('slug', flat=True))
+    all_tag = list(Tag.objects.values_list("slug", flat=True))
 
     if tag not in all_tag:
         return HttpResponse(status=404)
@@ -154,4 +157,7 @@ def tag(request, tag: str, feed_type="t", format="xml"):
         return _make_response(content, tag, format)
     except Exception as e:
         logging.warning("tag not found: %s / %s", tag, str(e))
-        return HttpResponse(status=404, content="Feed not found, Maybe it's still in progress, Please try again later.")
+        return HttpResponse(
+            status=404,
+            content="Feed not found, Maybe it's still in progress, Please try again later.",
+        )

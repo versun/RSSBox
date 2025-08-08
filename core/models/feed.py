@@ -154,10 +154,7 @@ class Feed(models.Model):
     #     force_lowercase=True, blank=True, help_text=_("Enter a category string")
     # )
     tags = models.ManyToManyField(
-        "Tag",
-        blank=True,
-        related_name="feeds",
-        verbose_name=_("Tags")
+        "Tag", blank=True, related_name="feeds", verbose_name=_("Tags")
     )
 
     total_tokens = models.IntegerField(_("Tokens Cost"), default=0)

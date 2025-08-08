@@ -3,20 +3,24 @@
 import autoslug.fields
 from django.db import migrations, models, connection
 
+
 def table_exists(schema_editor, table_name):
     """检查表是否存在"""
-    return table_name in schema_editor.connection.introspection.table_names(schema_editor.connection.cursor())
+    return table_name in schema_editor.connection.introspection.table_names(
+        schema_editor.connection.cursor()
+    )
+
 
 def migrate_tags(apps, schema_editor):
     db_alias = schema_editor.connection.alias
     Tag = apps.get_model("core", "Tag")
     Feed = apps.get_model("core", "Feed")
-    
+
     # 1. 检查旧标签表是否存在
     old_tag_table = "core_tagulous_feed_category"
     if not table_exists(schema_editor, old_tag_table):
         return
-    
+
     # 2. 迁移标签数据
     tag_map = {}  # 旧标签ID -> 新标签对象
     with schema_editor.connection.cursor() as cursor:
@@ -26,77 +30,126 @@ def migrate_tags(apps, schema_editor):
             # 处理空值情况
             name = name or ""
             slug = slug or ""
-            
+
             # 生成唯一slug
-            base_slug = slug if slug else name.replace(' ', '-').lower()[:50]
+            base_slug = slug if slug else name.replace(" ", "-").lower()[:50]
             new_slug = base_slug
             suffix = 1
             while Tag.objects.using(db_alias).filter(slug=new_slug).exists():
                 new_slug = f"{base_slug}-{suffix}"
                 suffix += 1
-            
+
             # 创建新标签
             new_tag = Tag.objects.using(db_alias).create(
-                name=name,
-                slug=new_slug,
-                total_tokens=0,
-                last_updated=None,
-                etag=''
+                name=name, slug=new_slug, total_tokens=0, last_updated=None, etag=""
             )
             tag_map[old_id] = new_tag
-    
+
     # 3. 迁移Feed关系
     # 获取所有有category的Feed
     FeedModel = apps.get_model("core", "Feed")
     feed_category_field = "category_id"  # 旧外键字段
-    
+
     # 检查Feed表是否还有category字段
     if table_exists(schema_editor, "core_feed"):
         with schema_editor.connection.cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, {} FROM core_feed
                 WHERE {} IS NOT NULL
-            """.format(feed_category_field, feed_category_field))
-            
+            """.format(feed_category_field, feed_category_field)
+            )
+
             for feed_id, category_id in cursor.fetchall():
                 if category_id in tag_map:
                     feed = FeedModel.objects.using(db_alias).get(id=feed_id)
                     tag = tag_map[category_id]
                     feed.tags.add(tag)
 
-class Migration(migrations.Migration):
 
+class Migration(migrations.Migration):
     dependencies = [
-        ('core', '0026_filter_agent_content_type_filter_agent_object_id_and_more'),
+        ("core", "0026_filter_agent_content_type_filter_agent_object_id_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Tag',
+            name="Tag",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(blank=True, max_length=255, null=True, verbose_name='Name')),
-                ('slug', autoslug.fields.AutoSlugField(editable=False, populate_from='name', unique=True, verbose_name='URL Slug')),
-                ('total_tokens', models.PositiveIntegerField(default=0, verbose_name='Tokens Cost')),
-                ('last_updated', models.DateTimeField(blank=True, editable=False, null=True, verbose_name='Last updated')),
-                ('etag', models.CharField(blank=True, default='', editable=False, max_length=255, null=True)),
-                ('filters', models.ManyToManyField(blank=True, related_name='tags', to='core.filter', verbose_name='Filters')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Name"
+                    ),
+                ),
+                (
+                    "slug",
+                    autoslug.fields.AutoSlugField(
+                        editable=False,
+                        populate_from="name",
+                        unique=True,
+                        verbose_name="URL Slug",
+                    ),
+                ),
+                (
+                    "total_tokens",
+                    models.PositiveIntegerField(default=0, verbose_name="Tokens Cost"),
+                ),
+                (
+                    "last_updated",
+                    models.DateTimeField(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        verbose_name="Last updated",
+                    ),
+                ),
+                (
+                    "etag",
+                    models.CharField(
+                        blank=True,
+                        default="",
+                        editable=False,
+                        max_length=255,
+                        null=True,
+                    ),
+                ),
+                (
+                    "filters",
+                    models.ManyToManyField(
+                        blank=True,
+                        related_name="tags",
+                        to="core.filter",
+                        verbose_name="Filters",
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
-            model_name='feed',
-            name='tags',
-            field=models.ManyToManyField(blank=True, related_name='feeds', to='core.tag', verbose_name='Tags'),
+            model_name="feed",
+            name="tags",
+            field=models.ManyToManyField(
+                blank=True, related_name="feeds", to="core.tag", verbose_name="Tags"
+            ),
         ),
         migrations.RunPython(
             code=migrate_tags,
             reverse_code=migrations.RunPython.noop,
         ),
         migrations.RemoveField(
-            model_name='feed',
-            name='category',
+            model_name="feed",
+            name="category",
         ),
         migrations.DeleteModel(
-            name='Tagulous_Feed_category',
+            name="Tagulous_Feed_category",
         ),
     ]

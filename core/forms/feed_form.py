@@ -46,7 +46,7 @@ class FeedForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         initial=[],
     )
-    
+
     class Meta:
         model = Feed
         exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]

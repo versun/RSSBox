@@ -5,24 +5,58 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0027_remove_feed_category_tag_feed_tags_and_more'),
+        ("core", "0027_remove_feed_category_tag_feed_tags_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FilterResult',
+            name="FilterResult",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('passed', models.BooleanField(blank=True, default=None, null=True, verbose_name='Passed Filter')),
-                ('last_updated', models.DateTimeField(auto_now=True)),
-                ('entry', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='filter_results', to='core.entry')),
-                ('filter', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='results', to='core.filter')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "passed",
+                    models.BooleanField(
+                        blank=True,
+                        default=None,
+                        null=True,
+                        verbose_name="Passed Filter",
+                    ),
+                ),
+                ("last_updated", models.DateTimeField(auto_now=True)),
+                (
+                    "entry",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="filter_results",
+                        to="core.entry",
+                    ),
+                ),
+                (
+                    "filter",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="results",
+                        to="core.filter",
+                    ),
+                ),
             ],
             options={
-                'indexes': [models.Index(fields=['filter', 'entry', 'passed'], name='core_filter_filter__f4a449_idx')],
-                'unique_together': {('filter', 'entry')},
+                "indexes": [
+                    models.Index(
+                        fields=["filter", "entry", "passed"],
+                        name="core_filter_filter__f4a449_idx",
+                    )
+                ],
+                "unique_together": {("filter", "entry")},
             },
         ),
     ]
