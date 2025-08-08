@@ -32,7 +32,8 @@ def _get_modified(request, feed_slug, feed_type="t", **kwargs):
 def _get_etag(request, feed_slug, feed_type="t", **kwargs):
     try:
         if feed_type == "t":
-            etag = Feed.objects.get(slug=feed_slug).last_translate
+            last_translate = Feed.objects.get(slug=feed_slug).last_translate
+            etag = last_translate.isoformat() if last_translate else None
         else:
             etag = Feed.objects.get(slug=feed_slug).etag
     except Feed.DoesNotExist:
