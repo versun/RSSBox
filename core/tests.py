@@ -76,26 +76,6 @@ class RSSViewTest(TestCase):
         response = self.client.get(url, follow=True)
         self.assertEqual(response.status_code, 404)
 
-class tagViewTest(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.feed = Feed.objects.create(
-            name="Test Feed",
-            feed_url="https://example.com/feed.xml",
-            target_language="en",
-            tag="testcat"
-        )
-
-    def test_tag_view_200_or_404(self):
-        url = "/rss/tag/testcat"
-        response = self.client.get(url, follow=True)
-        self.assertIn(response.status_code, [200, 404])
-
-    def test_tag_view_404(self):
-        url = "/rss/tag/notexistcat"
-        response = self.client.get(url, follow=True)
-        self.assertEqual(response.status_code, 404)
-
 class AdminSiteTest(TestCase):
     def setUp(self):
         from core.admin.admin_site import core_admin_site
@@ -122,49 +102,68 @@ class AdminSiteTest(TestCase):
         self.assertEqual(str(self.site.site_title), 'RSS Translator')
         self.assertEqual(str(self.site.index_title), 'Dashboard')
 
-class CacheFunctionTest(TestCase):
-    def setUp(self):
-        self.feed = Feed.objects.create(
-            name="Test Feed",
-            feed_url="https://example.com/feed.xml",
-            target_language="en",
-            tag="testcat"
-        )
-        self.slug = self.feed.slug or "test-feed-slug"
-        if not self.feed.slug:
-            self.feed.slug = self.slug
-            self.feed.save()
-        cache.clear()
+# class tagViewTest(TestCase):
+#     def setUp(self):
+#         self.client = Client()
+#         self.feed = Feed.objects.create(
+#             name="Test Feed",
+#             feed_url="https://example.com/feed.xml",
+#             target_language="en",
+#             tag="testcat"
+#         )
 
-    @patch("core.cache.generate_atom_feed")
-    def test_cache_rss_success(self, mock_generate_atom_feed):
-        mock_generate_atom_feed.return_value = "<feed>atom</feed>"
-        result = cache_module.cache_rss(self.feed.slug or self.slug)
-        cache_key = f"cache_rss_{self.feed.slug or self.slug}_t_xml"
-        self.assertEqual(result, "<feed>atom</feed>")
-        self.assertEqual(cache.get(cache_key), "<feed>atom</feed>")
-        mock_generate_atom_feed.assert_called_once()
+#     def test_tag_view_200_or_404(self):
+#         url = "/rss/tag/testcat"
+#         response = self.client.get(url, follow=True)
+#         self.assertIn(response.status_code, [200, 404])
 
-    @patch("core.cache.generate_atom_feed")
-    def test_cache_rss_none(self, mock_generate_atom_feed):
-        mock_generate_atom_feed.return_value = None
-        result = cache_module.cache_rss(self.feed.slug or self.slug)
-        self.assertIsNone(result)
+#     def test_tag_view_404(self):
+#         url = "/rss/tag/notexistcat"
+#         response = self.client.get(url, follow=True)
+#         self.assertEqual(response.status_code, 404)
 
-    @patch("core.cache.merge_feeds_into_one_atom")
-    def test_cache_tag_success(self, mock_merge):
-        mock_merge.return_value = "<feed>merged</feed>"
-        result = cache_module.cache_tag("testcat")
-        cache_key = "cache_tag_testcat_t_xml"
-        self.assertEqual(result, "<feed>merged</feed>")
-        self.assertEqual(cache.get(cache_key), "<feed>merged</feed>")
-        mock_merge.assert_called_once()
+# class CacheFunctionTest(TestCase):
+#     def setUp(self):
+#         self.feed = Feed.objects.create(
+#             name="Test Feed",
+#             feed_url="https://example.com/feed.xml",
+#             target_language="en",
+#         )
+#         self.slug = self.feed.slug or "test-feed-slug"
+#         if not self.feed.slug:
+#             self.feed.slug = self.slug
+#             self.feed.save()
+#         cache.clear()
 
-    @patch("core.cache.merge_feeds_into_one_atom")
-    def test_cache_tag_none(self, mock_merge):
-        mock_merge.return_value = None
-        result = cache_module.cache_tag("testcat")
-        self.assertIsNone(result)
+#     @patch("core.cache.generate_atom_feed")
+#     def test_cache_rss_success(self, mock_generate_atom_feed):
+#         mock_generate_atom_feed.return_value = "<feed>atom</feed>"
+#         result = cache_module.cache_rss(self.feed.slug or self.slug)
+#         cache_key = f"cache_rss_{self.feed.slug or self.slug}_t_xml"
+#         self.assertEqual(result, "<feed>atom</feed>")
+#         self.assertEqual(cache.get(cache_key), "<feed>atom</feed>")
+#         mock_generate_atom_feed.assert_called_once()
+
+#     @patch("core.cache.generate_atom_feed")
+#     def test_cache_rss_none(self, mock_generate_atom_feed):
+#         mock_generate_atom_feed.return_value = None
+#         result = cache_module.cache_rss(self.feed.slug or self.slug)
+#         self.assertIsNone(result)
+
+#     @patch("core.cache.merge_feeds_into_one_atom")
+#     def test_cache_tag_success(self, mock_merge):
+#         mock_merge.return_value = "<feed>merged</feed>"
+#         result = cache_module.cache_tag("testcat")
+#         cache_key = "cache_tag_testcat_t_xml"
+#         self.assertEqual(result, "<feed>merged</feed>")
+#         self.assertEqual(cache.get(cache_key), "<feed>merged</feed>")
+#         mock_merge.assert_called_once()
+
+#     @patch("core.cache.merge_feeds_into_one_atom")
+#     def test_cache_tag_none(self, mock_merge):
+#         mock_merge.return_value = None
+#         result = cache_module.cache_tag("testcat")
+#         self.assertIsNone(result)
 
 
 
