@@ -1,11 +1,12 @@
 import logging
 import sys
+from itertools import chain
 import time
 import os
 from concurrent.futures import wait
 
 from django.core.management.base import BaseCommand
-from core.models import Feed
+from core.models import Feed, Tag
 from core.tasks import (
     handle_single_feed_fetch,
     handle_feeds_translation,
@@ -13,7 +14,7 @@ from core.tasks import (
 )
 from django.db import close_old_connections
 from utils.task_manager import task_manager
-from core.cache import cache_rss, cache_category
+from core.cache import cache_rss, cache_tag
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
@@ -71,9 +72,7 @@ class Command(BaseCommand):
                 )
             )
         except Exception as e:
-            logging.exception(
-                f"Command update_feeds_for_frequency failed: {str(e)}"
-            )
+            logging.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
             self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
             sys.exit(1)
         finally:
@@ -123,7 +122,9 @@ def update_multiple_feeds(feeds: list):
     try:
         # 先执行所有feed更新任务
         futures = [
-            task_manager.submit_task(f"update_feed_{feed.name}", update_single_feed, feed)
+            task_manager.submit_task(
+                f"update_feed_{feed.name}", update_single_feed, feed
+            )
             for feed in feeds
         ]
 
@@ -155,14 +156,20 @@ def update_multiple_feeds(feeds: list):
                     f"{time.time()}: Failed to cache RSS for {feed.slug}: {str(e)}"
                 )
 
-        categories = set(feed.category for feed in feeds if feed.category)
-        for category in categories:
+        # 获取所有 feeds 关联的 tags（去重）
+        tag_ids = set(
+            chain.from_iterable(
+                feed.tags.values_list("id", flat=True) for feed in feeds
+            )
+        )
+        tags = Tag.objects.filter(id__in=tag_ids)
+        for tag in tags:
             try:
-                cache_category(category, feed_type="o", format="xml")
-                cache_category(category, feed_type="t", format="xml")
-                cache_category(category, feed_type="t", format="json")
+                cache_tag(tag.slug, feed_type="o", format="xml")
+                cache_tag(tag.slug, feed_type="t", format="xml")
+                cache_tag(tag.slug, feed_type="t", format="json")
             except Exception as e:
-                logging.error(f"Failed to cache category {category}: {str(e)}")
+                logging.error(f"Failed to cache tag {tag.slug}: {str(e)}")
 
     except Exception as e:
         logging.exception("Command update_multiple_feeds failed: %s", str(e))
@@ -186,12 +193,12 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         # Use iterator to reduce initial memory load, then convert to list for multiple uses.
         feeds_iterator = Feed.objects.filter(update_frequency=frequency_val).iterator()
         feeds_list = list(feeds_iterator)
-        
+
         log = f"{current_time}: Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds_list)}"
         logging.info(log)
         # output to stdout
         print(log)
-        
+
         update_multiple_feeds(feeds_list)
 
     except KeyError:

@@ -251,6 +251,15 @@ wheels = [
 ]
 
 [[package]]
+name = "django-autoslug"
+version = "1.9.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/6e/6f454a5287127e03214dfd2df10fbd45df87674528ff73bf1fbb3536cdb4/django-autoslug-1.9.9.tar.gz", hash = "sha256:79f88e9433c1c88d8d3f2bec60d65ca98bffaff6c072b78aa5fd99d0e84a13dd", size = 25457, upload-time = "2023-04-03T13:05:46.892Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/5c/37bed8c69ad42002a37ba161245342ca15f78a43c75b025ac465d696294c/django_autoslug-1.9.9-py2.py3-none-any.whl", hash = "sha256:81cb018944498f27f439d439687cf902212cafbdb8c74c8ca0307543a3d82907", size = 14392, upload-time = "2023-04-03T13:05:45.702Z" },
+]
+
+[[package]]
 name = "django-debug-toolbar"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1068,13 +1077,14 @@ wheels = [
 
 [[package]]
 name = "rss-translator"
-version = "2025.8.4"
+version = "2025.8.8"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },
     { name = "bx-django-utils" },
     { name = "deepl" },
     { name = "django" },
+    { name = "django-autoslug" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
     { name = "django-tagulous" },
@@ -1104,6 +1114,7 @@ requires-dist = [
     { name = "bx-django-utils", specifier = ">=89" },
     { name = "deepl", specifier = ">=1.22.0" },
     { name = "django", specifier = ">=5.2.1" },
+    { name = "django-autoslug", specifier = ">=1.9.9" },
     { name = "django-debug-toolbar", specifier = ">=5.2.0" },
     { name = "django-encrypted-model-fields", specifier = ">=0.6.5" },
     { name = "django-tagulous", specifier = ">=2.1.1" },

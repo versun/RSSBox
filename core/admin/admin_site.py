@@ -8,9 +8,10 @@ from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, Test
 from utils.modelAdmin_utils import (
     status_icon,
 )
-from django.shortcuts import redirect,render
+from django.shortcuts import redirect, render
 
-from core.models import Feed, Filter
+from core.models import Feed, Filter, Tag
+
 
 class CoreAdminSite(AdminSite):
     site_header = _("RSS Translator Admin")
@@ -46,6 +47,20 @@ class CoreAdminSite(AdminSite):
                         },
                         "admin_url": "/core/feed/",
                         "add_url": "/core/feed/add/",
+                        "view_only": False,
+                    },
+                    {
+                        "model": Tag,
+                        "name": "Tags",
+                        "object_name": "Tag",
+                        "perms": {
+                            "add": True,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/tag/",
+                        "add_url": "/core/tag/add/",
                         "view_only": False,
                     },
                 ],
@@ -89,6 +104,7 @@ class AgentPaginator(Paginator):
         super().__init__(self, 100)
 
         self.agent_count = 3 if settings.DEBUG else 2
+
     @property
     def count(self):
         return self.agent_count
@@ -104,7 +120,11 @@ class AgentPaginator(Paginator):
 
     # Copied from Huey's SqliteStorage with some modifications to allow pagination
     def enqueued_items(self, limit, offset):
-        agents = [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
+        agents = (
+            [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent]
+            if settings.DEBUG
+            else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
+        )
         agent_list = []
         for model in agents:
             objects = (
@@ -153,7 +173,11 @@ def agent_add(request):
             else redirect("/")
         )
     else:
-        models = [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent] if settings.DEBUG else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
+        models = (
+            [OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent]
+            if settings.DEBUG
+            else [OpenAIAgent, DeepLAgent, LibreTranslateAgent]
+        )
         agent_list = []
         for model in models:
             agent_list.append(
@@ -167,5 +191,6 @@ def agent_add(request):
             "agent_choices": agent_list,
         }
         return render(request, "admin/agent_add.html", context)
+
 
 core_admin_site = CoreAdminSite()

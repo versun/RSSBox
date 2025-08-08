@@ -21,6 +21,7 @@ def setup_environment():
     origins_set = set(filter(None, (existing + "," + default_origins).split(",")))
     os.environ["CSRF_TRUSTED_ORIGINS"] = ",".join(sorted(origins_set))
 
+
 def start_production_server():
     """启动生产服务器"""
     print("🌐 准备Django生产服务器...")

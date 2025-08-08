@@ -2,6 +2,7 @@ import logging
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
+from django.utils.html import format_html, mark_safe
 from django.shortcuts import redirect
 from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 from utils.modelAdmin_utils import status_icon
@@ -10,6 +11,9 @@ from core.admin import core_admin_site
 
 class AgentAdmin(admin.ModelAdmin):
     # get_model_perms = lambda self, request: {}  # 不显示在admin页面
+    readonly_fields = [
+        "show_log",
+    ]
 
     def save_model(self, request, obj, form, change):
         logging.info("Call save_model: %s", obj)
@@ -42,6 +46,20 @@ class AgentAdmin(admin.ModelAdmin):
         # 重定向到指定URL
         return redirect("/core/agent")
 
+    @admin.display(description=_("Log"))
+    def show_log(self, obj):
+        return format_html(
+            """
+            <details>
+                <summary>show</summary>
+                <div style="max-height: 200px; overflow: auto;">
+                    {0}
+                </div>
+            </details>
+            """,
+            mark_safe(obj.log),
+        )
+
 
 class OpenAIAgentAdmin(AgentAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
@@ -59,14 +77,7 @@ class OpenAIAgentAdmin(AgentAdmin):
     fieldsets = (
         (
             _("Model Information"),
-            {
-                "fields": (
-                    "name",
-                    "api_key",
-                    "base_url",
-                    "model",
-                )
-            },
+            {"fields": ("name", "api_key", "base_url", "model", "show_log")},
         ),
         (
             _("Prompts"),
@@ -95,7 +106,7 @@ class OpenAIAgentAdmin(AgentAdmin):
 
 
 class DeepLAgentAdmin(AgentAdmin):
-    fields = ["name", "api_key", "server_url", "proxy", "max_characters"]
+    fields = ["name", "api_key", "server_url", "proxy", "max_characters", "show_log"]
     list_display = [
         "name",
         "is_valid",

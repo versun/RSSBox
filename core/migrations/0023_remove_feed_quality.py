@@ -4,14 +4,13 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0022_filter_feed_filters_tagulous_filter_keywords_and_more'),
+        ("core", "0022_filter_feed_filters_tagulous_filter_keywords_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='feed',
-            name='quality',
+            model_name="feed",
+            name="quality",
         ),
     ]

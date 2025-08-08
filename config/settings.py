@@ -242,7 +242,8 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {message:.240s}",
+            # "format": "{levelname} {asctime} {message:.500s}", 限制500字符
+            "format": "{levelname} {asctime} {message}",
             "style": "{",
         },
     },
@@ -253,7 +254,7 @@ LOGGING = {
             "filename": DATA_FOLDER / "app.log",
             "maxBytes": 1024 * 1024 * 5,  # 10 MB
             "encoding": "utf-8",
-            "backupCount": 3,
+            "backupCount": 2,
             "formatter": "verbose",
         },
     },
@@ -280,7 +281,9 @@ Requirements:
 Important: Do not modify, remove, or alter any HTML tags, attributes, classes, IDs, or structural elements. Only translate the actual text content between tags.
 
 """
-default_summary_prompt = "Summarize the following text in {target_language} and return markdown format."
+default_summary_prompt = (
+    "Summarize the following text in {target_language} and return markdown format."
+)
 
 default_digest_prompt = """
 ROLE: Professional News Editor
@@ -312,7 +315,7 @@ TASK: Generate concise daily briefings
 """
 
 default_filter_prompt = """
-You are an advanced RSS content curator. Analyze each article following these protocols:
+You are an advanced RSS content curator. Analyze the article following these protocols:
 
 1. **Cross-article Deduplication**:
    - Identify duplicate content using semantic similarity
@@ -331,18 +334,12 @@ You are an advanced RSS content curator. Analyze each article following these pr
    - Uses sensational punctuation (e.g., "SHOCKING!", "You won't BELIEVE...")
    - Poses unanswered questions ("What happened next?")
    - Employs urgency/scarcity tactics ("Act NOW!")
-
-4. **Content Quality Threshold**
-   Discard if:
-   - Readability score <20 (Flesch-Kincaid)
-   - >10 grammatical errors/100 words
 """
 
 output_format_for_filter_prompt = """
 
-**Output Format Requirements**
-• STRICT FORMAT: JSON array of retained IDs that meet all criteria
-• EXAMPLE: ["id123","id456"]
+**Output Requirements**
+• Only return "Passed" or "Blocked" based on the above checks.
 • ABSOLUTELY NO:
   - Explanations
   - Metadata

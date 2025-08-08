@@ -6,52 +6,133 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0021_check_empty_engines'),
+        ("core", "0021_check_empty_engines"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Filter',
+            name="Filter",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(blank=True, max_length=255, null=True, verbose_name='Name')),
-                ('operation', models.BooleanField(choices=[(True, 'Include - Only show items containing these keywords'), (False, 'Exclude - Hide items containing these keywords')], default=False, help_text='Action to take on matching keywords.')),
-                ('filter_original_title', models.BooleanField(default=True, help_text='Apply filter to the original title of the entry.')),
-                ('filter_original_content', models.BooleanField(default=True, help_text='Apply filter to the content of the entry.')),
-                ('filter_translated_title', models.BooleanField(default=False, help_text='Apply filter to the translated title of the entry.')),
-                ('filter_translated_content', models.BooleanField(default=False, help_text='Apply filter to the translated content of the entry.')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(
+                        blank=True, max_length=255, null=True, verbose_name="Name"
+                    ),
+                ),
+                (
+                    "operation",
+                    models.BooleanField(
+                        choices=[
+                            (
+                                True,
+                                "Include - Only show items containing these keywords",
+                            ),
+                            (False, "Exclude - Hide items containing these keywords"),
+                        ],
+                        default=False,
+                        help_text="Action to take on matching keywords.",
+                    ),
+                ),
+                (
+                    "filter_original_title",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Apply filter to the original title of the entry.",
+                    ),
+                ),
+                (
+                    "filter_original_content",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Apply filter to the content of the entry.",
+                    ),
+                ),
+                (
+                    "filter_translated_title",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Apply filter to the translated title of the entry.",
+                    ),
+                ),
+                (
+                    "filter_translated_content",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Apply filter to the translated content of the entry.",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Filter',
-                'verbose_name_plural': 'Filter',
+                "verbose_name": "Filter",
+                "verbose_name_plural": "Filter",
             },
         ),
         migrations.AddField(
-            model_name='feed',
-            name='filters',
-            field=models.ManyToManyField(blank=True, help_text='Filters to apply to the feed entries', related_name='feeds', to='core.filter', verbose_name='Filters'),
+            model_name="feed",
+            name="filters",
+            field=models.ManyToManyField(
+                blank=True,
+                help_text="Filters to apply to the feed entries",
+                related_name="feeds",
+                to="core.filter",
+                verbose_name="Filters",
+            ),
         ),
         migrations.CreateModel(
-            name='Tagulous_Filter_keywords',
+            name="Tagulous_Filter_keywords",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255, unique=True)),
-                ('slug', models.SlugField()),
-                ('count', models.IntegerField(default=0, help_text='Internal counter of how many times this tag is in use')),
-                ('protected', models.BooleanField(default=False, help_text='Will not be deleted when the count reaches 0')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=255, unique=True)),
+                ("slug", models.SlugField()),
+                (
+                    "count",
+                    models.IntegerField(
+                        default=0,
+                        help_text="Internal counter of how many times this tag is in use",
+                    ),
+                ),
+                (
+                    "protected",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Will not be deleted when the count reaches 0",
+                    ),
+                ),
             ],
             options={
-                'ordering': ('name',),
-                'abstract': False,
-                'unique_together': {('slug',)},
+                "ordering": ("name",),
+                "abstract": False,
+                "unique_together": {("slug",)},
             },
             bases=(tagulous.models.models.BaseTagModel, models.Model),
         ),
         migrations.AddField(
-            model_name='filter',
-            name='keywords',
-            field=tagulous.models.fields.TagField(_set_tag_meta=True, blank=True, help_text='Keywords to filter entries. ', to='core.tagulous_filter_keywords', verbose_name='Keywords'),
+            model_name="filter",
+            name="keywords",
+            field=tagulous.models.fields.TagField(
+                _set_tag_meta=True,
+                blank=True,
+                help_text="Keywords to filter entries. ",
+                to="core.tagulous_filter_keywords",
+                verbose_name="Keywords",
+            ),
         ),
     ]
