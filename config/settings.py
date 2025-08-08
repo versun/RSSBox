@@ -242,7 +242,8 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {message:.240s}",
+            # "format": "{levelname} {asctime} {message:.500s}", 限制500字符
+            "format": "{levelname} {asctime} {message}",
             "style": "{",
         },
     },
@@ -253,7 +254,7 @@ LOGGING = {
             "filename": DATA_FOLDER / "app.log",
             "maxBytes": 1024 * 1024 * 5,  # 10 MB
             "encoding": "utf-8",
-            "backupCount": 3,
+            "backupCount": 2,
             "formatter": "verbose",
         },
     },

@@ -47,6 +47,18 @@ def clean_ai_summary(modeladmin, request, queryset):
         messages.SUCCESS
     )
 
+@admin.display(description=_("Clean filter results"))
+def clean_filter_results(modeladmin, request, queryset):
+    for filter in queryset:
+        filter.clear_ai_filter_cache_results()
+
+    modeladmin.message_user(
+        request,
+        _("Successfully cleaned all filter results for selected filters."),
+        messages.SUCCESS
+    )
+
+
 def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_prefix):
     """
     生成OPML文件的通用函数
@@ -161,15 +173,14 @@ def feed_force_update(modeladmin, request, queryset):
     feeds = queryset
     task_manager.submit_task("Force Update Feeds", update_multiple_feeds, feeds)
 
-@admin.display(description=_("Force update"))
+@admin.display(description=_("Recombine related feeds."))
 def tag_force_update(modeladmin, request, queryset):
     logging.info("Call tag_force_update: %s", queryset)
 
     with transaction.atomic():
         for instance in queryset:
-            # cache_tag(instance.slug,"t","xml")
-            # cache_tag(instance.slug,"t","json")
             task_manager.submit_task("Force Update Tags", cache_tag, instance.slug,"t","xml")
+            task_manager.submit_task("Force Update Tags", cache_tag, instance.slug,"t","json")
             instance.last_updated = timezone.now()
             instance.save()
 

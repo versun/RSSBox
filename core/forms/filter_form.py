@@ -19,7 +19,7 @@ class FilterForm(forms.ModelForm):
         help_text=_("Select a valid agent for filtering"),
         label=_("Agent"),
     )
-    keywords = TagField(required=True)
+    keywords = TagField(required=False)
 
     class Meta:
         model = Filter

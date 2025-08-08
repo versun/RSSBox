@@ -66,6 +66,7 @@ class FeedAdmin(admin.ModelAdmin):
                     "simple_update_frequency",
                     "tags",
                     "fetch_article",
+                    "show_log",
                 ),
                 # "description": "内容源的基本识别信息和限制设置"
             },
@@ -105,7 +106,6 @@ class FeedAdmin(admin.ModelAdmin):
                     "total_characters",
                     "last_fetch",
                     "last_translate",
-                    "show_log",
                 ),
             },
         ),
@@ -265,10 +265,20 @@ class FeedAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("Cost Info"))
     def cost_info(self, obj):
+        def format_number(n):
+            if n < 1000:
+                return str(n)
+            elif n < 1000000:
+                # 避免显示不必要的小数点
+                return f"{n/1000:.1f}K".replace(".0K", "K")
+            else:
+                # 百万单位格式化
+                return f"{n/1000000:.1f}M".replace(".0M", "M")
+        
         return format_html(
-            "<span>tokens:{0}</span><br><span>characters:{1}</span>",
-            obj.total_tokens,
-            obj.total_characters,
+            "<span>tokens:{}</span><br><span>characters:{}</span>",
+            format_number(obj.total_tokens),
+            format_number(obj.total_characters)
         )
 
     @admin.display(description=_("Filters"))
