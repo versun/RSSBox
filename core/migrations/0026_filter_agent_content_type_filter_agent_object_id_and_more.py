@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="filter",
             name="filter_prompt",
-            field=models.TextField(blank=True, null=True, verbose_name="Filter Prompt"),
+            field=models.TextField(blank=True, default='\nYou are an advanced RSS content curator. Analyze the article following these protocols:\n\n1. **Cross-article Deduplication**:\n   - Identify duplicate content using semantic similarity\n   - For duplicate sets:\n     • Keep the most comprehensive version\n\n2. **Ad Exclusion**:\n   • Discard if any detected:\n     - Promotional language patterns\n     - Affiliate links\n     - Brand mentions >5% of content\n     - "Sponsored" disclosure\n\n3. **Clickbait Detection**\n   Discard if headline:\n   - Uses sensational punctuation (e.g., "SHOCKING!", "You won\'t BELIEVE...")\n   - Poses unanswered questions ("What happened next?")\n   - Employs urgency/scarcity tactics ("Act NOW!")\n', null=True, verbose_name='Filter Prompt'),
         ),
         migrations.AddField(
             model_name="filter",

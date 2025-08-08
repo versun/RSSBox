@@ -7,6 +7,7 @@ from django.utils import timezone
 from tagulous.models import TagField
 from utils import text_handler
 import json
+from config import settings
 
 
 class Filter(models.Model):
@@ -47,7 +48,7 @@ class Filter(models.Model):
     )
     agent_object_id = models.PositiveIntegerField(null=True, blank=True, default=None)
     agent = GenericForeignKey("agent_content_type", "agent_object_id")
-    filter_prompt = models.TextField(_("Filter Prompt"), blank=True, null=True)
+    filter_prompt = models.TextField(_("Filter Prompt"), blank=True, null=True, default=settings.default_filter_prompt)
 
     filter_method = models.PositiveSmallIntegerField(
         _("Filter Method"),
