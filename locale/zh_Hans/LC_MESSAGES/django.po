@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-01 13:08+0800\n"
+"POT-Creation-Date: 2025-08-01 14:49+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -54,16 +54,12 @@ msgid "Agents"
 msgstr "助理"
 
 #: core/admin/agent_admin.py:61
-#, fuzzy
-#| msgid "Feed Information"
 msgid "Model Information"
-msgstr "源信息"
+msgstr "模型信息"
 
 #: core/admin/agent_admin.py:72
-#, fuzzy
-#| msgid "Report Prompt"
 msgid "Prompts"
-msgstr "报告提示词"
+msgstr "提示词"
 
 #: core/admin/agent_admin.py:82
 msgid "Advanced"
@@ -129,12 +125,12 @@ msgid "Keywords"
 msgstr "关键词"
 
 #: core/forms.py:19
-msgid "Select a valid translator"
-msgstr "选择一个有效的翻译器"
+msgid "Select a valid agent for translation"
+msgstr "选择一个有效的助理"
 
 #: core/forms.py:25
-msgid "Select a valid AI engine"
-msgstr "选择一个有效的AI引擎"
+msgid "Select a valid agent for summarization"
+msgstr "选择一个有效的助理"
 
 #: core/forms.py:26 templates/admin/feed_batch_modify.html:54
 msgid "Summarizer"
@@ -161,7 +157,7 @@ msgid "Translation Options"
 msgstr "翻译选项"
 
 #: core/forms.py:71
-msgid "Optonal, default use the feed title"
+msgid "Optional, default use the feed title"
 msgstr "可选，默认使用源标题"
 
 #: core/forms.py:77
@@ -498,6 +494,9 @@ msgstr "最佳质量"
 #: templates/admin/feed_batch_modify.html:99
 msgid "category"
 msgstr "类别"
+
+#~ msgid "Select a valid AI engine"
+#~ msgstr "选择一个有效的AI引擎"
 
 #~ msgid "Create Digest"
 #~ msgstr "创建简报"

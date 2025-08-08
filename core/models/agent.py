@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from config import settings
 from openai import OpenAI
+from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField
 import time
 import datetime
@@ -10,10 +11,17 @@ from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
 
+
 class Agent(models.Model):
     name = models.CharField(_("Name"), max_length=100, unique=True)
     valid = models.BooleanField(_("Valid"), null=True)
     is_ai = models.BooleanField(default=False, editable=False)
+    log = models.TextField(
+        _("Log"),
+        default="",
+        blank=True,
+        null=True,
+    )
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         raise NotImplementedError(
@@ -68,7 +76,7 @@ class OpenAIAgent(Agent):
     top_p = models.FloatField(default=0.2)
     frequency_penalty = models.FloatField(default=0)
     presence_penalty = models.FloatField(default=0)
-    max_tokens = models.IntegerField(default=1000000)
+    max_tokens = models.IntegerField(default=100000)
     rate_limit_rpm = models.IntegerField(
         _("Rate Limit (RPM)"),
         default=0,
@@ -93,16 +101,19 @@ class OpenAIAgent(Agent):
                 res = client.with_options(max_retries=3).chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": "Hi"}],
-                    max_tokens=10,
+                    max_tokens=30,
                 )
-                fr = res.choices[
-                    0
-                ].finish_reason  # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
+                # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
+                fr = res.choices[0].finish_reason
                 logging.info(">>> Translator Validate:%s", fr)
+                self.log = ""
                 return True
             except Exception as e:
                 logging.error("OpenAIInterface validate ->%s", e)
+                self.log = f"{timezone.now()}: {str(e)}"
                 return False
+            finally:
+                self.save()
 
     def _wait_for_rate_limit(self):
         """等待直到满足速率限制条件"""
@@ -222,8 +233,12 @@ class OpenAIAgent(Agent):
             #     result_text = ''
             #     logging.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
             tokens = res.usage.total_tokens if res.usage else 0
+            self.log = ""
         except Exception as e:
+            self.log = f"{timezone.now()}: {str(e)}"
             logging.error("OpenAIInterface->%s: %s", e, text)
+        finally:
+            self.save()
 
         return {"text": result_text, "tokens": tokens}
 
@@ -272,9 +287,24 @@ class OpenAIAgent(Agent):
         self, text: str, system_prompt: str, max_tokens: int = None, **kwargs
     ) -> dict:
         logging.info(">>> Start Filter: %s", text)
-        return self.completions(
-            text, system_prompt=system_prompt, max_tokens=max_tokens, **kwargs
+        passed = False
+        tokens = 0
+        results = self.completions(
+            text,
+            system_prompt=system_prompt + settings.output_format_for_filter_prompt,
+            max_tokens=max_tokens,
+            **kwargs,
         )
+
+        if results["text"] and "Passed" in results["text"]:
+            logging.info(">>> Filter Passed: %s", text)
+            passed = True
+            tokens = results["tokens"]
+        else:
+            logging.info(">>> Filter Blocked: %s", text)
+            passed = False
+
+        return {"passed": passed, "tokens": tokens}
 
 
 class DeepLAgent(Agent):
@@ -318,10 +348,14 @@ class DeepLAgent(Agent):
         try:
             translator = self._init()
             usage = translator.get_usage()
+            self.log = ""
             return usage.character.valid
         except Exception as e:
             logging.error("DeepLTranslator validate ->%s", e)
+            self.log = f"{timezone.now()}: {str(e)}"
             return False
+        finally:
+            self.save()
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         logging.info(">>> DeepL Translate [%s]: %s", target_language, text)
@@ -341,8 +375,12 @@ class DeepLAgent(Agent):
                 tag_handling="html",
             )
             translated_text = resp.text
+            self.log = ""
         except Exception as e:
             logging.error("DeepLTranslator->%s: %s", e, text)
+            self.log = f"{timezone.now()}: {str(e)}"
+        finally:
+            self.save()
         return {"text": translated_text, "characters": len(text)}
 
 
@@ -363,8 +401,14 @@ class TestAgent(Agent):
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         logging.info(">>> Test Translate [%s]: %s", target_language, text)
         time.sleep(self.interval)
-        return {"text": self.translated_text, "tokens": 0, "characters": len(text)}
+        return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
 
     def summarize(self, text: str, target_language: str) -> dict:
         logging.info(">>> Test Summarize [%s]: %s", target_language, text)
-        return self.translate(text, target_language)
+        return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
+
+    def filter(self, text: str, **kwargs):
+        logging.info(">>> Test Filter")
+        import random
+
+        return {"passed": random.choice([True, False]), "tokens": 10}

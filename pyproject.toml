@@ -28,6 +28,7 @@ dependencies = [
     "bx_django_utils>=89",
     "fake-useragent>=2.2.0",
     "httpx>=0.28.1",
+    "django-autoslug>=1.9.9",
 ]
 
 [tool.uv]

@@ -11,9 +11,10 @@ import feedparser
 from lxml import etree
 import mistune
 from feedgen.feed import FeedGenerator
-from core.models import Feed, Entry
+from core.models import Feed, Entry, Tag
 from utils.text_handler import set_translation_display
 from fake_useragent import UserAgent
+
 
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
@@ -223,7 +224,11 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         )
 
         # 添加所有条目
-        for entry in reversed(feed.filtered_entries.order_by("-pubdate")[: feed.max_posts]):
+        entries = feed.filtered_entries if feed_type == "t" else feed.entries.all()
+        if entries is None:
+            return []
+
+        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
             _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
         # 生成最终XML
@@ -234,11 +239,11 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         return None
 
 
-def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
+def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     """合并多个Feeds生成单个Atom Feed"""
     type_str = "Original" if feed_type == "o" else "Translated"
-    feed_id = f"urn:merged-category-{category}-{type_str}-feeds"
-    feed_title = f"{type_str} Category {category} Feeds"
+    feed_id = f"urn:merged-tag-{tag}-{type_str}-feeds"
+    feed_title = f"{type_str} #{tag} tag  Feeds"
 
     # 构建基础Feed
     fg = _build_atom_feed(
@@ -246,31 +251,62 @@ def merge_feeds_into_one_atom(category: str, feeds: list[Feed], feed_type="t"):
         title=feed_title,
         author=feed_title,
         link=settings.SITE_URL,
-        subtitle=f"Combined {type_str} {category} Feeds",
+        subtitle=f"Combined {type_str} {tag} Feeds",
         language="en",
         updated=timezone.now(),
     )
 
     # 收集所有条目
     all_entries = []
+    entry_ids = []  # 用于存储所有条目的ID
     for feed in feeds:
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
         # 收集当前feed的条目
-        for entry in reversed(feed.filtered_entries.order_by("-pubdate")[: feed.max_posts]):
+        entries = feed.entries.all()  # tag的条目不走feed的filter，因为tag有自己的filter
+        if not entries:
+            continue
+
+        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
+            entry_ids.append(entry.id)
 
-    # 按时间升序排序
+    # 按时间降序排序（最新的在最前面）
     all_entries.sort(key=lambda x: x[0], reverse=True)
 
+    # 获取tag filter对象
+    tag_filters = Tag.objects.get(slug=tag).filters.all()
+
+    # 开始过滤 - 使用批量查询优化性能
+    if not tag_filters:
+        # 没有过滤器，直接使用所有条目
+        filtered_entries = [entry for (_, entry) in all_entries]
+    else:
+        # 批量获取所有条目ID的QuerySet
+        base_qs = Entry.objects.filter(id__in=entry_ids)
+
+        # 应用所有过滤器（链式应用）
+        filtered_qs = base_qs
+        for filter_obj in tag_filters:
+            filtered_qs = filter_obj.apply_filter(filtered_qs)
+
+        # 获取通过过滤的条目ID集合
+        passed_ids = set(filtered_qs.values_list("id", flat=True))
+
+        # 构建过滤后的条目列表（保持原排序）
+        filtered_entries = [
+            entry for (_, entry) in all_entries if entry.id in passed_ids
+        ]
+
     # 更新Feed时间为最新条目时间
-    if all_entries:
+    if filtered_entries:
+        # 第一个条目是最新的（因为已按时间降序排序）
         latest_time = all_entries[0][0]
         fg.updated(latest_time)
 
-    # 添加所有条目
-    for _, entry in all_entries[:100]:  # 限制为前100条
+    # 添加所有条目（最多100条）
+    for entry in filtered_entries[:100]:
         _add_atom_entry(fg, entry, feed_type)
 
     # 生成最终XML

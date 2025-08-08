@@ -62,7 +62,7 @@ def init_server():
 
         print("Creating migrations...")
         call_command("makemigrations", verbosity=1)
-        
+
         print("Running migrations...")
         call_command("migrate", verbosity=0, interactive=False)
 
@@ -79,6 +79,7 @@ def init_server():
 
     except Exception as e:
         import traceback
+
         print(f"Error: {e}\n{traceback.format_exc()}")
         raise
 
