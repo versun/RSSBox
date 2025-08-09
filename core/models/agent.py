@@ -516,6 +516,8 @@ class LibreTranslateAgent(Agent):
             return {"text": translated_text, "characters": len(text)}
         except Exception as e:
             logging.error(f"LibreTranslate API error: {e}")
+            self.log = f"{timezone.now()}: {str(e)}"
+            self.save()
             return {'text': text, 'characters': len(text)}
 
     def validate(self) -> bool:
@@ -523,11 +525,15 @@ class LibreTranslateAgent(Agent):
         try:
             # A simple translation test to check connectivity and authentication.
             test_translation = self._api_translate("Hello World", "en", "es", "text")
+            self.log = ""
             return bool(test_translation)
         except Exception as e:
             logging.error(f"LibreTranslate validation error: {e}")
+            self.log = f"{timezone.now()}: {str(e)}"
             return False
-
+        finally:
+            self.save()
+        
 class TestAgent(Agent):
     translated_text = models.TextField(default="@@Translated Text@@")
     max_characters = models.IntegerField(default=50000)

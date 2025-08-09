@@ -118,7 +118,7 @@ class DeepLAgentAdmin(AgentAdmin):
 
 
 class LibreTranslateAgentAdmin(AgentAdmin):  
-    fields = ["name", "api_key", "server_url", "max_characters"]
+    fields = ["name", "api_key", "server_url", "max_characters","show_log"]
     list_display = [
         "name",
         "is_valid",
