@@ -9,6 +9,7 @@ dependencies = [
     "django-encrypted-model-fields>=0.6.5",
     "django-tagulous>=2.1.1",
     "bs4>=0.0.2",
+    "libretranslatepy>=2.1.4",
     "deepl>=1.22.0",
     "openai>=1.82.0",
     "feed2json>=2024.4.29",

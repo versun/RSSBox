@@ -10,6 +10,9 @@ import datetime
 from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
+import json
+import logging
+from urllib import request, parse
 
 
 class Agent(models.Model):
@@ -383,6 +386,147 @@ class DeepLAgent(Agent):
             self.save()
         return {"text": translated_text, "characters": len(text)}
 
+class LibreTranslateAgent(Agent):
+    """
+    An Agent that uses a LibreTranslate server for translation,
+    with API communication logic integrated directly into the class.
+    """
+    api_key = EncryptedCharField(_("API Key (if required)"), max_length=255, blank=True)
+    server_url = models.URLField(
+        verbose_name='Server URL',
+        default='https://libretranslate.com',
+        help_text='Your self-hosted or public LibreTranslate server endpoint'
+    )
+    max_characters = models.IntegerField(
+        default=5000,
+        verbose_name='Max Characters',
+        help_text='Maximum characters per translation request'
+    )
+    language_map = {
+        'Chinese Simplified': 'zh',
+        'Chinese Traditional': 'zh',
+        'English': 'en',
+        'Spanish': 'es',
+        'French': 'fr',
+        'German': 'de',
+        'Italian': 'it',
+        'Portuguese': 'pt',
+        'Russian': 'ru',
+        'Japanese': 'ja',
+        'Dutch': 'nl',
+        'Korean': 'ko',
+        'Czech': 'cs',
+        'Danish': 'da',
+        'Indonesian': 'id',
+        'Polish': 'pl',
+        'Hungarian': 'hu',
+        'Norwegian Bokmål': 'nb',
+        'Swedish': 'sv',
+        'Turkish': 'tr'
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Fetch and cache available languages upon initialization
+        self.available_languages = self._get_available_languages()
+        
+    # --------------------------------
+    # API Methods
+    # --------------------------------
+    def _api_request(self, endpoint: str, params: dict = None, method: str = "POST") -> any:
+        """
+        Handles sending requests to the configured LibreTranslate server endpoint.
+        """
+        url = self.server_url
+        if not url.endswith('/'):
+            url += '/'
+        full_url = f"{url}{endpoint}"
+
+        query_params = params or {}
+        if self.api_key:
+            query_params["api_key"] = self.api_key
+
+        data = parse.urlencode(query_params).encode('utf-8')
+        req = request.Request(full_url, data=data, method=method)
+
+        with request.urlopen(req) as response:
+            if response.status != 200:
+                raise ConnectionError(f"API returned status {response.status}: {response.read().decode()}")
+            response_str = response.read().decode('utf-8')
+            return json.loads(response_str)
+
+    def _api_translate(self, q: str, source: str, target: str, format: str) -> str:
+        """Calls the /translate endpoint."""
+        params = {"q": q, "source": source, "target": target, "format": format}
+        response_data = self._api_request("translate", params=params, method="POST")
+        
+        if "error" in response_data:
+            raise Exception(f"API Translation Error: {response_data['error']}")
+        
+        return response_data.get("translatedText", "")
+
+    def _api_languages(self) -> list:
+        """Calls the /languages endpoint."""
+        # Languages endpoint requires a GET request
+        return self._api_request("languages", method="GET")
+
+    # --------------------------------
+    # Agent Methods
+    # --------------------------------
+    def _get_available_languages(self) -> dict:
+        """
+        Fetches supported languages from the API and filters them
+        against the agent's defined language_map.
+        """
+        try:
+            supported_languages = self._api_languages()
+            available_codes = {lang['code'] for lang in supported_languages}
+            
+            reverse_language_map = {v: k for k, v in self.language_map.items()}
+
+            return {
+                reverse_language_map[code]: code
+                for code in available_codes
+                if code in reverse_language_map
+            }
+        except Exception as e:
+            logging.error(f"Failed to fetch available LibreTranslate languages: {e}")
+            return {}
+
+    class Meta:
+        verbose_name = "LibreTranslate"
+        verbose_name_plural = "LibreTranslate"
+
+    def translate(self, text: str, target_language: str, **kwargs) -> dict:
+        """
+        Translate text using LibreTranslate API.
+        The format is always 'html'.
+        Returns dict with 'text', 'characters' keys.
+        """
+        target_lang_code = self.available_languages.get(target_language, 'en')
+
+        try:
+            # Corrected to always use "html" for the format as requested.
+            translated_text = self._api_translate(
+                q=text,
+                source="auto",
+                target=target_lang_code,
+                format="html" 
+            )
+            return {"text": translated_text, "characters": len(text)}
+        except Exception as e:
+            logging.error(f"LibreTranslate API error: {e}")
+            return {'text': text, 'characters': len(text)}
+
+    def validate(self) -> bool:
+        """Validate LibreTranslate connection."""
+        try:
+            # A simple translation test to check connectivity and authentication.
+            test_translation = self._api_translate("Hello World", "en", "es", "text")
+            return bool(test_translation)
+        except Exception as e:
+            logging.error(f"LibreTranslate validation error: {e}")
+            return False
 
 class TestAgent(Agent):
     translated_text = models.TextField(default="@@Translated Text@@")
