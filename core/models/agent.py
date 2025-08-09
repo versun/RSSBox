@@ -236,7 +236,6 @@ class OpenAIAgent(Agent):
             #     result_text = ''
             #     logging.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
             tokens = res.usage.total_tokens if res.usage else 0
-            self.log = ""
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
             logging.error("OpenAIInterface->%s: %s", e, text)
@@ -378,7 +377,6 @@ class DeepLAgent(Agent):
                 tag_handling="html",
             )
             translated_text = resp.text
-            self.log = ""
         except Exception as e:
             logging.error("DeepLTranslator->%s: %s", e, text)
             self.log = f"{timezone.now()}: {str(e)}"
