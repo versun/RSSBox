@@ -27,7 +27,7 @@ class FeedAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "fetch_feed",
-        "translated_feed",
+        "generate_feed",
         "translator",
         "target_language",
         "translation_options",
@@ -46,6 +46,8 @@ class FeedAdmin(admin.ModelAdmin):
         "summary",
     ]
     readonly_fields = [
+        "fetch_feed",
+        "generate_feed",
         "fetch_status",
         "translation_status",
         "total_tokens",
@@ -195,8 +197,8 @@ class FeedAdmin(admin.ModelAdmin):
     def translator(self, obj):
         return obj.translator
 
-    @admin.display(description=_("Translated Status"))
-    def translated_feed(
+    @admin.display(description=_("Generate feed"))
+    def generate_feed(
         self, obj
     ):  # 显示3个元素：translated_status、feed_url、json_url
         if not obj.translate_title and not obj.translate_content and not obj.summary:
@@ -212,8 +214,12 @@ class FeedAdmin(admin.ModelAdmin):
             "json",  # 4
         )
 
-    @admin.display(description=_("Fetch Status"))
+    @admin.display(description=_("Fetch Feed"))
     def fetch_feed(self, obj):  # 显示3个元素：fetch状态、原url、代理feed
+        if obj.pk:
+            status = status_icon(obj.fetch_status)
+        else:
+            status = "-"
         return format_html(
             "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
             status_icon(obj.fetch_status),  # 0

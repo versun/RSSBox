@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-08 15:21+0800\n"
+"POT-Creation-Date: 2025-08-10 15:29+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -77,8 +77,8 @@ msgstr "仪表盘"
 msgid "Agents"
 msgstr "助理"
 
-#: core/admin/agent_admin.py:49 core/admin/feed_admin.py:245
-#: core/models/agent.py:20 core/models/feed.py:188
+#: core/admin/agent_admin.py:49 core/admin/feed_admin.py:249
+#: core/models/agent.py:23 core/models/feed.py:188
 msgid "Log"
 msgstr "日志"
 
@@ -94,71 +94,71 @@ msgstr "提示词"
 msgid "Advanced"
 msgstr "高级"
 
-#: core/admin/feed_admin.py:61
+#: core/admin/feed_admin.py:63
 msgid "Feed Information"
 msgstr "源信息"
 
-#: core/admin/feed_admin.py:77
+#: core/admin/feed_admin.py:81
 msgid "Content Processing"
 msgstr "内容处理"
 
-#: core/admin/feed_admin.py:91
+#: core/admin/feed_admin.py:95
 msgid "Output Control"
 msgstr "输出控制"
 
-#: core/admin/feed_admin.py:101
+#: core/admin/feed_admin.py:105
 msgid "Status"
 msgstr "状态"
 
-#: core/admin/feed_admin.py:179 core/forms/feed_form.py:35
+#: core/admin/feed_admin.py:183 core/forms/feed_form.py:35
 #: core/models/feed.py:61 templates/admin/feed_batch_modify.html:13
 msgid "Update Frequency"
 msgstr "更新频率(分钟)"
 
-#: core/admin/feed_admin.py:194 core/forms/feed_form.py:14
+#: core/admin/feed_admin.py:198 core/forms/feed_form.py:14
 #: templates/admin/feed_batch_modify.html:45
 msgid "Translator"
 msgstr "翻译器"
 
-#: core/admin/feed_admin.py:198
-msgid "Translated Status"
-msgstr "翻译状态"
+#: core/admin/feed_admin.py:202
+msgid "Generate feed"
+msgstr "生成源"
 
-#: core/admin/feed_admin.py:215 core/models/feed.py:55
-msgid "Fetch Status"
-msgstr "订阅状态"
+#: core/admin/feed_admin.py:219
+msgid "Fetch Feed"
+msgstr "获取源"
 
-#: core/admin/feed_admin.py:226
+#: core/admin/feed_admin.py:230
 msgid "Options"
 msgstr "选项"
 
-#: core/admin/feed_admin.py:231 core/forms/feed_form.py:40
+#: core/admin/feed_admin.py:235 core/forms/feed_form.py:40
 msgid "Title"
 msgstr "标题"
 
-#: core/admin/feed_admin.py:232 core/forms/feed_form.py:41
+#: core/admin/feed_admin.py:236 core/forms/feed_form.py:41
 msgid "Content"
 msgstr "内容"
 
-#: core/admin/feed_admin.py:233 core/forms/feed_form.py:42
+#: core/admin/feed_admin.py:237 core/forms/feed_form.py:42
 #: core/models/feed.py:94 templates/admin/feed_batch_modify.html:73
 msgid "Summary"
 msgstr "摘要"
 
-#: core/admin/feed_admin.py:259
+#: core/admin/feed_admin.py:263
 msgid "Fetch Info"
 msgstr "获取信息"
 
-#: core/admin/feed_admin.py:267
+#: core/admin/feed_admin.py:271
 msgid "Cost Info"
 msgstr "花费信息"
 
-#: core/admin/feed_admin.py:285 core/admin/tag_admin.py:27
+#: core/admin/feed_admin.py:289 core/admin/tag_admin.py:27
 #: core/models/feed.py:142 core/models/tag.py:15
 msgid "Filters"
 msgstr "过滤器"
 
-#: core/admin/feed_admin.py:295 templates/admin/feed_batch_modify.html:94
+#: core/admin/feed_admin.py:299 templates/admin/feed_batch_modify.html:94
 msgid "tags"
 msgstr "标签"
 
@@ -167,7 +167,7 @@ msgid "Filter Information"
 msgstr "过滤器信息"
 
 #: core/admin/filter_admin.py:30 core/admin/filter_admin.py:47
-#: core/models/filter.py:35
+#: core/models/filter.py:36
 msgid "Keywords"
 msgstr "关键词"
 
@@ -247,48 +247,52 @@ msgstr "助理"
 msgid "Target Field"
 msgstr "目标字段"
 
-#: core/models/agent.py:16 core/models/feed.py:14 core/models/filter.py:29
+#: core/models/agent.py:19 core/models/feed.py:14 core/models/filter.py:30
 #: core/models/tag.py:8
 msgid "Name"
 msgstr "名称"
 
-#: core/models/agent.py:17
+#: core/models/agent.py:20
 msgid "Valid"
 msgstr "验证"
 
-#: core/models/agent.py:60 core/models/agent.py:312
+#: core/models/agent.py:63 core/models/agent.py:315
 msgid "API Key"
 msgstr ""
 
-#: core/models/agent.py:61
+#: core/models/agent.py:64
 msgid "API URL"
 msgstr ""
 
-#: core/models/agent.py:68
+#: core/models/agent.py:71
 msgid "Title Translate Prompt"
 msgstr "标题翻译提示词"
 
-#: core/models/agent.py:71
+#: core/models/agent.py:74
 msgid "Content Translate Prompt"
 msgstr "内容翻译提示词"
 
-#: core/models/agent.py:81
+#: core/models/agent.py:84
 msgid "Rate Limit (RPM)"
 msgstr ""
 
-#: core/models/agent.py:83
+#: core/models/agent.py:86
 msgid "Maximum requests per minute (0 = no limit)"
 msgstr ""
 
-#: core/models/agent.py:314
+#: core/models/agent.py:317
 msgid "API URL(optional)"
 msgstr ""
 
-#: core/models/agent.py:315
+#: core/models/agent.py:318
 msgid "Proxy(optional)"
 msgstr ""
 
-#: core/models/agent.py:391
+#: core/models/agent.py:393
+msgid "API Key (if required)"
+msgstr ""
+
+#: core/models/agent.py:543
 msgid "Request Interval(s)"
 msgstr "请求间隔"
 
@@ -331,6 +335,10 @@ msgstr "更新日期"
 #: core/models/feed.py:53
 msgid "Feed URL"
 msgstr "订阅链接"
+
+#: core/models/feed.py:55
+msgid "Fetch Status"
+msgstr "订阅状态"
 
 #: core/models/feed.py:63
 msgid "Minutes"
@@ -406,7 +414,7 @@ msgstr "用于AI翻译和摘要"
 msgid "Tags"
 msgstr "标签"
 
-#: core/models/feed.py:160 core/models/filter.py:80 core/models/tag.py:24
+#: core/models/feed.py:160 core/models/filter.py:81 core/models/tag.py:24
 msgid "Tokens Cost"
 msgstr "花费Token数"
 
@@ -442,51 +450,51 @@ msgstr "源"
 msgid "Feeds"
 msgstr "源"
 
-#: core/models/filter.py:16
+#: core/models/filter.py:17
 msgid "Include - Only show items containing these keywords"
 msgstr "包含 - 只显示包含这些关键词的条目"
 
-#: core/models/filter.py:17
+#: core/models/filter.py:18
 msgid "Exclude - Hide items containing these keywords"
 msgstr "排除 - 隐藏包含这些关键词的条目"
 
-#: core/models/filter.py:23
+#: core/models/filter.py:24
 msgid "Keyword Only"
 msgstr "仅关键词"
 
-#: core/models/filter.py:24
+#: core/models/filter.py:25
 msgid "AI Only"
 msgstr "仅AI"
 
-#: core/models/filter.py:25
+#: core/models/filter.py:26
 msgid "Both Keyword and AI (First Keyword, then AI)"
 msgstr "先关键词再AI"
 
-#: core/models/filter.py:37
+#: core/models/filter.py:38
 msgid "Keywords to filter entries. "
 msgstr "用于过滤的关键词"
 
-#: core/models/filter.py:50
+#: core/models/filter.py:51
 msgid "Filter Prompt"
 msgstr "过滤提示词"
 
-#: core/models/filter.py:53
+#: core/models/filter.py:54
 msgid "Filter Method"
 msgstr "过滤方式"
 
-#: core/models/filter.py:56
+#: core/models/filter.py:57
 msgid "Choose which filtering method to apply"
 msgstr "选择一个过滤方式"
 
-#: core/models/filter.py:61
+#: core/models/filter.py:62
 msgid "Action to take on matching keywords."
 msgstr "匹配关键词的动作"
 
-#: core/models/filter.py:86 core/models/filter.py:87
+#: core/models/filter.py:87 core/models/filter.py:88
 msgid "Filter"
 msgstr "过滤器"
 
-#: core/models/filter.py:254
+#: core/models/filter.py:255
 msgid "Passed Filter"
 msgstr ""
 
@@ -577,6 +585,9 @@ msgstr " 禁用"
 #: templates/admin/feed_batch_modify.html:103
 msgid "filter"
 msgstr "过滤器"
+
+#~ msgid "Translated Status"
+#~ msgstr "翻译状态"
 
 #~ msgid "Translated Feed"
 #~ msgstr "翻译源"
