@@ -451,11 +451,11 @@ class LibreTranslateAgent(Agent):
             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
             req.add_header('User-Agent', 'LibreTranslateAgent/1.0')
 
-            with request.urlopen(req) as response:
+            with request.urlopen(req, timeout=5) as response:
                 response_str = response.read().decode('utf-8')
                 return json.loads(response_str)
         except Exception as e:
-            raise ConnectionError(f"_api_request {e}")
+            raise ConnectionError(f"_api_request {e.reason}")
 
     def _api_translate(self, q: str, source: str, target: str, format: str) -> str:
         """Calls the /translate endpoint."""
