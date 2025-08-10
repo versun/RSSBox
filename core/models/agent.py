@@ -267,8 +267,9 @@ class OpenAIAgent(Agent):
         self, text: str, target_language: str, max_tokens: int = None, **kwargs
     ) -> dict:
         logging.info(">>> Start Summarize [%s]: %s", target_language, text)
+        system_prompt = self.summary_prompt.replace("{target_language}", target_language)
         return self.completions(
-            text, system_prompt=self.summary_prompt, max_tokens=max_tokens, **kwargs
+            text, system_prompt=system_prompt, max_tokens=max_tokens, **kwargs
         )
 
     def digester(
