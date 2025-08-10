@@ -18,7 +18,8 @@ def handle_single_feed_fetch(feed: Feed):
     """
     try:
         feed.fetch_status = None
-        fetch_results = fetch_feed(url=feed.feed_url, etag=feed.etag)
+        etag = feed.etag if feed.max_posts <= feed.entries.count() else ""
+        fetch_results = fetch_feed(url=feed.feed_url, etag=etag)
 
         if fetch_results["error"]:
             raise Exception(f"Fetch Feed Failed: {fetch_results['error']}")
