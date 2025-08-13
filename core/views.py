@@ -92,11 +92,15 @@ def import_opml(request):
                     for outline in outlines:
                         # 检查是否为 feed（有 xmlUrl 属性）
                         if "xmlUrl" in outline.attrib:
-                            Feed.objects.get_or_create(
-                                name=outline.get("title") or outline.get("text"),
+                            feed, created = Feed.objects.get_or_create(
                                 feed_url=outline.get("xmlUrl"),
-                                tag=tag,
+                                defaults={
+                                    "name": outline.get("title") or outline.get("text")
+                                },
                             )
+                            if tag:
+                                tag_obj, _ = Tag.objects.get_or_create(name=tag)
+                                feed.tags.add(tag_obj)
                         # 处理嵌套结构（新类别）
                         elif outline.find("outline") is not None:
                             new_tag = outline.get("text") or outline.get("title")
