@@ -348,17 +348,20 @@ class DeepLAgent(Agent):
         )
 
     def validate(self) -> bool:
+        is_valid = False
         try:
             translator = self._init()
             usage = translator.get_usage()
-            self.log = ""
-            return usage.character.valid
+            if usage.character.valid:
+                self.log = ""
+                is_valid = True
         except Exception as e:
             logging.error("DeepLTranslator validate ->%s", e)
             self.log = f"{timezone.now()}: {str(e)}"
-            return False
+            is_valid = False
         finally:
             self.save()
+        return is_valid
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         logging.info(">>> DeepL Translate [%s]: %s", target_language, text)
@@ -426,8 +429,6 @@ class LibreTranslateAgent(Agent):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Fetch and cache available languages upon initialization
-        # self.available_languages = self._get_available_languages()
         
     # --------------------------------
     # API Methods
@@ -456,9 +457,9 @@ class LibreTranslateAgent(Agent):
                 response_str = response.read().decode('utf-8')
                 return json.loads(response_str)
         except Exception as e:
-            raise ConnectionError(f"_api_request {e.reason}")
+            raise ConnectionError(f"_api_request {str(e)}") # e.reason
 
-    def _api_translate(self, q: str, source: str, target: str, format: str) -> str:
+    def _api_translate(self, q: str, source: str, target: str, format: str="html") -> str:
         """Calls the /translate endpoint."""
         params = {"q": q, "source": source, "target": target, "format": format}
         response_data = self._api_request("translate", params=params, method="POST")
@@ -476,65 +477,40 @@ class LibreTranslateAgent(Agent):
     # --------------------------------
     # Agent Methods
     # --------------------------------
-    # def _get_available_languages(self) -> dict:
-    #     """
-    #     Fetches supported languages from the API and filters them
-    #     against the agent's defined language_map.
-    #     """
-    #     try:
-    #         supported_languages = self._api_languages()
-    #         available_codes = {lang['code'] for lang in supported_languages}
-            
-    #         reverse_language_map = {v: k for k, v in self.language_map.items()}
+    def validate(self) -> bool:
+        is_valid = False
+        try:
+            self._api_languages()
+            self.log = ""
+            is_valid = True
+        except Exception as e:
+            self.log = f"{timezone.now()}: {str(e)}"
+            is_valid = False
+        finally:
+            self.save()
+        return is_valid
 
-    #         return {
-    #             reverse_language_map[code]: code
-    #             for code in available_codes
-    #             if code in reverse_language_map
-    #         }
-    #     except Exception as e:
-    #         raise Exception(f"_get_available_languages: {e}")
+    def translate(self, text: str, target_language: str, **kwargs) -> dict:
+        target_code = self.language_map.get(target_language)
+        if not target_code:
+            self.log += f"{timezone.now()}: Not support target language: {target_language}"
+            logging.error(f"LibreTranslateAgent->Not support target language: {target_language}")
+            return {"text": "", "characters": 0}
+
+        try:
+            translated_text = self._api_translate(q=text, source="auto", target=target_code, format="html")
+            return {"text": translated_text, "characters": len(text)}
+        except Exception as e:
+            logging.error("LibreTranslateAgent->: %s", str(e))
+            self.log = f"{timezone.now()}: {str(e)}"
+            self.save()
+            return {"text": "", "characters": 0}
 
     class Meta:
         verbose_name = "LibreTranslate"
         verbose_name_plural = "LibreTranslate"
 
-    def translate(self, text: str, target_language: str, **kwargs) -> dict:
-        """
-        Translate text using LibreTranslate API.
-        The format is always 'html'.
-        Returns dict with 'text', 'characters' keys.
-        """
-        target_lang_code = self.language_map.get(target_language, 'en')
 
-        try:
-            # Corrected to always use "html" for the format as requested.
-            translated_text = self._api_translate(
-                q=text,
-                source="auto",
-                target=target_lang_code,
-                format="html" 
-            )
-            return {"text": translated_text, "characters": len(text)}
-        except Exception as e:
-            logging.error(f"LibreTranslate translate error: {e}")
-            self.log = f"{timezone.now()}: {str(e)}"
-            self.save()
-            return {'text': text, 'characters': len(text)}
-
-    def validate(self) -> bool:
-        """Validate LibreTranslate connection."""
-        try:
-            # A simple translation test to check connectivity and authentication.
-            test_translation = self._api_translate("Hello World", "en", "es", "text")
-            self.log = ""
-            return bool(test_translation)
-        except Exception as e:
-            logging.error(f"LibreTranslate validation error: {e}")
-            self.log = f"{timezone.now()}: {str(e)}"
-            return False
-        finally:
-            self.save()
         
 class TestAgent(Agent):
     translated_text = models.TextField(default="@@Translated Text@@")
