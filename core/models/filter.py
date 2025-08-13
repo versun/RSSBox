@@ -189,7 +189,7 @@ class Filter(models.Model):
             return True
 
         # 2. 检查条目内容是否更新
-        if entry.updated > result.last_updated:
+        if entry.updated and entry.updated > result.last_updated:
             return True
 
     def save(self, *args, **kwargs):
