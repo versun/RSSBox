@@ -243,7 +243,7 @@ LOGGING = {
     "formatters": {
         "verbose": {
             # "format": "{levelname} {asctime} {message:.500s}", 限制500字符
-            "format": "{levelname} {asctime} {message}",
+            "format": "{levelname} {asctime}<{name}>:{message}",
             "style": "{",
         },
     },
