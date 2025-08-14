@@ -11,8 +11,9 @@ from django.core.cache import cache
 from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
 import json
-import logging
 from urllib import request, parse
+
+logger = logging.getLogger(__name__)
 
 
 class Agent(models.Model):
@@ -108,11 +109,11 @@ class OpenAIAgent(Agent):
                 )
                 # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
                 fr = res.choices[0].finish_reason
-                logging.info(">>> Translator Validate:%s", fr)
+                logger.info(">>> Translator Validate:%s", fr)
                 self.log = ""
                 return True
             except Exception as e:
-                logging.error("OpenAIInterface validate ->%s", e)
+                logger.error("OpenAIInterface validate ->%s", e)
                 self.log = f"{timezone.now()}: {str(e)}"
                 return False
             finally:
@@ -141,7 +142,7 @@ class OpenAIAgent(Agent):
 
             # 添加一点缓冲确保时间窗口切换
             wait_seconds += 0.1
-            logging.info(f"Rate limit reached. Waiting {wait_seconds:.2f} seconds...")
+            logger.info(f"Rate limit reached. Waiting {wait_seconds:.2f} seconds...")
             time.sleep(wait_seconds)
 
             # 重置计数（新分钟开始）
@@ -180,7 +181,7 @@ class OpenAIAgent(Agent):
             )  # 100 token buffer
             # 检查文本长度是否需要分块
             if get_token_count(text) > max_usable_tokens:
-                logging.info(
+                logger.info(
                     f"Text too large ({get_token_count(text)} tokens), chunking..."
                 )
 
@@ -227,18 +228,18 @@ class OpenAIAgent(Agent):
             # if res.choices[0].finish_reason.lower() == "stop" or res.choices[0].message.content:
             if res.choices and res.choices[0].message.content:
                 result_text = res.choices[0].message.content
-                logging.info(
+                logger.info(
                     "OpenAI->%s: %s",
                     res.choices[0].finish_reason,
                     result_text,
                 )
             # else:
             #     result_text = ''
-            #     logging.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
+            #     logger.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
             tokens = res.usage.total_tokens if res.usage else 0
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
-            logging.error("OpenAIInterface->%s: %s", e, text)
+            logger.error("OpenAIInterface->%s: %s", e, text)
         finally:
             self.save()
 
@@ -252,7 +253,7 @@ class OpenAIAgent(Agent):
         text_type: str = "title",
         **kwargs,
     ) -> dict:
-        logging.info(">>> Translate [%s]: %s", target_language, text)
+        logger.info(">>> Translate [%s]: %s", target_language, text)
         system_prompt = (
             self.title_translate_prompt
             if text_type == "title"
@@ -266,7 +267,7 @@ class OpenAIAgent(Agent):
     def summarize(
         self, text: str, target_language: str, max_tokens: int = None, **kwargs
     ) -> dict:
-        logging.info(">>> Start Summarize [%s]: %s", target_language, text)
+        logger.info(">>> Start Summarize [%s]: %s", target_language, text)
         system_prompt = self.summary_prompt.replace(
             "{target_language}", target_language
         )
@@ -282,7 +283,7 @@ class OpenAIAgent(Agent):
         max_tokens: int = None,
         **kwargs,
     ) -> dict:
-        logging.info(">>> Start Digesting [%s]: %s", target_language, text)
+        logger.info(">>> Start Digesting [%s]: %s", target_language, text)
         system_prompt += settings.output_format_for_filter_prompt
         return self.completions(
             text, system_prompt=system_prompt, max_tokens=max_tokens, **kwargs
@@ -291,7 +292,7 @@ class OpenAIAgent(Agent):
     def filter(
         self, text: str, system_prompt: str, max_tokens: int = None, **kwargs
     ) -> dict:
-        logging.info(">>> Start Filter: %s", text)
+        logger.info(">>> Start Filter: %s", text)
         passed = False
         tokens = 0
         results = self.completions(
@@ -302,11 +303,11 @@ class OpenAIAgent(Agent):
         )
 
         if results["text"] and "Passed" in results["text"]:
-            logging.info(">>> Filter Passed: %s", text)
+            logger.info(">>> Filter Passed: %s", text)
             passed = True
             tokens = results["tokens"]
         else:
-            logging.info(">>> Filter Blocked: %s", text)
+            logger.info(">>> Filter Blocked: %s", text)
             passed = False
 
         return {"passed": passed, "tokens": tokens}
@@ -358,7 +359,7 @@ class DeepLAgent(Agent):
                 self.log = ""
                 is_valid = True
         except Exception as e:
-            logging.error("DeepLTranslator validate ->%s", e)
+            logger.error("DeepLTranslator validate ->%s", e)
             self.log = f"{timezone.now()}: {str(e)}"
             is_valid = False
         finally:
@@ -366,12 +367,12 @@ class DeepLAgent(Agent):
         return is_valid
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
-        logging.info(">>> DeepL Translate [%s]: %s", target_language, text)
+        logger.info(">>> DeepL Translate [%s]: %s", target_language, text)
         target_code = self.language_code_map.get(target_language, None)
         translated_text = ""
         try:
             if target_code is None:
-                logging.error(
+                logger.error(
                     "DeepLTranslator->Not support target language:%s", target_language
                 )
             translator = self._init()
@@ -384,7 +385,7 @@ class DeepLAgent(Agent):
             )
             translated_text = resp.text
         except Exception as e:
-            logging.error("DeepLTranslator->%s: %s", e, text)
+            logger.error("DeepLTranslator->%s: %s", e, text)
             self.log = f"{timezone.now()}: {str(e)}"
         finally:
             self.save()
@@ -504,7 +505,7 @@ class LibreTranslateAgent(Agent):
             self.log += (
                 f"{timezone.now()}: Not support target language: {target_language}"
             )
-            logging.error(
+            logger.error(
                 f"LibreTranslateAgent->Not support target language: {target_language}"
             )
             return {"text": "", "characters": 0}
@@ -515,7 +516,7 @@ class LibreTranslateAgent(Agent):
             )
             return {"text": translated_text, "characters": len(text)}
         except Exception as e:
-            logging.error("LibreTranslateAgent->: %s", str(e))
+            logger.error("LibreTranslateAgent->: %s", str(e))
             self.log = f"{timezone.now()}: {str(e)}"
             self.save()
             return {"text": "", "characters": 0}
@@ -540,17 +541,17 @@ class TestAgent(Agent):
         return True
 
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
-        logging.info(">>> Test Translate [%s]: %s", target_language, text)
+        logger.info(">>> Test Translate [%s]: %s", target_language, text)
         time.sleep(self.interval)
         return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
 
     def summarize(self, text: str, target_language: str) -> dict:
-        logging.info(">>> Test Summarize [%s]: %s", target_language, text)
+        logger.info(">>> Test Summarize [%s]: %s", target_language, text)
         time.sleep(self.interval)
         return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
 
     def filter(self, text: str, **kwargs):
-        logging.info(">>> Test Filter")
+        logger.info(">>> Test Filter")
         import random
 
         time.sleep(self.interval)

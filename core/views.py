@@ -13,6 +13,8 @@ from feed2json import feed2json
 
 from .cache import cache_rss, cache_tag
 
+logger = logging.getLogger(__name__)
+
 
 def _get_modified(request, feed_slug, feed_type="t", **kwargs):
     try:
@@ -21,7 +23,7 @@ def _get_modified(request, feed_slug, feed_type="t", **kwargs):
         else:
             modified = Feed.objects.get(slug=feed_slug).last_fetch
     except Feed.DoesNotExist:
-        logging.warning(
+        logger.warning(
             "Translated feed not found, Maybe still in progress, Please confirm it's exist: %s",
             feed_slug,
         )
@@ -37,7 +39,7 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
         else:
             etag = Feed.objects.get(slug=feed_slug).etag
     except Feed.DoesNotExist:
-        logging.warning(
+        logger.warning(
             "Feed not fetched yet, Please update it first: %s",
             feed_slug,
         )
@@ -130,14 +132,14 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
         cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
         content = cache.get(cache_key)
         if content is None:
-            logging.debug(f"Cache MISS for key: {cache_key}")
+            logger.debug(f"Cache MISS for key: {cache_key}")
             content = cache_rss(feed_slug, feed_type, format)
         else:
-            logging.debug(f"Cache HIT for key: {cache_key}")
+            logger.debug(f"Cache HIT for key: {cache_key}")
 
         return _make_response(content, feed_slug, format)
     except Exception as e:
-        logging.warning(f"Feed not found {feed_slug}: {str(e)}")
+        logger.warning(f"Feed not found {feed_slug}: {str(e)}")
         return HttpResponse(
             status=404,
             content="Feed not found, Maybe it's still in progress, Please try again later.",
@@ -155,13 +157,13 @@ def tag(request, tag: str, feed_type="t", format="xml"):
         cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
         content = cache.get(cache_key)
         if content is None:
-            logging.debug(f"Cache MISS for key: {cache_key}")
+            logger.debug(f"Cache MISS for key: {cache_key}")
             content = cache_tag(tag, feed_type, format)
         else:
-            logging.debug(f"Cache HIT for key: {cache_key}")
+            logger.debug(f"Cache HIT for key: {cache_key}")
         return _make_response(content, tag, format)
     except Exception as e:
-        logging.warning("tag not found: %s / %s", tag, str(e))
+        logger.warning("tag not found: %s / %s", tag, str(e))
         return HttpResponse(
             status=404,
             content="Feed not found, Maybe it's still in progress, Please try again later.",

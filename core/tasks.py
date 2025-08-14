@@ -1,17 +1,15 @@
 import logging
 import time
-import json
 
 logger = logging.getLogger(__name__)
 from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
 import newspaper
-from .models import Feed, Entry, Filter
+from .models import Feed, Entry
 from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
 from core.models.agent import Agent
-from utils.text_handler import get_token_count, adaptive_chunking
 
 
 def handle_single_feed_fetch(feed: Feed):

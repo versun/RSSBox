@@ -4,6 +4,8 @@ import shutil
 import datetime
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 
 def backup_db(apps, schema_editor):
     db_path = settings.DATABASES["default"]["NAME"]
@@ -15,8 +17,8 @@ def backup_db(apps, schema_editor):
             os.remove(backup_path)
         shutil.copyfile(db_path, backup_path)
     except FileNotFoundError:
-        logging.error(f"Database file {db_path} not found.")
+        logger.error(f"Database file {db_path} not found.")
     except PermissionError:
-        logging.error(f"Permission denied when accessing {db_path} or {backup_path}.")
+        logger.error(f"Permission denied when accessing {db_path} or {backup_path}.")
     except Exception as e:
-        logging.error(f"Error occurred during database backup: {str(e)}")
+        logger.error(f"Error occurred during database backup: {str(e)}")

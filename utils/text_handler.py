@@ -1,6 +1,6 @@
 import functools
 import re
-from typing import List, Tuple, Optional
+from typing import List
 from bs4 import Comment
 import tiktoken
 import html2text

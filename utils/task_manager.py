@@ -5,6 +5,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from collections import OrderedDict
 
+logger = logging.getLogger(__name__)
+
 
 class TaskManager:
     """
@@ -29,7 +31,7 @@ class TaskManager:
         This method shuts down the current executor, waits for active tasks to complete,
         and then creates a new executor.
         """
-        logging.info(
+        logger.info(
             f"Task manager: Restarting worker threads. Tasks executed: {self.tasks_executed_since_restart}"
         )
         # Shutdown the existing executor
@@ -41,7 +43,7 @@ class TaskManager:
         )
         # Reset the counter
         self.tasks_executed_since_restart = 0
-        logging.info("Task manager: Worker threads restarted successfully.")
+        logger.info("Task manager: Worker threads restarted successfully.")
 
     def submit_task(self, task_name, task_fn, *args, **kwargs):
         """提交新任务"""
@@ -49,7 +51,7 @@ class TaskManager:
             if self.tasks_executed_since_restart >= self.restart_threshold:
                 self._restart_executor()
             self.tasks_executed_since_restart += 1
-            logging.debug(
+            logger.debug(
                 f"Submitting task: {task_name} (Total executed: {self.tasks_executed_since_restart})"
             )
 

@@ -15,6 +15,8 @@ from core.models import Feed, Entry, Tag
 from utils.text_handler import set_translation_display
 from fake_useragent import UserAgent
 
+logger = logging.getLogger(__name__)
+
 
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
@@ -70,7 +72,7 @@ def manual_fetch_feed(url: str, etag: str = "") -> Dict:
 
     if feed:
         if feed.bozo and not feed.entries:
-            logging.warning("Get feed %s %s", url, feed.get("bozo_exception"))
+            logger.warning("Get feed %s %s", url, feed.get("bozo_exception"))
             error = feed.get("bozo_exception")
 
     return {
@@ -85,14 +87,14 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
         ua = UserAgent()
         feed = feedparser.parse(url, etag=etag, agent=ua.random.strip())
         if feed.status == 304:
-            logging.info(f"Feed {url} not modified, using cached version.")
+            logger.info(f"Feed {url} not modified, using cached version.")
             return {
                 "feed": None,
                 "update": False,
                 "error": None,
             }
         if feed.bozo and not feed.entries:
-            logging.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
+            logger.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
             results = manual_fetch_feed(url, etag)
             return results
         else:
@@ -102,7 +104,7 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
                 "error": None,
             }
     except Exception as e:
-        # logging.warning(f"Failed to fetch feed {url}: {str(e)}")
+        # logger.warning(f"Failed to fetch feed {url}: {str(e)}")
         return {
             "feed": None,
             "update": False,
@@ -185,7 +187,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
                     length=enclosure.get("length"),
                 )
         except Exception as e:
-            logging.error(f"Error parsing enclosures for entry {entry.id}: {str(e)}")
+            logger.error(f"Error parsing enclosures for entry {entry.id}: {str(e)}")
 
     return fe
 
@@ -207,7 +209,7 @@ def _finalize_atom_feed(fg):
 def generate_atom_feed(feed: Feed, feed_type="t"):
     """生成单个Feed的Atom格式"""
     if not feed:
-        logging.error("generate_atom_feed: feed is None")
+        logger.error("generate_atom_feed: feed is None")
         return None
 
     try:
