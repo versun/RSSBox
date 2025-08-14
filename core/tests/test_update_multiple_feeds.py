@@ -38,8 +38,8 @@ class UpdateMultipleFeedsTests(TestCase):
         self.assertEqual(mock_tm.submit_task.call_count, 2)
         # cache_rss called 4 times per feed
         self.assertEqual(mock_cache_rss.call_count, 4 * 2)
-        # cache_tag called once for tag
-        mock_cache_tag.assert_called_once_with(tag.slug, feed_type="t", format="json")
+        # cache_tag should be called three times (o/xml, t/xml, t/json)
+        self.assertEqual(mock_cache_tag.call_count, 3)
 
     @mock.patch("core.management.commands.update_feeds.wait")
     @mock.patch("core.management.commands.update_feeds.task_manager")

@@ -1,5 +1,4 @@
 import functools
-import logging
 import re
 from typing import List, Tuple, Optional
 from bs4 import Comment
