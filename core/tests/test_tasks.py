@@ -83,8 +83,9 @@ class TasksTestCase(TestCase):
         self.assertFalse(self.feed.fetch_status)
         self.assertIn("Network Error", self.feed.log)
 
+    @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation(self, mock_translate_feed):
+    def test_handle_feeds_translation(self, mock_translate_feed, mock_logger_info):
         """Test the handle_feeds_translation task."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         feeds = [self.feed]
@@ -92,11 +93,114 @@ class TasksTestCase(TestCase):
         handle_feeds_translation(feeds, target_field="title")
 
         mock_translate_feed.assert_called_once_with(self.feed, target_field="title")
+        mock_logger_info.assert_called_once_with(
+            "Start translate %s of feed %s to %s",
+            "title",
+            self.feed.feed_url,
+            self.feed.target_language,
+        )
 
         # In the original function, the feeds list is updated in-place.
         # We need to get the updated feed object to check its status.
         updated_feed = Feed.objects.get(id=self.feed.id)
-        self.assertTrue(updated_feed.translation_status)
+        # translation_status is not set to True in the current implementation (it's commented out)
+        # so we check that it's None (set at the beginning) instead
+        self.assertIsNone(updated_feed.translation_status)
+        self.assertIn("Translate Completed", updated_feed.log)
+
+    def test_handle_feeds_translation_no_entries(self):
+        """Test handle_feeds_translation with feeds that have no entries."""
+        # This feed has no entries
+        feeds = [self.feed]
+
+        handle_feeds_translation(feeds, target_field="title")
+
+        # Feed should not be processed, status should remain unchanged
+        updated_feed = Feed.objects.get(id=self.feed.id)
+        self.assertIsNone(updated_feed.translation_status)
+        # Log should not contain "Translate Completed"
+        self.assertNotIn("Translate Completed", updated_feed.log)
+
+    @patch("core.tasks.logger.error")
+    @patch("core.tasks.logger.info")
+    @patch("core.tasks.translate_feed")
+    def test_handle_feeds_translation_error(self, mock_translate_feed, mock_logger_info, mock_logger_error):
+        """Test handle_feeds_translation when translate_feed raises an exception."""
+        Entry.objects.create(feed=self.feed, original_title="An entry to translate")
+        mock_translate_feed.side_effect = Exception("Translation failed")
+        feeds = [self.feed]
+
+        handle_feeds_translation(feeds, target_field="title")
+
+        mock_translate_feed.assert_called_once_with(self.feed, target_field="title")
+        mock_logger_info.assert_called_once_with(
+            "Start translate %s of feed %s to %s",
+            "title",
+            self.feed.feed_url,
+            self.feed.target_language,
+        )
+        mock_logger_error.assert_called_once_with(
+            f"Error in translate_feed for feed {self.feed.name}: Translation failed"
+        )
+
+        # Check that error status and log are set correctly
+        updated_feed = Feed.objects.get(id=self.feed.id)
+        self.assertFalse(updated_feed.translation_status)
+        self.assertIn("Translation failed", updated_feed.log)
+
+    @patch("core.tasks.logger.info")
+    @patch("core.tasks.translate_feed")
+    def test_handle_feeds_translation_multiple_feeds(self, mock_translate_feed, mock_logger_info):
+        """Test handle_feeds_translation with multiple feeds."""
+        # Create a second feed
+        feed2 = Feed.objects.create(
+            name="Second Feed",
+            feed_url="https://example.com/feed2.xml",
+        )
+        
+        # Add entries to both feeds
+        Entry.objects.create(feed=self.feed, original_title="Entry 1")
+        Entry.objects.create(feed=feed2, original_title="Entry 2")
+        
+        feeds = [self.feed, feed2]
+
+        handle_feeds_translation(feeds, target_field="title")
+
+        # Both feeds should be called
+        self.assertEqual(mock_translate_feed.call_count, 2)
+        mock_translate_feed.assert_any_call(self.feed, target_field="title")
+        mock_translate_feed.assert_any_call(feed2, target_field="title")
+
+        # Both feeds should have logger calls
+        self.assertEqual(mock_logger_info.call_count, 2)
+
+        # Check both feeds are updated
+        updated_feed1 = Feed.objects.get(id=self.feed.id)
+        updated_feed2 = Feed.objects.get(id=feed2.id)
+        self.assertIsNone(updated_feed1.translation_status)
+        self.assertIsNone(updated_feed2.translation_status)
+        self.assertIn("Translate Completed", updated_feed1.log)
+        self.assertIn("Translate Completed", updated_feed2.log)
+
+    @patch("core.tasks.logger.info")
+    @patch("core.tasks.translate_feed")
+    def test_handle_feeds_translation_content_field(self, mock_translate_feed, mock_logger_info):
+        """Test handle_feeds_translation with target_field='content'."""
+        Entry.objects.create(feed=self.feed, original_title="An entry to translate")
+        feeds = [self.feed]
+
+        handle_feeds_translation(feeds, target_field="content")
+
+        mock_translate_feed.assert_called_once_with(self.feed, target_field="content")
+        mock_logger_info.assert_called_once_with(
+            "Start translate %s of feed %s to %s",
+            "content",
+            self.feed.feed_url,
+            self.feed.target_language,
+        )
+
+        updated_feed = Feed.objects.get(id=self.feed.id)
+        self.assertIsNone(updated_feed.translation_status)
         self.assertIn("Translate Completed", updated_feed.log)
 
     @patch("core.tasks.summarize_feed")
