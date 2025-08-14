@@ -8,6 +8,7 @@ from utils.task_manager import task_manager
 from core.admin import core_admin_site
 from core.actions import tag_force_update
 
+logger = logging.getLogger(__name__)
 
 class TagAdmin(admin.ModelAdmin):
     list_display = (

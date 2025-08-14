@@ -9,6 +9,7 @@ from utils import text_handler
 import json
 from config import settings
 
+logger = logging.getLogger(__name__)
 
 class Filter(models.Model):
     INCLUDE = True
@@ -150,11 +151,13 @@ class Filter(models.Model):
                     )
 
                 text_str = json.dumps(json_data, ensure_ascii=False)
-                filter_results = self.agent.filter(
-                    text=text_str, system_prompt=self.filter_prompt
-                )
-                passed = filter_results["passed"]
-                tokens += filter_results["tokens"]
+                passed = None
+                if self.agent:
+                    filter_results = self.agent.filter(
+                        text=text_str, system_prompt=self.filter_prompt
+                    )
+                    passed = filter_results["passed"]
+                    tokens += filter_results["tokens"]
                 result.passed = passed
                 result.save()
             else:
@@ -243,7 +246,7 @@ class Filter(models.Model):
         清除与此过滤器相关的所有缓存结果
         """
         FilterResult.objects.filter(filter=self).delete()
-        logging.debug(f"Cleared cache for filter {self.name}")
+        logger.debug(f"Cleared cache for filter {self.name}")
 
 
 class FilterResult(models.Model):

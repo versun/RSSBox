@@ -1,6 +1,8 @@
 import logging
 import time
 import json
+
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
@@ -122,7 +124,7 @@ def handle_single_feed_fetch(feed: Feed):
         feed.fetch_status = True
         feed.log = f"{timezone.now()} Fetch Completed <br>"
     except Exception as e:
-        logging.error("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
+        logger.error("Task handle_single_feed_fetch %s: %s", feed.feed_url, str(e))
         feed.fetch_status = False
         feed.log = f"{timezone.now()} {str(e)}<br>"
     finally:
@@ -153,7 +155,8 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
                 continue
 
             feed.translation_status = None
-            logging.info(
+            feed.save()
+            logger.info(
                 "Start translate %s of feed %s to %s",
                 target_field,
                 feed.feed_url,
@@ -165,11 +168,8 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             feed.last_translate = timezone.now()
             feed.log += f"{timezone.now()} Translate Completed <br>"
         except Exception as e:
-            logging.error(
-                "Task handle_feeds_translation (%s)%s: %s",
-                feed.target_language,
-                feed.feed_url,
-                str(e),
+            logger.error(
+                f"Error in translate_feed for feed {feed.name}: {str(e)}"
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)} <br>"
@@ -198,7 +198,8 @@ def handle_feeds_summary(feeds: list):
                 continue
 
             feed.translation_status = None
-            logging.info(
+            feed.save()
+            logger.info(
                 "Start summary feed %s to %s", feed.feed_url, feed.target_language
             )
             if not feed.summarizer:
@@ -217,11 +218,8 @@ def handle_feeds_summary(feeds: list):
             feed.translation_status = True
             feed.log += f"{timezone.now()} Summary Completed <br>"
         except Exception as e:
-            logging.error(
-                "Task handle_feeds_summary (%s)%s: %s",
-                feed.target_language,
-                feed.feed_url,
-                str(e),
+            logger.error(
+                f"Error in summarize_feed for feed {feed.name}: {str(e)}"
             )
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)}<br>"
@@ -238,7 +236,7 @@ def handle_feeds_summary(feeds: list):
 
 def translate_feed(feed: Feed, target_field: str = "title"):
     """Translate and summarize feed entries with memory optimizations."""
-    logging.info("Translating feed: %s", feed.target_language)
+    logger.info("Translating feed: %s", feed.target_language)
     total_tokens = 0
     total_characters = 0
     entries_to_save = []
@@ -251,7 +249,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
     for entry in entries:
         try:
-            logging.debug(f"Processing entry {entry}")
+            logger.debug(f"Processing entry {entry}")
             if not feed.translator:
                 raise Exception("Translate Engine Not Set")
 
@@ -311,10 +309,13 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                 gc.collect()
 
         except Exception as e:
-            logging.error(f"Error processing entry {entry.link}: {str(e)}")
+            logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
+            # feed.translation_status = False
+            # feed.save()
+            # feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
         finally:
             # Explicitly clean up entry reference
             del entry
@@ -331,7 +332,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     feed.total_tokens += total_tokens
     feed.total_characters += total_characters
 
-    logging.info(
+    logger.info(
         f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}"
     )
     # Clean up large variables
@@ -351,7 +352,7 @@ def _translate_title(
     if entry.translated_title:
         return {"tokens": 0, "characters": 0}
 
-    logging.debug("[Title] Translating title")
+    logger.debug("[Title] Translating title")
     result = _auto_retry(
         engine.translate,
         max_retries=3,
@@ -461,16 +462,16 @@ def summarize_feed(
             .count()
         )
         if not total_entries:
-            logging.info(f"No entries to summarize for feed: {feed.feed_url}")
-            return
+            logger.info(f"No entries to summarize for feed: {feed.feed_url}")
+            return False
 
-        logging.info(
+        logger.info(
             f"Starting summary for {total_entries} entries in feed: {feed.feed_url}"
         )
 
         for idx, entry in enumerate(entries):
             try:
-                logging.info(
+                logger.info(
                     f"[{idx + 1}/{total_entries}] Processing: {entry.original_title}"
                 )
 
@@ -512,7 +513,7 @@ def summarize_feed(
                 del content_text
 
                 actual_chunks = len(text_chunks)
-                logging.info(
+                logger.info(
                     f"Chunked into {actual_chunks} chunks (target: {target_chunks})"
                 )
 
@@ -589,7 +590,7 @@ def summarize_feed(
                 # Clean up accumulated summaries
                 del accumulated_summaries
 
-                logging.info(
+                logger.info(
                     f"Completed summary for '{entry.original_title}' - Total tokens: {total_tokens}"
                 )
 
@@ -605,8 +606,8 @@ def summarize_feed(
                     gc.collect()
 
             except Exception as e:
-                logging.error(
-                    f"Error processing entry '{entry.original_title}': {str(e)}"
+                logger.error(
+                    f"Error in summarize_feed for feed {feed.name}: {str(e)}"
                 )
                 entry.ai_summary = f"[Summary failed: {str(e)}]"
                 entries_to_save.append(entry)
@@ -617,14 +618,15 @@ def summarize_feed(
                 if "content_text" in locals():
                     del content_text
     except Exception as e:
-        logging.exception(f"Critical error summarizing feed {feed.feed_url}")
+        logger.error(f"Critical error summarizing feed {feed.feed_url}")
         feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
     finally:
         _save_progress(entries_to_save, feed, total_tokens)
-        logging.info(f"Completed summary process for feed: {feed.feed_url}")
+        logger.info(f"Completed summary process for feed: {feed.feed_url}")
 
         # Clean up large references
         del entries, entries_to_save
+    return True
 
 
 def _save_progress(entries_to_save, feed, total_tokens):
@@ -646,7 +648,7 @@ def _auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
             result = func(**kwargs)
             break
         except Exception as e:
-            logging.error(f"Attempt {attempt + 1} failed: {str(e)}")
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
             time.sleep(0.5 * (2**attempt))  # Exponential backoff
 
     # Clean up kwargs if they contain large objects
@@ -666,7 +668,7 @@ def _fetch_article_content(link: str) -> str:
         article.parse()
         content = mistune.html(article.text)
     except Exception as e:
-        logging.error(f"Article fetch failed: {str(e)}")
+        logger.error(f"Article fetch failed: {str(e)}")
     finally:
         # Explicitly clean up newspaper objects
         if "article" in locals():

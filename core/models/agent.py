@@ -533,10 +533,11 @@ class TestAgent(Agent):
 
     def summarize(self, text: str, target_language: str) -> dict:
         logging.info(">>> Test Summarize [%s]: %s", target_language, text)
+        time.sleep(self.interval)
         return {"text": self.translated_text, "tokens": 10, "characters": len(text)}
 
     def filter(self, text: str, **kwargs):
         logging.info(">>> Test Filter")
         import random
-
+        time.sleep(self.interval)
         return {"passed": random.choice([True, False]), "tokens": 10}

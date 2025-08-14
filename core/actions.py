@@ -18,6 +18,7 @@ from utils.task_manager import task_manager
 from .management.commands.update_feeds import update_multiple_feeds
 from core.cache import cache_tag
 
+logger = logging.getLogger(__name__)
 
 @admin.display(description=_("Clean translated content"))
 def clean_translated_content(modeladmin, request, queryset):
@@ -131,7 +132,7 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
         return response
 
     except Exception as e:
-        logging.error("OPML export error: %s", str(e), exc_info=True)
+        logger.error("OPML export error: %s", str(e), exc_info=True)
         return HttpResponse("An error occurred during OPML export", status=500)
 
 
@@ -159,7 +160,7 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
 
 @admin.display(description=_("Force update"))
 def feed_force_update(modeladmin, request, queryset):
-    logging.info("Call feed_force_update: %s", queryset)
+    logger.info("Call feed_force_update: %s", queryset)
 
     with transaction.atomic():
         for instance in queryset:
@@ -173,7 +174,7 @@ def feed_force_update(modeladmin, request, queryset):
 
 @admin.display(description=_("Recombine related feeds."))
 def tag_force_update(modeladmin, request, queryset):
-    logging.info("Call tag_force_update: %s", queryset)
+    logger.info("Call tag_force_update: %s", queryset)
 
     with transaction.atomic():
         for instance in queryset:
@@ -190,7 +191,7 @@ def tag_force_update(modeladmin, request, queryset):
 @admin.display(description=_("Batch modification"))
 def feed_batch_modify(modeladmin, request, queryset):
     if "apply" in request.POST:
-        logging.info("Apply feed_batch_modify")
+        logger.info("Apply feed_batch_modify")
         post_data = request.POST
         fields = {
             "update_frequency": "update_frequency_value",

@@ -10,6 +10,7 @@ from core.models import Feed, Entry
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
+logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = "Clean up entries by removing those beyond each feed's max_posts limit"
@@ -34,7 +35,7 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"{current_time}: Successfully cleaned up all feeds")
             )
         except Exception as e:
-            logging.exception(f"Command cleanup_entries failed: {str(e)}")
+            logger.exception(f"Command cleanup_entries failed: {str(e)}")
             self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
             sys.exit(1)
         finally:
@@ -58,12 +59,12 @@ def cleanup_feed_entries(feed: Feed):
 
         # Delete older entries
         deleted_count = feed.entries.exclude(id__in=keep_ids).delete()[0]
-        logging.info(
+        logger.info(
             f"Cleaned {deleted_count} entries from {feed.name} "
             f"(kept {len(keep_ids)}/{total_entries})"
         )
     except Exception as e:
-        logging.exception(f"Error cleaning feed {feed.name}: {str(e)}")
+        logger.exception(f"Error cleaning feed {feed.name}: {str(e)}")
     finally:
         close_old_connections()
 
@@ -81,12 +82,12 @@ def cleanup_all_feeds():
             cleanup_feed_entries(feed)
 
             if processed % 10 == 0:
-                logging.info(
+                logger.info(
                     f"{current_time}: Processing feed {processed}/{total_feeds}"
                 )
                 close_old_connections()  # Close connections after processing batch
 
-        logging.info(f"{current_time}: Completed cleanup for {total_feeds} feeds")
+        logger.info(f"{current_time}: Completed cleanup for {total_feeds} feeds")
     except Exception as e:
-        logging.exception("cleanup_all_feeds failed: %s", str(e))
+        logger.exception("cleanup_all_feeds failed: %s", str(e))
         raise

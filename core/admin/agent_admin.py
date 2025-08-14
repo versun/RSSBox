@@ -8,6 +8,7 @@ from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, Test
 from utils.modelAdmin_utils import status_icon
 from core.admin import core_admin_site
 
+logger = logging.getLogger(__name__)
 
 class AgentAdmin(admin.ModelAdmin):
     # get_model_perms = lambda self, request: {}  # 不显示在admin页面
@@ -16,14 +17,14 @@ class AgentAdmin(admin.ModelAdmin):
     ]
 
     def save_model(self, request, obj, form, change):
-        logging.info("Call save_model: %s", obj)
+        logger.info("Call save_model: %s", obj)
         # obj.valid = None
         # obj.save()
         try:
             obj.valid = obj.validate()
         except Exception as e:
             obj.valid = False
-            logging.error("Error in translator: %s", e)
+            logger.error("Error in agent: %s", e)
         finally:
             obj.save()
         return redirect("/core/agent")

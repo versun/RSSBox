@@ -7,6 +7,7 @@ from core.forms import FilterForm
 from core.admin import core_admin_site
 from core.actions import clean_filter_results
 
+logger = logging.getLogger(__name__)
 
 class FilterAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"

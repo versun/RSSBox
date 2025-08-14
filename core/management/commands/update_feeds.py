@@ -18,6 +18,7 @@ from core.cache import cache_rss, cache_tag
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
+logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = "Updates feeds based on specified frequency or runs immediate update"
@@ -72,7 +73,7 @@ class Command(BaseCommand):
                 )
             )
         except Exception as e:
-            logging.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
+            logger.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
             self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
             sys.exit(1)
         finally:
@@ -88,7 +89,7 @@ def update_single_feed(feed: Feed):
         close_old_connections()
 
         try:
-            logging.info(f"Starting feed update: {feed.name}")
+            logger.info(f"Starting feed update: {feed.name}")
 
             handle_single_feed_fetch(feed)
             # task_manager.update_progress(feed_id, 50)
@@ -100,14 +101,14 @@ def update_single_feed(feed: Feed):
             if feed.summary:
                 handle_feeds_summary([feed])
 
-            logging.info(f"Completed feed update: {feed.name}")
+            logger.info(f"Completed feed update: {feed.name}")
 
             return True
         except Feed.DoesNotExist:
-            logging.error(f"Feed not found: ID {feed.name}")
+            logger.error(f"Feed not found: ID {feed.name}")
             return False
         except Exception as e:
-            logging.exception(f"Error updating feed ID {feed.name}: {str(e)}")
+            logger.exception(f"Error updating feed ID {feed.name}: {str(e)}")
             return False
     finally:
         # 确保关闭数据库连接
@@ -117,7 +118,7 @@ def update_single_feed(feed: Feed):
 def update_multiple_feeds(feeds: list):
     """并行更新多个Feed"""
     if not feeds:
-        logging.info("No feeds to update.")
+        logger.info("No feeds to update.")
         return
     try:
         # 先执行所有feed更新任务
@@ -133,7 +134,7 @@ def update_multiple_feeds(feeds: list):
         done, not_done = wait(futures, timeout=timeout)
 
         if not_done:
-            logging.warning(
+            logger.warning(
                 f"Feed update task timed out. {len(not_done)} tasks did not complete."
             )
 
@@ -141,7 +142,7 @@ def update_multiple_feeds(feeds: list):
             try:
                 future.result()
             except Exception as e:
-                logging.warning(f"A feed update task resulted in an exception: {e}")
+                logger.warning(f"A feed update task resulted in an exception: {e}")
 
         # 所有任务完成后执行缓存操作
         # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
@@ -152,7 +153,7 @@ def update_multiple_feeds(feeds: list):
                 cache_rss(feed.slug, feed_type="t", format="xml")
                 cache_rss(feed.slug, feed_type="t", format="json")
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"{time.time()}: Failed to cache RSS for {feed.slug}: {str(e)}"
                 )
 
@@ -169,10 +170,10 @@ def update_multiple_feeds(feeds: list):
                 cache_tag(tag.slug, feed_type="t", format="xml")
                 cache_tag(tag.slug, feed_type="t", format="json")
             except Exception as e:
-                logging.error(f"Failed to cache tag {tag.slug}: {str(e)}")
+                logger.error(f"Failed to cache tag {tag.slug}: {str(e)}")
 
     except Exception as e:
-        logging.exception("Command update_multiple_feeds failed: %s", str(e))
+        logger.exception("Command update_multiple_feeds failed: %s", str(e))
 
 
 def update_feeds_for_frequency(simple_update_frequency: str):
@@ -195,17 +196,17 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         feeds_list = list(feeds_iterator)
 
         log = f"{current_time}: Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds_list)}"
-        logging.info(log)
+        logger.info(log)
         # output to stdout
         print(log)
 
         update_multiple_feeds(feeds_list)
 
     except KeyError:
-        logging.error(f"Invalid frequency: {simple_update_frequency}")
+        logger.error(f"Invalid frequency: {simple_update_frequency}")
     except Exception as e:
         log = f"{current_time}: Command update_feeds_for_frequency {simple_update_frequency}: {str(e)}"
-        logging.exception(log)
+        logger.exception(log)
         print(log)
 
 

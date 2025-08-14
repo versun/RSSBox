@@ -20,6 +20,7 @@ from core.views import import_opml
 from core.management.commands.update_feeds import update_single_feed
 from core.admin import core_admin_site
 
+logger = logging.getLogger(__name__)
 
 class FeedAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
@@ -143,7 +144,7 @@ class FeedAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
     def save_model(self, request, obj, form, change):
-        logging.info(f"Call Feed save_model: {obj}")
+        logger.info(f"Call Feed save_model: {obj}")
         feed_url_changed = "feed_url" in form.changed_data
         target_language_changed = "target_language" in form.changed_data
         # 处理默认名称设置
@@ -176,7 +177,7 @@ class FeedAdmin(admin.ModelAdmin):
         task_id = task_manager.submit_task(
             f"Update Feed: {feed.name}", update_single_feed, feed
         )
-        logging.info(f"Submitted feed update task after commit: {task_id}")
+        logger.info(f"Submitted feed update task after commit: {task_id}")
 
     @admin.display(description=_("Update Frequency"), ordering="update_frequency")
     def simple_update_frequency(self, obj):
