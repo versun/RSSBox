@@ -43,17 +43,19 @@ class UpdateSingleFeedTests(TestCase):
         # close_old_connections should be called twice (entering & finally)
         self.assertGreaterEqual(mock_close_conn.call_count, 2)
 
+    @mock.patch("core.management.commands.update_feeds.logger")
     @mock.patch("core.management.commands.update_feeds.close_old_connections")
     @mock.patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    def test_update_single_feed_exception(self, mock_fetch, mock_close_conn):
+    def test_update_single_feed_exception(self, mock_fetch, mock_close_conn, mock_logger):
         """If internal helper raises, function should swallow and return False."""
         feed = self._create_feed()
         mock_fetch.side_effect = RuntimeError("boom")
 
-        with self.assertLogs(level=logging.ERROR):
-            result = cmd.update_single_feed(feed)
+        result = cmd.update_single_feed(feed)
 
         self.assertFalse(result)
         mock_fetch.assert_called_once_with(feed)
+        # 验证logger.exception被调用
+        mock_logger.exception.assert_called_once()
         # ensure finally block executed
         self.assertGreaterEqual(mock_close_conn.call_count, 2)
