@@ -162,7 +162,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             )
 
             translate_feed(feed, target_field=target_field)
-            feed.translation_status = True
+            # feed.translation_status = True
             feed.last_translate = timezone.now()
             feed.log += f"{timezone.now()} Translate Completed <br>"
         except Exception as e:
@@ -242,6 +242,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     )
 
     for entry in entries:
+        translation_status = None
         try:
             logger.debug(f"Processing entry {entry}")
             if not feed.translator:
@@ -301,16 +302,16 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                 import gc
 
                 gc.collect()
-
+            translation_status = True
         except Exception as e:
             logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
-            # feed.translation_status = False
-            # feed.save()
-            # feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
+            translation_status = False
+            #feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
         finally:
+            feed.translation_status = translation_status
             # Explicitly clean up entry reference
             del entry
 
