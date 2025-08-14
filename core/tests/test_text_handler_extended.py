@@ -11,12 +11,11 @@ from utils.text_handler import (
     adaptive_chunking,
     should_skip,
     unwrap_tags,
-    set_translation_display
+    set_translation_display,
 )
 
 
 class TextHandlerExtendedTest(TestCase):
-    
     def test_clean_content_basic_html(self):
         """Test clean_content with basic HTML."""
         html = "<p>This is a <strong>test</strong> paragraph.</p>"
@@ -56,12 +55,12 @@ class TextHandlerExtendedTest(TestCase):
     def test_tokenize_caching(self):
         """Test tokenize function with caching."""
         text = "This is a test sentence."
-        
+
         # First call
         tokens1 = tokenize(text)
         # Second call should use cache
         tokens2 = tokenize(text)
-        
+
         self.assertEqual(tokens1, tokens2)
         self.assertIsInstance(tokens1, list)
         self.assertGreater(len(tokens1), 0)
@@ -71,11 +70,11 @@ class TextHandlerExtendedTest(TestCase):
         short_text = "Hello"
         medium_text = "This is a medium length sentence with several words."
         long_text = "This is a much longer text that contains many more words and should result in a higher token count than the previous examples."
-        
+
         short_count = get_token_count(short_text)
         medium_count = get_token_count(medium_text)
         long_count = get_token_count(long_text)
-        
+
         self.assertGreater(medium_count, short_count)
         self.assertGreater(long_count, medium_count)
 
@@ -83,7 +82,7 @@ class TextHandlerExtendedTest(TestCase):
         """Test split_large_sentence when sentence is already small enough."""
         sentence = "This is a short sentence."
         result = split_large_sentence(sentence, max_tokens=100)
-        
+
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], sentence)
 
@@ -91,7 +90,7 @@ class TextHandlerExtendedTest(TestCase):
         """Test split_large_sentence using comma delimiter."""
         sentence = "This is a long sentence, with multiple commas, that should be split, into several parts."
         result = split_large_sentence(sentence, max_tokens=5, delimiters=[",", " "])
-        
+
         self.assertGreaterEqual(len(result), 1)
         # Verify we get some kind of splitting
         if len(result) > 1:
@@ -101,14 +100,14 @@ class TextHandlerExtendedTest(TestCase):
         """Test split_large_sentence falls back to space delimiter."""
         sentence = "This is a sentence without commas that needs splitting"
         result = split_large_sentence(sentence, max_tokens=3, delimiters=[",", " "])
-        
+
         self.assertGreaterEqual(len(result), 1)
 
     def test_split_large_sentence_unsplittable(self):
         """Test split_large_sentence with unsplittable content."""
         sentence = "verylongwordwithoutanydelimiters"
         result = split_large_sentence(sentence, max_tokens=2, delimiters=[",", " "])
-        
+
         # Should return some result
         self.assertGreaterEqual(len(result), 1)
 
@@ -116,7 +115,7 @@ class TextHandlerExtendedTest(TestCase):
         """Test chunk_on_delimiter with basic text."""
         text = "First sentence. Second sentence. Third sentence."
         result = chunk_on_delimiter(text, max_tokens=5, delimiter=".")
-        
+
         self.assertGreaterEqual(len(result), 1)
         for chunk in result:
             self.assertLessEqual(get_token_count(chunk), 10)  # Allow some buffer
@@ -124,8 +123,10 @@ class TextHandlerExtendedTest(TestCase):
     def test_chunk_on_delimiter_with_fallback(self):
         """Test chunk_on_delimiter with fallback delimiters."""
         text = "First sentence! Second sentence? Third sentence."
-        result = chunk_on_delimiter(text, max_tokens=5, delimiter=".", fallback_delimiters=["!", "?"])
-        
+        result = chunk_on_delimiter(
+            text, max_tokens=5, delimiter=".", fallback_delimiters=["!", "?"]
+        )
+
         self.assertGreater(len(result), 1)
 
     def test_chunk_on_delimiter_empty_text(self):
@@ -136,8 +137,10 @@ class TextHandlerExtendedTest(TestCase):
     def test_adaptive_chunking_basic(self):
         """Test adaptive_chunking with basic parameters."""
         text = "This is a long text. " * 50  # Create long text
-        result = adaptive_chunking(text, target_chunks=3, min_chunk_size=50, max_chunk_size=200)
-        
+        result = adaptive_chunking(
+            text, target_chunks=3, min_chunk_size=50, max_chunk_size=200
+        )
+
         self.assertLessEqual(len(result), 10)  # Should be reasonable number of chunks
         self.assertGreaterEqual(len(result), 1)  # At least one chunk
         # Verify all chunks are strings
@@ -147,8 +150,10 @@ class TextHandlerExtendedTest(TestCase):
     def test_adaptive_chunking_short_text(self):
         """Test adaptive_chunking with text shorter than target."""
         text = "Short text."
-        result = adaptive_chunking(text, target_chunks=5, min_chunk_size=50, max_chunk_size=200)
-        
+        result = adaptive_chunking(
+            text, target_chunks=5, min_chunk_size=50, max_chunk_size=200
+        )
+
         # Should return single chunk for short text
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], text)
@@ -156,40 +161,46 @@ class TextHandlerExtendedTest(TestCase):
     def test_adaptive_chunking_adjustment(self):
         """Test adaptive_chunking adjusts chunk size to hit target."""
         text = "Sentence. " * 100  # Create predictable long text
-        result = adaptive_chunking(text, target_chunks=4, min_chunk_size=50, max_chunk_size=500)
-        
+        result = adaptive_chunking(
+            text, target_chunks=4, min_chunk_size=50, max_chunk_size=500
+        )
+
         # Should try to get close to 4 chunks
         self.assertGreaterEqual(len(result), 2)
         self.assertLessEqual(len(result), 8)
 
     def test_should_skip_function_exists(self):
         """Test should_skip function exists and is callable."""
-        soup = BeautifulSoup("<p>content</p>", 'html.parser')
-        p_tag = soup.find('p')
-        
+        soup = BeautifulSoup("<p>content</p>", "html.parser")
+        p_tag = soup.find("p")
+
         # Just test that the function exists and returns a boolean
         result = should_skip(p_tag)
         self.assertIsInstance(result, bool)
 
     def test_unwrap_tags_basic(self):
         """Test unwrap_tags with basic HTML."""
-        soup = BeautifulSoup("<div><span>text</span><em>emphasis</em></div>", 'html.parser')
+        soup = BeautifulSoup(
+            "<div><span>text</span><em>emphasis</em></div>", "html.parser"
+        )
         unwrap_tags(soup)
-        
+
         # span and em tags should be unwrapped
-        self.assertIsNone(soup.find('span'))
-        self.assertIsNone(soup.find('em'))
-        self.assertIn('text', soup.get_text())
-        self.assertIn('emphasis', soup.get_text())
+        self.assertIsNone(soup.find("span"))
+        self.assertIsNone(soup.find("em"))
+        self.assertIn("text", soup.get_text())
+        self.assertIn("emphasis", soup.get_text())
 
     def test_unwrap_tags_preserves_structure(self):
         """Test unwrap_tags preserves important structure."""
-        soup = BeautifulSoup("<div><p>paragraph</p><span>span text</span></div>", 'html.parser')
+        soup = BeautifulSoup(
+            "<div><p>paragraph</p><span>span text</span></div>", "html.parser"
+        )
         unwrap_tags(soup)
-        
+
         # p tag should be preserved, span should be unwrapped
-        self.assertIsNotNone(soup.find('p'))
-        self.assertIsNone(soup.find('span'))
+        self.assertIsNotNone(soup.find("p"))
+        self.assertIsNone(soup.find("span"))
 
     def test_set_translation_display_translation_only(self):
         """Test set_translation_display with translation only (mode 0)."""

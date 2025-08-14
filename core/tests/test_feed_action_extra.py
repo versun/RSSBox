@@ -46,7 +46,9 @@ class ManualFetchFeedTests(SimpleTestCase):
         mock_client.get.return_value = mock_response
         mock_client_cls.return_value = mock_client
 
-        dummy_feed = SimpleNamespace(bozo=False, entries=["item"], get=lambda *a, **k: None)
+        dummy_feed = SimpleNamespace(
+            bozo=False, entries=["item"], get=lambda *a, **k: None
+        )
         mock_parse.return_value = dummy_feed
 
         result = manual_fetch_feed("http://example.com/rss", etag="abc")
@@ -94,7 +96,9 @@ class ManualFetchFeedTests(SimpleTestCase):
 class AddAtomEntryTests(SimpleTestCase):
     """Tests covering _build_atom_feed, _add_atom_entry and _finalize_atom_feed."""
 
-    @mock.patch("utils.feed_action.set_translation_display", lambda o, t, *_args, **_kw: f"{t}")
+    @mock.patch(
+        "utils.feed_action.set_translation_display", lambda o, t, *_args, **_kw: f"{t}"
+    )
     def test_add_entry_with_translation_and_summary(self):
         now = timezone.now()
         fg = _build_atom_feed(
@@ -130,7 +134,10 @@ class AddAtomEntryTests(SimpleTestCase):
         # Title should have used translated_title due to patched set_translation_display
         self.assertIn("Tran title", fe.title())
         # AI summary should be in content
-        self.assertIn("🤖", fe.content()["content"] if isinstance(fe.content(), dict) else fe.content())
+        self.assertIn(
+            "🤖",
+            fe.content()["content"] if isinstance(fe.content(), dict) else fe.content(),
+        )
         # Ensure enclosure reflected in final XML
         xml_str = _finalize_atom_feed(fg)
         self.assertIn("file.mp3", xml_str)

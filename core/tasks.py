@@ -168,9 +168,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             feed.last_translate = timezone.now()
             feed.log += f"{timezone.now()} Translate Completed <br>"
         except Exception as e:
-            logger.error(
-                f"Error in translate_feed for feed {feed.name}: {str(e)}"
-            )
+            logger.error(f"Error in translate_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)} <br>"
         finally:
@@ -218,9 +216,7 @@ def handle_feeds_summary(feeds: list):
             feed.translation_status = True
             feed.log += f"{timezone.now()} Summary Completed <br>"
         except Exception as e:
-            logger.error(
-                f"Error in summarize_feed for feed {feed.name}: {str(e)}"
-            )
+            logger.error(f"Error in summarize_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
             feed.log += f"{timezone.now()} {str(e)}<br>"
         finally:
@@ -606,9 +602,7 @@ def summarize_feed(
                     gc.collect()
 
             except Exception as e:
-                logger.error(
-                    f"Error in summarize_feed for feed {feed.name}: {str(e)}"
-                )
+                logger.error(f"Error in summarize_feed for feed {feed.name}: {str(e)}")
                 entry.ai_summary = f"[Summary failed: {str(e)}]"
                 entries_to_save.append(entry)
             finally:

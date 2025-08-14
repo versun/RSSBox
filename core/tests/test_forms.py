@@ -12,7 +12,9 @@ class FeedFormTest(TestCase):
 
     def setUp(self):
         # Minimal valid OpenAIAgent for translator / summarizer selections
-        self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key", valid=True)
+        self.agent = OpenAIAgent.objects.create(
+            name="Test Agent", api_key="key", valid=True
+        )
         self.ct = ContentType.objects.get_for_model(OpenAIAgent)
 
     def test_initial_values_for_existing_instance(self):

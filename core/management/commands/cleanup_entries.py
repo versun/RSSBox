@@ -12,6 +12,7 @@ current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
 logger = logging.getLogger(__name__)
 
+
 class Command(BaseCommand):
     help = "Clean up entries by removing those beyond each feed's max_posts limit"
 

@@ -267,7 +267,9 @@ class OpenAIAgent(Agent):
         self, text: str, target_language: str, max_tokens: int = None, **kwargs
     ) -> dict:
         logging.info(">>> Start Summarize [%s]: %s", target_language, text)
-        system_prompt = self.summary_prompt.replace("{target_language}", target_language)
+        system_prompt = self.summary_prompt.replace(
+            "{target_language}", target_language
+        )
         return self.completions(
             text, system_prompt=system_prompt, max_tokens=max_tokens, **kwargs
         )
@@ -388,85 +390,91 @@ class DeepLAgent(Agent):
             self.save()
         return {"text": translated_text, "characters": len(text)}
 
+
 class LibreTranslateAgent(Agent):
     """
     An Agent that uses a LibreTranslate server for translation,
     with API communication logic integrated directly into the class.
     """
+
     api_key = EncryptedCharField(_("API Key (if required)"), max_length=255, blank=True)
     server_url = models.URLField(
-        verbose_name='Server URL',
-        default='https://libretranslate.com',
-        help_text='Your self-hosted or public LibreTranslate server endpoint'
+        verbose_name="Server URL",
+        default="https://libretranslate.com",
+        help_text="Your self-hosted or public LibreTranslate server endpoint",
     )
     max_characters = models.IntegerField(
         default=5000,
-        verbose_name='Max Characters',
-        help_text='Maximum characters per translation request'
+        verbose_name="Max Characters",
+        help_text="Maximum characters per translation request",
     )
     language_map = {
-        'Chinese Simplified': 'zh',
-        'Chinese Traditional': 'zh',
-        'English': 'en',
-        'Spanish': 'es',
-        'French': 'fr',
-        'German': 'de',
-        'Italian': 'it',
-        'Portuguese': 'pt',
-        'Russian': 'ru',
-        'Japanese': 'ja',
-        'Dutch': 'nl',
-        'Korean': 'ko',
-        'Czech': 'cs',
-        'Danish': 'da',
-        'Indonesian': 'id',
-        'Polish': 'pl',
-        'Hungarian': 'hu',
-        'Norwegian Bokmål': 'nb',
-        'Swedish': 'sv',
-        'Turkish': 'tr'
+        "Chinese Simplified": "zh",
+        "Chinese Traditional": "zh",
+        "English": "en",
+        "Spanish": "es",
+        "French": "fr",
+        "German": "de",
+        "Italian": "it",
+        "Portuguese": "pt",
+        "Russian": "ru",
+        "Japanese": "ja",
+        "Dutch": "nl",
+        "Korean": "ko",
+        "Czech": "cs",
+        "Danish": "da",
+        "Indonesian": "id",
+        "Polish": "pl",
+        "Hungarian": "hu",
+        "Norwegian Bokmål": "nb",
+        "Swedish": "sv",
+        "Turkish": "tr",
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
     # --------------------------------
     # API Methods
     # --------------------------------
-    def _api_request(self, endpoint: str, params: dict = None, method: str = "POST") -> any:
+    def _api_request(
+        self, endpoint: str, params: dict = None, method: str = "POST"
+    ) -> any:
         """
         Handles sending requests to the configured LibreTranslate server endpoint.
         """
         try:
             url = self.server_url
-            if not url.endswith('/'):
-                url += '/'
+            if not url.endswith("/"):
+                url += "/"
             full_url = f"{url}{endpoint}"
 
             query_params = params or {}
             if self.api_key:
                 query_params["api_key"] = self.api_key
 
-            data = parse.urlencode(query_params).encode('utf-8')
+            data = parse.urlencode(query_params).encode("utf-8")
             req = request.Request(full_url, data=data, method=method)
-            req.add_header('accept', 'application/json')
-            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-            req.add_header('User-Agent', 'LibreTranslateAgent/1.0')
+            req.add_header("accept", "application/json")
+            req.add_header("Content-Type", "application/x-www-form-urlencoded")
+            req.add_header("User-Agent", "LibreTranslateAgent/1.0")
 
             with request.urlopen(req, timeout=5) as response:
-                response_str = response.read().decode('utf-8')
+                response_str = response.read().decode("utf-8")
                 return json.loads(response_str)
         except Exception as e:
-            raise ConnectionError(f"_api_request {str(e)}") # e.reason
+            raise ConnectionError(f"_api_request {str(e)}")  # e.reason
 
-    def _api_translate(self, q: str, source: str, target: str, format: str="html") -> str:
+    def _api_translate(
+        self, q: str, source: str, target: str, format: str = "html"
+    ) -> str:
         """Calls the /translate endpoint."""
         params = {"q": q, "source": source, "target": target, "format": format}
         response_data = self._api_request("translate", params=params, method="POST")
-        
+
         if "error" in response_data:
             raise Exception(f"_api_translate Error: {response_data['error']}")
-        
+
         return response_data.get("translatedText", "")
 
     def _api_languages(self) -> list:
@@ -493,12 +501,18 @@ class LibreTranslateAgent(Agent):
     def translate(self, text: str, target_language: str, **kwargs) -> dict:
         target_code = self.language_map.get(target_language)
         if not target_code:
-            self.log += f"{timezone.now()}: Not support target language: {target_language}"
-            logging.error(f"LibreTranslateAgent->Not support target language: {target_language}")
+            self.log += (
+                f"{timezone.now()}: Not support target language: {target_language}"
+            )
+            logging.error(
+                f"LibreTranslateAgent->Not support target language: {target_language}"
+            )
             return {"text": "", "characters": 0}
 
         try:
-            translated_text = self._api_translate(q=text, source="auto", target=target_code, format="html")
+            translated_text = self._api_translate(
+                q=text, source="auto", target=target_code, format="html"
+            )
             return {"text": translated_text, "characters": len(text)}
         except Exception as e:
             logging.error("LibreTranslateAgent->: %s", str(e))
@@ -511,7 +525,6 @@ class LibreTranslateAgent(Agent):
         verbose_name_plural = "LibreTranslate"
 
 
-        
 class TestAgent(Agent):
     translated_text = models.TextField(default="@@Translated Text@@")
     max_characters = models.IntegerField(default=50000)
@@ -539,5 +552,6 @@ class TestAgent(Agent):
     def filter(self, text: str, **kwargs):
         logging.info(">>> Test Filter")
         import random
+
         time.sleep(self.interval)
         return {"passed": random.choice([True, False]), "tokens": 10}

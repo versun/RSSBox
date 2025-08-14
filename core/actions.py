@@ -20,6 +20,7 @@ from core.cache import cache_tag
 
 logger = logging.getLogger(__name__)
 
+
 @admin.display(description=_("Clean translated content"))
 def clean_translated_content(modeladmin, request, queryset):
     for feed in queryset:

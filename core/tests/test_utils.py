@@ -75,4 +75,3 @@ class TaskManagerTests(SimpleTestCase):
         for _ in range(4):
             tm.submit_task("noop", lambda: None).result(timeout=2)
         self.assertLessEqual(tm.tasks_executed_since_restart, 1)
-

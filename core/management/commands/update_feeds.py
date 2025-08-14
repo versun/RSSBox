@@ -20,6 +20,7 @@ current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
 logger = logging.getLogger(__name__)
 
+
 class Command(BaseCommand):
     help = "Updates feeds based on specified frequency or runs immediate update"
 

@@ -59,7 +59,15 @@ class TranslationDisplayTests(SimpleTestCase):
     def test_set_translation_display(self):
         original = "原文"
         translation = "翻译"
-        self.assertEqual(th.set_translation_display(original, translation, 0), translation)
-        self.assertEqual(th.set_translation_display(original, translation, 1), f"{translation} || {original}")
-        self.assertEqual(th.set_translation_display(original, translation, 2), f"{original} || {translation}")
+        self.assertEqual(
+            th.set_translation_display(original, translation, 0), translation
+        )
+        self.assertEqual(
+            th.set_translation_display(original, translation, 1),
+            f"{translation} || {original}",
+        )
+        self.assertEqual(
+            th.set_translation_display(original, translation, 2),
+            f"{original} || {translation}",
+        )
         self.assertEqual(th.set_translation_display(original, translation, 99), "")

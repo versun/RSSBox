@@ -9,6 +9,7 @@ from core.actions import clean_filter_results
 
 logger = logging.getLogger(__name__)
 
+
 class FilterAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
     list_display = ("name", "filter_method", "operation", "tokens_info")

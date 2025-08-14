@@ -5,27 +5,61 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0029_deeplagent_log_openaiagent_log_testagent_log_and_more'),
+        ("core", "0029_deeplagent_log_openaiagent_log_testagent_log_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='LibreTranslateAgent',
+            name="LibreTranslateAgent",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100, unique=True, verbose_name='Name')),
-                ('valid', models.BooleanField(null=True, verbose_name='Valid')),
-                ('is_ai', models.BooleanField(default=False, editable=False)),
-                ('log', models.TextField(blank=True, default='', null=True, verbose_name='Log')),
-                ('api_key', encrypted_model_fields.fields.EncryptedCharField(blank=True, verbose_name='API Key (if required)')),
-                ('server_url', models.URLField(default='https://libretranslate.com', help_text='Your self-hosted or public LibreTranslate server endpoint', verbose_name='Server URL')),
-                ('max_characters', models.IntegerField(default=5000, help_text='Maximum characters per translation request', verbose_name='Max Characters')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(max_length=100, unique=True, verbose_name="Name"),
+                ),
+                ("valid", models.BooleanField(null=True, verbose_name="Valid")),
+                ("is_ai", models.BooleanField(default=False, editable=False)),
+                (
+                    "log",
+                    models.TextField(
+                        blank=True, default="", null=True, verbose_name="Log"
+                    ),
+                ),
+                (
+                    "api_key",
+                    encrypted_model_fields.fields.EncryptedCharField(
+                        blank=True, verbose_name="API Key (if required)"
+                    ),
+                ),
+                (
+                    "server_url",
+                    models.URLField(
+                        default="https://libretranslate.com",
+                        help_text="Your self-hosted or public LibreTranslate server endpoint",
+                        verbose_name="Server URL",
+                    ),
+                ),
+                (
+                    "max_characters",
+                    models.IntegerField(
+                        default=5000,
+                        help_text="Maximum characters per translation request",
+                        verbose_name="Max Characters",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'LibreTranslate',
-                'verbose_name_plural': 'LibreTranslate',
+                "verbose_name": "LibreTranslate",
+                "verbose_name_plural": "LibreTranslate",
             },
         ),
     ]

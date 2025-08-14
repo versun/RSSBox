@@ -18,7 +18,9 @@ class UpdateMultipleFeedsTests(TestCase):
     @mock.patch("core.management.commands.update_feeds.cache_rss")
     @mock.patch("core.management.commands.update_feeds.wait")
     @mock.patch("core.management.commands.update_feeds.task_manager")
-    def test_update_multiple_feeds_basic(self, mock_tm, mock_wait, mock_cache_rss, mock_cache_tag):
+    def test_update_multiple_feeds_basic(
+        self, mock_tm, mock_wait, mock_cache_rss, mock_cache_tag
+    ):
         """Ensure submit_task called and caching functions called for each feed."""
         # Prepare feeds with tags
         tag = Tag.objects.create(name="Tech")

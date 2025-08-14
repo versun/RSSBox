@@ -11,6 +11,7 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class Filter(models.Model):
     INCLUDE = True
     EXCLUDE = False
@@ -49,7 +50,12 @@ class Filter(models.Model):
     )
     agent_object_id = models.PositiveIntegerField(null=True, blank=True, default=None)
     agent = GenericForeignKey("agent_content_type", "agent_object_id")
-    filter_prompt = models.TextField(_("Filter Prompt"), blank=True, null=True, default=settings.default_filter_prompt)
+    filter_prompt = models.TextField(
+        _("Filter Prompt"),
+        blank=True,
+        null=True,
+        default=settings.default_filter_prompt,
+    )
 
     filter_method = models.PositiveSmallIntegerField(
         _("Filter Method"),

@@ -12,7 +12,6 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         # Fresh command instance per test
         self.command = cmd.Command()
 
-
     def test_handle_invalid_frequency(self):
         """Invalid frequency string should raise SystemExit(1)."""
         with self.assertRaises(SystemExit) as ctx:
@@ -20,8 +19,12 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         self.assertEqual(ctx.exception.code, 1)
 
     @mock.patch("core.management.commands.update_feeds.os.remove")
-    @mock.patch("core.management.commands.update_feeds.open", new_callable=mock.mock_open)
-    @mock.patch("core.management.commands.update_feeds.os.path.exists", return_value=True)
+    @mock.patch(
+        "core.management.commands.update_feeds.open", new_callable=mock.mock_open
+    )
+    @mock.patch(
+        "core.management.commands.update_feeds.os.path.exists", return_value=True
+    )
     def test_handle_lock_file_exists(self, mock_exists, mock_open_file, mock_remove):
         """When lock file present, command should exit with code 0 and not proceed."""
         with self.assertRaises(SystemExit) as ctx:
@@ -32,10 +35,17 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         mock_remove.assert_not_called()
 
     @mock.patch("core.management.commands.update_feeds.os.remove")
-    @mock.patch("core.management.commands.update_feeds.open", new_callable=mock.mock_open)
-    @mock.patch("core.management.commands.update_feeds.os.path.exists", side_effect=[False, True])
+    @mock.patch(
+        "core.management.commands.update_feeds.open", new_callable=mock.mock_open
+    )
+    @mock.patch(
+        "core.management.commands.update_feeds.os.path.exists",
+        side_effect=[False, True],
+    )
     @mock.patch("core.management.commands.update_feeds.update_feeds_for_frequency")
-    def test_handle_happy_path(self, mock_update, mock_exists, mock_open_file, mock_remove):
+    def test_handle_happy_path(
+        self, mock_update, mock_exists, mock_open_file, mock_remove
+    ):
         """Valid frequency without lock proceeds and cleans up lock file."""
         self.command.handle(frequency="5 min")
 

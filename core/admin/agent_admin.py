@@ -10,6 +10,7 @@ from core.admin import core_admin_site
 
 logger = logging.getLogger(__name__)
 
+
 class AgentAdmin(admin.ModelAdmin):
     # get_model_perms = lambda self, request: {}  # 不显示在admin页面
     readonly_fields = [
@@ -118,8 +119,8 @@ class DeepLAgentAdmin(AgentAdmin):
     ]
 
 
-class LibreTranslateAgentAdmin(AgentAdmin):  
-    fields = ["name", "api_key", "server_url", "max_characters","show_log"]
+class LibreTranslateAgentAdmin(AgentAdmin):
+    fields = ["name", "api_key", "server_url", "max_characters", "show_log"]
     list_display = [
         "name",
         "is_valid",
@@ -127,6 +128,7 @@ class LibreTranslateAgentAdmin(AgentAdmin):
         "server_url",
         "max_characters",
     ]
+
 
 class TestAgentAdmin(AgentAdmin):
     fields = ["name", "translated_text", "max_characters", "max_tokens", "interval"]

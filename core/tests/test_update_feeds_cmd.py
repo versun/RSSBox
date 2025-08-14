@@ -9,7 +9,9 @@ class UpdateFeedsCommandTests(SimpleTestCase):
 
     @mock.patch("core.management.commands.update_feeds.update_multiple_feeds")
     @mock.patch("core.management.commands.update_feeds.Feed")
-    def test_update_feeds_for_frequency_success(self, mock_feed_model, mock_update_multi):
+    def test_update_feeds_for_frequency_success(
+        self, mock_feed_model, mock_update_multi
+    ):
         """When given a valid frequency, function should call update_multiple_feeds with list."""
         # Mock queryset filter/iterator to yield empty list
         mock_feed_model.objects.filter.return_value.iterator.return_value = []

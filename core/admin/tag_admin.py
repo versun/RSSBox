@@ -10,6 +10,7 @@ from core.actions import tag_force_update
 
 logger = logging.getLogger(__name__)
 
+
 class TagAdmin(admin.ModelAdmin):
     list_display = (
         "name",

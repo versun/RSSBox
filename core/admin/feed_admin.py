@@ -22,6 +22,7 @@ from core.admin import core_admin_site
 
 logger = logging.getLogger(__name__)
 
+
 class FeedAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
     form = FeedForm
@@ -199,9 +200,7 @@ class FeedAdmin(admin.ModelAdmin):
         return obj.translator
 
     @admin.display(description=_("Generate feed"))
-    def generate_feed(
-        self, obj
-    ):  # 显示3个元素：translated_status、feed_url、json_url
+    def generate_feed(self, obj):  # 显示3个元素：translated_status、feed_url、json_url
         if not obj.translate_title and not obj.translate_content and not obj.summary:
             translation_status_icon = "-"
         else:
