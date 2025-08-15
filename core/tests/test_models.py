@@ -800,8 +800,9 @@ class OpenAIAgentModelTest(TestCase):
         self.assertEqual(self.agent.model, "gpt-test")
         self.assertTrue(self.agent.is_ai)
 
+    @patch("core.models.agent.task_manager")
     @patch("core.models.agent.OpenAI")
-    def test_validate_success(self, mock_openai_class):
+    def test_validate_success(self, mock_openai_class, mock_task_manager):
         """Test the validate method with a successful API call."""
         mock_client = MagicMock()
         mock_completion = MagicMock()
@@ -810,15 +811,23 @@ class OpenAIAgentModelTest(TestCase):
             mock_completion
         )
         mock_openai_class.return_value = mock_client
+        
+        # Mock task_manager.submit_task to return a mock task with result
+        mock_task = MagicMock()
+        mock_task.result.return_value = 4096  # Mock max_tokens value
+        mock_task_manager.submit_task.return_value = mock_task
 
         is_valid = self.agent.validate()
 
         self.assertTrue(is_valid)
         self.agent.refresh_from_db()
         self.assertEqual(self.agent.log, "")
+        self.assertEqual(self.agent.max_tokens, 4096)
+        mock_task_manager.submit_task.assert_called_once()
 
+    @patch("core.models.agent.task_manager")
     @patch("core.models.agent.OpenAI")
-    def test_validate_failure(self, mock_openai_class):
+    def test_validate_failure(self, mock_openai_class, mock_task_manager):
         """Test the validate method with a failed API call."""
         mock_client = MagicMock()
         mock_client.with_options().chat.completions.create.side_effect = Exception(
@@ -831,6 +840,8 @@ class OpenAIAgentModelTest(TestCase):
         self.assertFalse(is_valid)
         self.agent.refresh_from_db()
         self.assertIn("API Error", self.agent.log)
+        # task_manager should not be called when API call fails
+        mock_task_manager.submit_task.assert_not_called()
 
     @patch.object(OpenAIAgent, "completions")
     def test_translate_method(self, mock_completions):
@@ -856,6 +867,9 @@ class OpenAIAgentModelTest(TestCase):
     @patch("core.models.agent.OpenAI")
     def test_completions_method(self, mock_openai_class, mock_get_token_count):
         """Test the completions method for success and failure cases."""
+        # Set max_tokens to avoid ValueError
+        self.agent.max_tokens = 4096
+        
         # Setup mock client and response
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
@@ -871,7 +885,7 @@ class OpenAIAgentModelTest(TestCase):
             mock_completion
         )
 
-        result_success = self.agent.completions("test prompt")
+        result_success = self.agent.completions("test content")
         self.assertEqual(result_success["text"], "Test response")
         self.assertEqual(result_success["tokens"], 42)
 
@@ -879,8 +893,8 @@ class OpenAIAgentModelTest(TestCase):
         mock_client.with_options().chat.completions.create.side_effect = Exception(
             "API Connection Error"
         )
-        result_failure = self.agent.completions("test prompt")
-        self.assertIn("", result_failure["text"])
+        result_failure = self.agent.completions("test content")
+        self.assertEqual(result_failure["text"], "")
         self.assertEqual(result_failure["tokens"], 0)
 
     @patch.object(OpenAIAgent, "_init")
@@ -890,12 +904,17 @@ class OpenAIAgentModelTest(TestCase):
         self, mock_get_token_count, mock_adaptive_chunking, mock_init
     ):
         """Test the completions method's chunking logic with robust mocks."""
+        # Set max_tokens to avoid ValueError
+        self.agent.max_tokens = 4096
+        
         long_text = "A very long text that needs to be chunked."
 
         # 1. Mock get_token_count to behave based on input
         def token_count_side_effect(text):
             if text == long_text:
                 return self.agent.max_tokens + 1
+            elif "system" in str(text).lower() or "prompt" in str(text).lower():
+                return 50  # For system prompt
             return 10  # For chunks
 
         mock_get_token_count.side_effect = token_count_side_effect
@@ -939,7 +958,7 @@ class OpenAIAgentModelTest(TestCase):
             "{target_language}", "English"
         )
         mock_completions.assert_called_once_with(
-            "Test text", system_prompt=expected_prompt, max_tokens=None
+            "Test text", system_prompt=expected_prompt
         )
 
     @patch.object(OpenAIAgent, "completions")
@@ -951,7 +970,7 @@ class OpenAIAgentModelTest(TestCase):
         )
         expected_prompt = custom_prompt + settings.output_format_for_filter_prompt
         mock_completions.assert_called_once_with(
-            "Test text", system_prompt=expected_prompt, max_tokens=None
+            "Test text", system_prompt=expected_prompt
         )
 
     @patch.object(OpenAIAgent, "completions")
