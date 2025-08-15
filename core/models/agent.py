@@ -251,8 +251,13 @@ class OpenAIAgent(Agent):
             system_prompt_tokens = get_token_count(system_prompt)
             # 获取最大可用token数（保留buffer）
             if not self.max_tokens:
+                task_manager.submit_task(
+                    f"detect_model_limit_{self.model}_{self.id}",
+                    self.detect_model_limit,
+                    force=True,
+                )
                 raise ValueError(
-                    "max_tokens is not set, Please wait for the validation to complete"
+                    "max_tokens is not set, Please wait for the model limit detection to complete"
                 )
 
             max_usable_tokens = (

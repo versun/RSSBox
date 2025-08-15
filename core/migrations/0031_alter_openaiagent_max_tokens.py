@@ -3,6 +3,12 @@
 from django.db import migrations, models
 
 
+def set_max_tokens_to_zero(apps, schema_editor): # 将会在下次翻译时自动更新max_tokens
+    """Set all existing OpenAIAgent max_tokens to 0"""
+    OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
+    OpenAIAgent.objects.all().update(max_tokens=0)
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("core", "0030_libretranslateagent"),
@@ -13,5 +19,8 @@ class Migration(migrations.Migration):
             model_name="openaiagent",
             name="max_tokens",
             field=models.IntegerField(default=0),
+        ),
+        migrations.RunPython(
+            set_max_tokens_to_zero,
         ),
     ]
