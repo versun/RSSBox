@@ -877,7 +877,7 @@ class OpenAIAgentModelTest(TestCase):
         # Test success case
         mock_completion = MagicMock()
         mock_completion.choices = [
-            MagicMock(message=MagicMock(content="Test response"))
+            MagicMock(message=MagicMock(content="Test response"), finish_reason="stop"),
         ]
         mock_completion.usage = MagicMock(total_tokens=42)
         # Mock the entire call chain
@@ -926,13 +926,13 @@ class OpenAIAgentModelTest(TestCase):
 
         mock_completion_1 = MagicMock()
         mock_completion_1.choices = [
-            MagicMock(message=MagicMock(content="Translated first."))
+            MagicMock(message=MagicMock(content="Translated first."), finish_reason="stop"),
         ]
         mock_completion_1.usage = MagicMock(total_tokens=20)
 
         mock_completion_2 = MagicMock()
         mock_completion_2.choices = [
-            MagicMock(message=MagicMock(content="Translated second."))
+            MagicMock(message=MagicMock(content="Translated second."), finish_reason="stop"),
         ]
         mock_completion_2.usage = MagicMock(total_tokens=25)
 
