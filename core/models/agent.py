@@ -442,13 +442,13 @@ class DeepLAgent(Agent):
             usage = translator.get_usage()
             if usage.character.valid:
                 self.log = ""
-                self.valid = True
                 is_valid = True
         except Exception as e:
             logger.error("DeepLTranslator validate ->%s", e)
             self.log = f"{timezone.now()}: {str(e)}"
             is_valid = False
         finally:
+            self.valid = is_valid
             self.save()
         return is_valid
 
@@ -577,12 +577,12 @@ class LibreTranslateAgent(Agent):
         try:
             self._api_languages()
             self.log = ""
-            self.valid = True
             is_valid = True
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
             is_valid = False
         finally:
+            self.valid = is_valid
             self.save()
         return is_valid
 
