@@ -122,11 +122,11 @@ class OpenAIAgent(Agent):
                 # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
                 fr = res.choices[0].finish_reason
                 # 提交后台任务检测模型限制
-                self.max_tokens = task_manager.submit_task(
+                results = task_manager.submit_task(
                     f"detect_model_limit_{self.model}_{self.id}",
                     self.detect_model_limit,
                     force=True,
-                ).result()
+                )
                 logger.info(
                     f"Submitted background task to detect model limit for {self.model}"
                 )
@@ -194,6 +194,8 @@ class OpenAIAgent(Agent):
 
         # 直接使用二分搜索
         final_limit = binary_search_limit(1024, 1000000)
+        self.max_tokens = final_limit
+        self.save()
         return final_limit
 
     def _wait_for_rate_limit(self):
