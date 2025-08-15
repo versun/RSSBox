@@ -68,10 +68,10 @@ class OpenAIAgentAdmin(AgentAdmin):
         "is_valid",
         "masked_api_key",
         "model",
-        "max_tokens",
+        "show_max_tokens",
         "base_url",
     ]
-    readonly_fields = ["show_log", "max_tokens"]
+    readonly_fields = ["show_log","show_max_tokens"]
     fieldsets = (
         (
             _("Model Information"),
@@ -96,11 +96,17 @@ class OpenAIAgentAdmin(AgentAdmin):
                     "frequency_penalty",
                     "presence_penalty",
                     "rate_limit_rpm",
-                    "max_tokens",
+                    "show_max_tokens",
                 )
             },
         ),
     )
+
+    @admin.display(description=_("Max Tokens"))
+    def show_max_tokens(self, obj):
+        if obj.max_tokens == 0:
+            return "Detecting..."
+        return obj.max_tokens
 
 
 class DeepLAgentAdmin(AgentAdmin):
