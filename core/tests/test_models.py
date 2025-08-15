@@ -882,17 +882,16 @@ class OpenAIAgentModelTest(TestCase):
         )
         mock_openai_class.return_value = mock_client
 
-        # Mock task_manager.submit_task to return a mock task with result
-        mock_task = MagicMock()
-        mock_task.result.return_value = 4096  # Mock max_tokens value
-        mock_task_manager.submit_task.return_value = mock_task
+        # Mock task_manager.submit_task
+        mock_task_manager.submit_task.return_value = None
 
         is_valid = self.agent.validate()
 
         self.assertTrue(is_valid)
         self.agent.refresh_from_db()
         self.assertEqual(self.agent.log, "")
-        self.assertEqual(self.agent.max_tokens, 4096)
+        # max_tokens should remain 0 since the background task hasn't completed
+        self.assertEqual(self.agent.max_tokens, 0)
         mock_task_manager.submit_task.assert_called_once()
 
     @patch("core.models.agent.task_manager")
