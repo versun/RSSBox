@@ -90,7 +90,7 @@ class OpenAIAgent(Agent):
     EXTRA_HEADERS = {
                         "HTTP-Referer": "https://www.rsstranslator.com",
                         "X-Title": "RSS Translator",
-                    },
+                    }
     class Meta:
         verbose_name = "OpenAI"
         verbose_name_plural = "OpenAI"
