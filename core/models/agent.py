@@ -151,7 +151,7 @@ class OpenAIAgent(Agent):
         # 二分搜索找到确切限制
         def binary_search_limit(low, high):
             """使用二分搜索找到确切的token限制"""
-            if high - low <= 1024:  # 当范围足够小时，返回低值作为安全限制
+            if high - low <= 256:  # 当范围足够小时，返回低值作为安全限制
                 return low
 
             mid = (low + high) // 2
@@ -181,7 +181,7 @@ class OpenAIAgent(Agent):
                 error_str = str(e).lower()
                 if any(
                     keyword in error_str
-                    for keyword in ["maximum", "limit", "token", "context"]
+                    for keyword in ["maximum", "limit", "tokens", "context", "length"]
                 ):
                     # 遇到限制错误，降低上限
                     return binary_search_limit(low, mid)
