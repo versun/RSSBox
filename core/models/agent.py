@@ -265,6 +265,14 @@ class OpenAIAgent(Agent):
                 result_text = " ".join(translated_chunks)
                 return {"text": result_text, "tokens": tokens}
 
+            # 计算合理的输出token限制
+            input_tokens = get_token_count(system_prompt) + get_token_count(text)
+            # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
+            output_token_limit = min(
+                4096,  # 大多数场景下4096个输出token足够
+                max(512, self.max_tokens - input_tokens - 200)  # 至少512，最多为剩余空间-200缓冲
+            )
+            
             # 正常流程
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers={
@@ -280,23 +288,17 @@ class OpenAIAgent(Agent):
                 top_p=self.top_p,
                 frequency_penalty=self.frequency_penalty,
                 presence_penalty=self.presence_penalty,
-                max_tokens=self.max_tokens,
+                max_tokens=output_token_limit,
+                reasoning_effort="minimal", # 关闭深度思考
             )
-            # if res.choices[0].finish_reason.lower() == "stop" or res.choices[0].message.content:
-            if res.choices and res.choices[0].message.content:
+            if res.choices and res.choices[0].finish_reason == "stop" and res.choices[0].message.content:
                 result_text = res.choices[0].message.content
-                logger.info(
-                    "OpenAI->%s: %s",
-                    res.choices[0].finish_reason,
-                    result_text,
-                )
-            # else:
-            #     result_text = ''
-            #     logger.warning("Translator->%s: %s", res.choices[0].finish_reason, text)
+                logger.debug(f"[{self.name}]: {result_text[:50]}...")
+
             tokens = res.usage.total_tokens if res.usage else 0
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
-            logger.error("OpenAIAgent->%s: %s", e, text)
+            logger.error(f"{self.name}: {e}")
         finally:
             self.save()
 
@@ -310,7 +312,7 @@ class OpenAIAgent(Agent):
         text_type: str = "title",
         **kwargs,
     ) -> dict:
-        logger.info(">>> OpenAIAgent Translate [%s]: %s", target_language, text[:50] + "...")
+        logger.info(f">>>Start Translate [{target_language}]: {text[:50]}...")
         system_prompt = (
             self.title_translate_prompt
             if text_type == "title"
@@ -324,7 +326,7 @@ class OpenAIAgent(Agent):
     def summarize(
         self, text: str, target_language: str, **kwargs
     ) -> dict:
-        logger.info(">>> Start Summarize [%s]: %s", target_language, text)
+        logger.info(f">>> Start Summarize [{target_language}]: {text[:50]}...")
         system_prompt = self.summary_prompt.replace(
             "{target_language}", target_language
         )
@@ -339,7 +341,7 @@ class OpenAIAgent(Agent):
         system_prompt: str,
         **kwargs,
     ) -> dict:
-        logger.info(">>> Start Digesting [%s]: %s", target_language, text)
+        logger.info(f">>> Start Digesting [{target_language}]: {text[:50]}...")
         system_prompt += settings.output_format_for_filter_prompt
         return self.completions(
             text, system_prompt=system_prompt, **kwargs
@@ -348,7 +350,7 @@ class OpenAIAgent(Agent):
     def filter(
         self, text: str, system_prompt: str, **kwargs
     ) -> dict:
-        logger.info(">>> Start Filter: %s", text)
+        logger.info(f">>> Start Filter: {text[:50]}...")
         passed = False
         tokens = 0
         results = self.completions(
@@ -358,11 +360,11 @@ class OpenAIAgent(Agent):
         )
 
         if results["text"] and "Passed" in results["text"]:
-            logger.info(">>> Filter Passed: %s", text)
+            logger.info(">>> Filter Passed")
             passed = True
             tokens = results["tokens"]
         else:
-            logger.info(">>> Filter Blocked: %s", text)
+            logger.info(">>> Filter Blocked")
             passed = False
 
         return {"passed": passed, "tokens": tokens}
