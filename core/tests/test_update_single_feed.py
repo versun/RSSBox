@@ -46,7 +46,9 @@ class UpdateSingleFeedTests(TestCase):
     @mock.patch("core.management.commands.update_feeds.logger")
     @mock.patch("core.management.commands.update_feeds.close_old_connections")
     @mock.patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    def test_update_single_feed_exception(self, mock_fetch, mock_close_conn, mock_logger):
+    def test_update_single_feed_exception(
+        self, mock_fetch, mock_close_conn, mock_logger
+    ):
         """If internal helper raises, function should swallow and return False."""
         feed = self._create_feed()
         mock_fetch.side_effect = RuntimeError("boom")

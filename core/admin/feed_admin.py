@@ -146,20 +146,21 @@ class FeedAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         logger.info(f"Call Feed save_model: {obj}")
-        needs_reprocessing = any(field in form.changed_data for field in [
-            'feed_url',           # 需要重新抓取
-            'target_language',    # 需要重新翻译
-            'translation_options',    # 需要重新翻译标题
-            'translator_option', # 需要用新翻译器重新翻译
-            'summary_engine_option', # 需要用新引擎重新生成摘要
-            'additional_prompt',
-        ])
+        needs_reprocessing = any(
+            field in form.changed_data
+            for field in [
+                "feed_url",  # 需要重新抓取
+                "target_language",  # 需要重新翻译
+                "translation_options",  # 需要重新翻译标题
+                "translator_option",  # 需要用新翻译器重新翻译
+                "summary_engine_option",  # 需要用新引擎重新生成摘要
+                "additional_prompt",
+            ]
+        )
         feed_url_changed = "feed_url" in form.changed_data
         target_language_changed = "target_language" in form.changed_data
         # 处理默认名称设置
-        obj.name = obj.name or (
-            "Loading" if needs_reprocessing else "Empty"
-        )
+        obj.name = obj.name or ("Loading" if needs_reprocessing else "Empty")
         # 无需特殊处理的情况直接保存返回
         if not needs_reprocessing:
             logger.info("No reprocessing needed, saving and returning")

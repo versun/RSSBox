@@ -36,8 +36,11 @@ class UpdateFeedsCommandTests(SimpleTestCase):
         mock_feed1.name = "Feed 1"
         mock_feed2 = mock.Mock(spec=Feed)
         mock_feed2.name = "Feed 2"
-        
-        mock_feed_model.objects.filter.return_value.iterator.return_value = [mock_feed1, mock_feed2]
+
+        mock_feed_model.objects.filter.return_value.iterator.return_value = [
+            mock_feed1,
+            mock_feed2,
+        ]
 
         cmd.update_feeds_for_frequency("hourly")
 
@@ -49,14 +52,12 @@ class UpdateFeedsCommandTests(SimpleTestCase):
         """Invalid frequency should not raise but log error."""
         # Function should handle invalid key internally without exception
         cmd.update_feeds_for_frequency("2 hours")  # Not in map -> KeyError handled
-        
+
         mock_logger.error.assert_called_once_with("Invalid frequency: 2 hours")
 
     @mock.patch("core.management.commands.update_feeds.logger")
     @mock.patch("core.management.commands.update_feeds.Feed")
-    def test_update_feeds_for_frequency_exception(
-        self, mock_feed_model, mock_logger
-    ):
+    def test_update_feeds_for_frequency_exception(self, mock_feed_model, mock_logger):
         """Test exception handling in update_feeds_for_frequency."""
         # Mock Feed.objects.filter to raise an exception
         mock_feed_model.objects.filter.side_effect = Exception("Database error")
@@ -79,16 +80,21 @@ class UpdateFeedsCommandTests(SimpleTestCase):
             "daily": 1440,
             "weekly": 10080,
         }
-        
-        with mock.patch("core.management.commands.update_feeds.Feed") as mock_feed_model, \
-             mock.patch("core.management.commands.update_feeds.update_multiple_feeds") as mock_update_multi:
-            
+
+        with (
+            mock.patch("core.management.commands.update_feeds.Feed") as mock_feed_model,
+            mock.patch(
+                "core.management.commands.update_feeds.update_multiple_feeds"
+            ) as mock_update_multi,
+        ):
             mock_feed_model.objects.filter.return_value.iterator.return_value = []
-            
+
             for freq_str, freq_val in expected_mappings.items():
                 with self.subTest(frequency=freq_str):
                     cmd.update_feeds_for_frequency(freq_str)
-                    mock_feed_model.objects.filter.assert_called_with(update_frequency=freq_val)
+                    mock_feed_model.objects.filter.assert_called_with(
+                        update_frequency=freq_val
+                    )
 
 
 class UpdateSingleFeedTests(SimpleTestCase):
@@ -109,7 +115,7 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test successful feed update without translation or summary."""
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertTrue(result)
         mock_close_conn.assert_called()
         mock_fetch.assert_called_once_with(self.mock_feed)
@@ -125,9 +131,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test feed update with title translation enabled."""
         self.mock_feed.translate_title = True
-        
+
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertTrue(result)
         mock_fetch.assert_called_once_with(self.mock_feed)
         mock_translation.assert_called_once_with([self.mock_feed], target_field="title")
@@ -141,12 +147,14 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test feed update with content translation enabled."""
         self.mock_feed.translate_content = True
-        
+
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertTrue(result)
         mock_fetch.assert_called_once_with(self.mock_feed)
-        mock_translation.assert_called_once_with([self.mock_feed], target_field="content")
+        mock_translation.assert_called_once_with(
+            [self.mock_feed], target_field="content"
+        )
 
     @mock.patch("core.management.commands.update_feeds.close_old_connections")
     @mock.patch("core.management.commands.update_feeds.handle_single_feed_fetch")
@@ -160,9 +168,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
         self.mock_feed.translate_title = True
         self.mock_feed.translate_content = True
         self.mock_feed.summary = True
-        
+
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertTrue(result)
         mock_fetch.assert_called_once_with(self.mock_feed)
         # Should call translation twice (title and content)
@@ -179,9 +187,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test handling of Feed.DoesNotExist exception."""
         mock_fetch.side_effect = Feed.DoesNotExist("Feed not found")
-        
+
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertFalse(result)
         mock_logger.error.assert_called_once_with("Feed not found: ID Test Feed")
         mock_close_conn.assert_called()
@@ -194,9 +202,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test handling of general exceptions."""
         mock_fetch.side_effect = Exception("Network error")
-        
+
         result = cmd.update_single_feed(self.mock_feed)
-        
+
         self.assertFalse(result)
         mock_logger.exception.assert_called_once_with(
             "Error updating feed ID Test Feed: Network error"
@@ -212,7 +220,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         self.mock_feed1.name = "Feed 1"
         self.mock_feed1.slug = "feed-1"
         self.mock_feed1.tags.values_list.return_value = [1, 2]
-        
+
         self.mock_feed2 = mock.Mock(spec=Feed)
         self.mock_feed2.name = "Feed 2"
         self.mock_feed2.slug = "feed-2"
@@ -222,7 +230,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
     def test_update_multiple_feeds_empty_list(self, mock_logger):
         """Test with empty feeds list."""
         cmd.update_multiple_feeds([])
-        
+
         mock_logger.info.assert_called_once_with("No feeds to update.")
 
     @mock.patch("core.management.commands.update_feeds.cache_tag")
@@ -232,7 +240,13 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
     @mock.patch("core.management.commands.update_feeds.task_manager")
     @mock.patch("core.management.commands.update_feeds.logger")
     def test_update_multiple_feeds_success(
-        self, mock_logger, mock_task_manager, mock_wait, mock_tag_model, mock_cache_rss, mock_cache_tag
+        self,
+        mock_logger,
+        mock_task_manager,
+        mock_wait,
+        mock_tag_model,
+        mock_cache_rss,
+        mock_cache_tag,
     ):
         """Test successful update of multiple feeds."""
         # Mock successful futures
@@ -240,20 +254,20 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         mock_future1.result.return_value = True
         mock_future2 = mock.Mock(spec=Future)
         mock_future2.result.return_value = True
-        
+
         mock_task_manager.submit_task.side_effect = [mock_future1, mock_future2]
         mock_wait.return_value = ([mock_future1, mock_future2], [])
-        
+
         # Mock tags
         mock_tag1 = mock.Mock(spec=Tag)
         mock_tag1.slug = "tag-1"
         mock_tag2 = mock.Mock(spec=Tag)
         mock_tag2.slug = "tag-2"
         mock_tag_model.objects.filter.return_value = [mock_tag1, mock_tag2]
-        
+
         feeds = [self.mock_feed1, self.mock_feed2]
         cmd.update_multiple_feeds(feeds)
-        
+
         # Verify task submission
         self.assertEqual(mock_task_manager.submit_task.call_count, 2)
         mock_task_manager.submit_task.assert_any_call(
@@ -262,10 +276,10 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         mock_task_manager.submit_task.assert_any_call(
             "update_feed_Feed 2", cmd.update_single_feed, self.mock_feed2
         )
-        
+
         # Verify wait was called with timeout
         mock_wait.assert_called_once_with([mock_future1, mock_future2], timeout=1800)
-        
+
         # Verify RSS caching for each feed
         expected_cache_calls = [
             mock.call("feed-1", feed_type="o", format="xml"),
@@ -278,7 +292,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
             mock.call("feed-2", feed_type="t", format="json"),
         ]
         mock_cache_rss.assert_has_calls(expected_cache_calls, any_order=True)
-        
+
         # Verify tag caching
         expected_tag_calls = [
             mock.call("tag-1", feed_type="o", format="xml"),
@@ -299,14 +313,14 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         """Test handling of task timeout."""
         mock_future1 = mock.Mock(spec=Future)
         mock_future2 = mock.Mock(spec=Future)
-        
+
         mock_task_manager.submit_task.side_effect = [mock_future1, mock_future2]
         # Simulate timeout - some tasks not done
         mock_wait.return_value = ([mock_future1], [mock_future2])
-        
+
         feeds = [self.mock_feed1, self.mock_feed2]
         cmd.update_multiple_feeds(feeds)
-        
+
         mock_logger.warning.assert_called_once_with(
             "Feed update task timed out. 1 tasks did not complete."
         )
@@ -321,13 +335,13 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         """Test handling of task exceptions."""
         mock_future1 = mock.Mock(spec=Future)
         mock_future1.result.side_effect = Exception("Task failed")
-        
+
         mock_task_manager.submit_task.return_value = mock_future1
         mock_wait.return_value = ([mock_future1], [])
-        
+
         feeds = [self.mock_feed1]
         cmd.update_multiple_feeds(feeds)
-        
+
         mock_logger.warning.assert_called_once_with(
             "A feed update task resulted in an exception: Task failed"
         )
@@ -343,15 +357,15 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         """Test handling of caching exceptions."""
         mock_future1 = mock.Mock(spec=Future)
         mock_future1.result.return_value = True
-        
+
         mock_task_manager.submit_task.return_value = mock_future1
         mock_wait.return_value = ([mock_future1], [])
         mock_cache_rss.side_effect = Exception("Cache error")
         mock_tag_model.objects.filter.return_value = []
-        
+
         feeds = [self.mock_feed1]
         cmd.update_multiple_feeds(feeds)
-        
+
         # Should log cache error
         mock_logger.error.assert_called()
         error_call = mock_logger.error.call_args[0][0]
@@ -361,12 +375,14 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
     @mock.patch("core.management.commands.update_feeds.logger")
     def test_update_multiple_feeds_general_exception(self, mock_logger):
         """Test handling of general exceptions in update_multiple_feeds."""
-        with mock.patch("core.management.commands.update_feeds.task_manager") as mock_task_manager:
+        with mock.patch(
+            "core.management.commands.update_feeds.task_manager"
+        ) as mock_task_manager:
             mock_task_manager.submit_task.side_effect = Exception("General error")
-            
+
             feeds = [self.mock_feed1]
             cmd.update_multiple_feeds(feeds)
-            
+
             mock_logger.exception.assert_called_once_with(
                 "Command update_multiple_feeds failed: %s", "General error"
             )

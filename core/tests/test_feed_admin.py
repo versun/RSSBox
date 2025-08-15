@@ -17,9 +17,7 @@ class FeedAdminSaveModelTest(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.admin = FeedAdmin(model=Feed, admin_site=AdminSite())
-        self.user = User.objects.create_superuser(
-            "admin", "admin@test.com", "password"
-        )
+        self.user = User.objects.create_superuser("admin", "admin@test.com", "password")
         self.feed = Feed.objects.create(
             name="Test Feed",
             feed_url="http://test.com/rss",
@@ -49,7 +47,9 @@ class FeedAdminSaveModelTest(TestCase):
         request.user = self.user
 
         # Add an entry to the feed to check if it gets deleted
-        self.feed.entries.create(original_title="Old Entry", link="http://test.com/entry1")
+        self.feed.entries.create(
+            original_title="Old Entry", link="http://test.com/entry1"
+        )
         self.assertEqual(self.feed.entries.count(), 1)
 
         form = MagicMock()
@@ -107,12 +107,14 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_other_reprocessing_fields_changed(self, mock_submit_task, mock_on_commit):
+    def test_save_model_other_reprocessing_fields_changed(
+        self, mock_submit_task, mock_on_commit
+    ):
         """Test save_model for other fields that trigger reprocessing."""
         reprocessing_fields = [
-            'translator_option',
-            'summary_engine_option',
-            'additional_prompt',
+            "translator_option",
+            "summary_engine_option",
+            "additional_prompt",
         ]
         for field in reprocessing_fields:
             with self.subTest(field=field):
@@ -135,20 +137,20 @@ class FeedAdminSaveModelTest(TestCase):
                 commit_callback()
 
                 entry.refresh_from_db()
-                self.assertEqual(entry.translated_title, "Translated")  # Content not cleared
+                self.assertEqual(
+                    entry.translated_title, "Translated"
+                )  # Content not cleared
                 self.assertEqual(self.feed.entries.count(), 1)
                 mock_submit_task.assert_called_once_with(self.feed)
 
-                self.feed.entries.all().delete() # Clean up for next subtest
+                self.feed.entries.all().delete()  # Clean up for next subtest
 
 
 class FeedAdminViewTest(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.admin = FeedAdmin(model=Feed, admin_site=AdminSite())
-        self.user = User.objects.create_superuser(
-            "admin", "admin@test.com", "password"
-        )
+        self.user = User.objects.create_superuser("admin", "admin@test.com", "password")
 
     def test_changelist_view_adds_import_button(self):
         """Test that changelist_view adds the import OPML button to context."""
@@ -159,6 +161,6 @@ class FeedAdminViewTest(TestCase):
 
         self.assertIn("import_opml_button", response.context_data)
         self.assertIn(
-            'import_opml/',
+            "import_opml/",
             response.context_data["import_opml_button"],
         )

@@ -124,7 +124,9 @@ class TasksTestCase(TestCase):
     @patch("core.tasks.logger.error")
     @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_error(self, mock_translate_feed, mock_logger_info, mock_logger_error):
+    def test_handle_feeds_translation_error(
+        self, mock_translate_feed, mock_logger_info, mock_logger_error
+    ):
         """Test handle_feeds_translation when translate_feed raises an exception."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         mock_translate_feed.side_effect = Exception("Translation failed")
@@ -150,18 +152,20 @@ class TasksTestCase(TestCase):
 
     @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_multiple_feeds(self, mock_translate_feed, mock_logger_info):
+    def test_handle_feeds_translation_multiple_feeds(
+        self, mock_translate_feed, mock_logger_info
+    ):
         """Test handle_feeds_translation with multiple feeds."""
         # Create a second feed
         feed2 = Feed.objects.create(
             name="Second Feed",
             feed_url="https://example.com/feed2.xml",
         )
-        
+
         # Add entries to both feeds
         Entry.objects.create(feed=self.feed, original_title="Entry 1")
         Entry.objects.create(feed=feed2, original_title="Entry 2")
-        
+
         feeds = [self.feed, feed2]
 
         handle_feeds_translation(feeds, target_field="title")
@@ -184,7 +188,9 @@ class TasksTestCase(TestCase):
 
     @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_content_field(self, mock_translate_feed, mock_logger_info):
+    def test_handle_feeds_translation_content_field(
+        self, mock_translate_feed, mock_logger_info
+    ):
         """Test handle_feeds_translation with target_field='content'."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         feeds = [self.feed]

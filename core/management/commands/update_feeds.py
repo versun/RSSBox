@@ -199,7 +199,7 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         log = f"{current_time}: Start update feeds for frequency: {simple_update_frequency}, feeds count: {len(feeds_list)}"
         logger.info(log)
         # output to stdout
-        #print(log)
+        # print(log)
 
         update_multiple_feeds(feeds_list)
 
@@ -208,7 +208,7 @@ def update_feeds_for_frequency(simple_update_frequency: str):
     except Exception as e:
         log = f"{current_time}: Command update_feeds_for_frequency {simple_update_frequency}: {str(e)}"
         logger.exception(log)
-        #print(log)
+        # print(log)
 
 
 # if __name__ == "__main__":

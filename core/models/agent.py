@@ -106,8 +106,11 @@ class OpenAIAgent(Agent):
                 res = client.with_options(max_retries=3).chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You must only reply with exactly one character: 1"},
-                        {"role": "user", "content": "1"}
+                        {
+                            "role": "system",
+                            "content": "You must only reply with exactly one character: 1",
+                        },
+                        {"role": "user", "content": "1"},
                     ],
                     max_tokens=50,
                 )
@@ -117,9 +120,11 @@ class OpenAIAgent(Agent):
                 self.max_tokens = task_manager.submit_task(
                     f"detect_model_limit_{self.model}_{self.id}",
                     self.detect_model_limit,
-                    force=True
+                    force=True,
                 ).result()
-                logger.info(f"Submitted background task to detect model limit for {self.model}")
+                logger.info(
+                    f"Submitted background task to detect model limit for {self.model}"
+                )
                 self.log = ""
                 self.valid = True
                 return True
@@ -131,47 +136,55 @@ class OpenAIAgent(Agent):
             finally:
                 self.save()
 
-    def detect_model_limit(self,force=False) -> int:
-        """通过二分搜索来高效检测模型实际限制"""        
+    def detect_model_limit(self, force=False) -> int:
+        """通过二分搜索来高效检测模型实际限制"""
         if not force and self.max_tokens > 0:
             return self.max_tokens
 
-        #test_range = [1024, 4096, 8192, 16384, 32768, 65536, 128000, 200000, 400000, 500000, 1000000]
-        
+        # test_range = [1024, 4096, 8192, 16384, 32768, 65536, 128000, 200000, 400000, 500000, 1000000]
+
         # 二分搜索找到确切限制
         def binary_search_limit(low, high):
             """使用二分搜索找到确切的token限制"""
             if high - low <= 1024:  # 当范围足够小时，返回低值作为安全限制
                 return low
-            
+
             mid = (low + high) // 2
-            
+
             try:
                 # 使用最小的测试内容减少token消耗
                 response = self._init().chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You must only reply with exactly one character: 1"},
-                        {"role": "user", "content": "1"}
+                        {
+                            "role": "system",
+                            "content": "You must only reply with exactly one character: 1",
+                        },
+                        {"role": "user", "content": "1"},
                     ],
                     max_tokens=mid,
                     temperature=0,  # 确保结果一致性
-                    stop=[",","\n", " ", ".","1"]
+                    stop=[",", "\n", " ", ".", "1"],
                 )
                 if response.choices[0].finish_reason == "stop":
-                # 成功调用，尝试更高的限制
+                    # 成功调用，尝试更高的限制
                     return binary_search_limit(mid, high)
-                
+
             except Exception as e:
                 error_str = str(e).lower()
-                if any(keyword in error_str for keyword in ['maximum', 'limit', 'token', 'context']):
+                if any(
+                    keyword in error_str
+                    for keyword in ["maximum", "limit", "token", "context"]
+                ):
                     # 遇到限制错误，降低上限
                     return binary_search_limit(low, mid)
                 else:
                     # 其他错误（如API错误），使用保守值
-                    logger.warning(f"Detect model limit when non-limit error occurs: {e}")
+                    logger.warning(
+                        f"Detect model limit when non-limit error occurs: {e}"
+                    )
                     return low
-        
+
         # 直接使用二分搜索
         final_limit = binary_search_limit(1024, 1000000)
         return final_limit
@@ -231,7 +244,9 @@ class OpenAIAgent(Agent):
             system_prompt_tokens = get_token_count(system_prompt)
             # 获取最大可用token数（保留buffer）
             if not self.max_tokens:
-                raise ValueError("max_tokens is not set, Please wait for the validation to complete")
+                raise ValueError(
+                    "max_tokens is not set, Please wait for the validation to complete"
+                )
 
             max_usable_tokens = (
                 self.max_tokens - system_prompt_tokens - 100
@@ -270,9 +285,11 @@ class OpenAIAgent(Agent):
             # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
             output_token_limit = min(
                 4096,  # 大多数场景下4096个输出token足够
-                max(512, self.max_tokens - input_tokens - 200)  # 至少512，最多为剩余空间-200缓冲
+                max(
+                    512, self.max_tokens - input_tokens - 200
+                ),  # 至少512，最多为剩余空间-200缓冲
             )
-            
+
             # 正常流程
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers={
@@ -289,9 +306,13 @@ class OpenAIAgent(Agent):
                 frequency_penalty=self.frequency_penalty,
                 presence_penalty=self.presence_penalty,
                 max_tokens=output_token_limit,
-                reasoning_effort="minimal", # 关闭深度思考
+                reasoning_effort="minimal",  # 关闭深度思考
             )
-            if res.choices and res.choices[0].finish_reason == "stop" and res.choices[0].message.content:
+            if (
+                res.choices
+                and res.choices[0].finish_reason == "stop"
+                and res.choices[0].message.content
+            ):
                 result_text = res.choices[0].message.content
                 logger.debug(f"[{self.name}]: {result_text[:50]}...")
 
@@ -323,16 +344,12 @@ class OpenAIAgent(Agent):
             text, system_prompt=system_prompt, user_prompt=user_prompt, **kwargs
         )
 
-    def summarize(
-        self, text: str, target_language: str, **kwargs
-    ) -> dict:
+    def summarize(self, text: str, target_language: str, **kwargs) -> dict:
         logger.info(f">>> Start Summarize [{target_language}]: {text[:50]}...")
         system_prompt = self.summary_prompt.replace(
             "{target_language}", target_language
         )
-        return self.completions(
-            text, system_prompt=system_prompt, **kwargs
-        )
+        return self.completions(text, system_prompt=system_prompt, **kwargs)
 
     def digester(
         self,
@@ -343,13 +360,9 @@ class OpenAIAgent(Agent):
     ) -> dict:
         logger.info(f">>> Start Digesting [{target_language}]: {text[:50]}...")
         system_prompt += settings.output_format_for_filter_prompt
-        return self.completions(
-            text, system_prompt=system_prompt, **kwargs
-        )
+        return self.completions(text, system_prompt=system_prompt, **kwargs)
 
-    def filter(
-        self, text: str, system_prompt: str, **kwargs
-    ) -> dict:
+    def filter(self, text: str, system_prompt: str, **kwargs) -> dict:
         logger.info(f">>> Start Filter: {text[:50]}...")
         passed = False
         tokens = 0

@@ -309,7 +309,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
             translation_status = False
-            #feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
+            # feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
         finally:
             feed.translation_status = translation_status
             # Explicitly clean up entry reference
@@ -358,9 +358,7 @@ def _translate_title(
 
     if result:
         translated_title = result.get("text")
-        entry.translated_title = (
-            translated_title if translated_title else None
-        )
+        entry.translated_title = translated_title if translated_title else None
         total_tokens = result.get("tokens", 0)
         total_characters = result.get("characters", 0)
 
@@ -411,9 +409,8 @@ def _translate_content(
     )
 
     translated_content = result.get("text")
-    entry.translated_content = (
-        translated_content if translated_content else None
-    )
+    logger.info(f"Translated content: {translated_content}")
+    entry.translated_content = translated_content if translated_content else None
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
 

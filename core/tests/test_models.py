@@ -76,18 +76,18 @@ class FeedModelTest(TestCase):
         Test Feed save method adjusts update_frequency to predefined thresholds.
         """
         test_cases = [
-            (3, 5),    # Should round up to 5
-            (7, 15),   # Should round up to 15
+            (3, 5),  # Should round up to 5
+            (7, 15),  # Should round up to 15
             (25, 30),  # Should round up to 30
             (45, 60),  # Should round up to 60
             (500, 1440),  # Should round up to 1440
             (5000, 10080),  # Should round up to 10080
         ]
-        
+
         for input_freq, expected_freq in test_cases:
             feed = Feed.objects.create(
                 feed_url=f"https://example.com/feed{input_freq}.xml",
-                update_frequency=input_freq
+                update_frequency=input_freq,
             )
             self.assertEqual(feed.update_frequency, expected_freq)
 
@@ -97,10 +97,9 @@ class FeedModelTest(TestCase):
         """
         long_log = "A" * 3000  # Create a log longer than 2048 bytes
         feed = Feed.objects.create(
-            feed_url="https://example.com/feed.xml",
-            log=long_log
+            feed_url="https://example.com/feed.xml", log=long_log
         )
-        
+
         # Log should be truncated to 2048 bytes
         self.assertLessEqual(len(feed.log.encode("utf-8")), 2048)
         self.assertTrue(feed.log.endswith("A" * 100))  # Should keep the end
@@ -110,10 +109,9 @@ class FeedModelTest(TestCase):
         Test Feed get_translation_display method.
         """
         feed = Feed.objects.create(
-            feed_url="https://example.com/feed.xml",
-            translation_display=1
+            feed_url="https://example.com/feed.xml", translation_display=1
         )
-        
+
         display = feed.get_translation_display()
         self.assertEqual(display, "Translation | Original")
 
@@ -125,7 +123,7 @@ class FeedModelTest(TestCase):
         feed.translator_content_type_id = None
         feed.translator_object_id = 1  # Set object_id but not content_type
         feed.save()
-        
+
         # Both should be set to None
         self.assertIsNone(feed.translator_content_type_id)
         self.assertIsNone(feed.translator_object_id)
@@ -135,15 +133,13 @@ class FeedModelTest(TestCase):
         Test Feed unique constraint on feed_url and target_language.
         """
         Feed.objects.create(
-            feed_url="https://example.com/feed.xml",
-            target_language="zh-hans"
+            feed_url="https://example.com/feed.xml", target_language="zh-hans"
         )
-        
+
         # Should raise IntegrityError for duplicate
         with self.assertRaises(IntegrityError):
             Feed.objects.create(
-                feed_url="https://example.com/feed.xml",
-                target_language="zh-hans"
+                feed_url="https://example.com/feed.xml", target_language="zh-hans"
             )
 
     # @patch('core.models.feed.Filter')
@@ -152,17 +148,17 @@ class FeedModelTest(TestCase):
     #     Test Feed filtered_entries property applies all filters.
     #     """
     #     feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
-        
+
     #     # Create mock filter
     #     mock_filter_instance = MagicMock()
     #     mock_filter_instance.apply_filter.return_value = "filtered_queryset"
-        
+
     #     # Mock the filters.all() method
     #     feed.filters.all = MagicMock(return_value=[mock_filter_instance])
     #     feed.entries.all = MagicMock(return_value="original_queryset")
-        
+
     #     result = feed.filtered_entries
-        
+
     #     # Verify filter was applied
     #     mock_filter_instance.apply_filter.assert_called_once_with("original_queryset")
     #     self.assertEqual(result, "filtered_queryset")
@@ -171,16 +167,15 @@ class FeedModelTest(TestCase):
         """Test Feed summary_detail field validators."""
         # Valid values
         feed = Feed.objects.create(
-            feed_url="https://example.com/feed.xml",
-            summary_detail=0.5
+            feed_url="https://example.com/feed.xml", summary_detail=0.5
         )
         self.assertEqual(feed.summary_detail, 0.5)
-        
+
         # Test boundary values
         feed.summary_detail = 0.0
         feed.save()
         self.assertEqual(feed.summary_detail, 0.0)
-        
+
         feed.summary_detail = 1.0
         feed.save()
         self.assertEqual(feed.summary_detail, 1.0)
@@ -193,7 +188,7 @@ class FeedModelTest(TestCase):
             (1, "Translation | Original"),
             (2, "Original | Translation"),
         ]
-        
+
         # Test all choices exist
         for choice in expected_choices:
             self.assertIn(choice, choices)
@@ -203,15 +198,15 @@ class FeedModelTest(TestCase):
         feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
         tag = Tag.objects.create(name="Test Tag")
         filter_obj = Filter.objects.create(name="Test Filter")
-        
+
         # Add relationships
         feed.tags.add(tag)
         feed.filters.add(filter_obj)
-        
+
         # Test forward relationships
         self.assertIn(tag, feed.tags.all())
         self.assertIn(filter_obj, feed.filters.all())
-        
+
         # Test reverse relationships
         self.assertIn(feed, tag.feeds.all())
         self.assertIn(feed, filter_obj.feeds.all())
@@ -270,7 +265,7 @@ class EntryModelTest(TestCase):
             pubdate=now,
             updated=now,
             guid="test-guid-123",
-            enclosures_xml="<enclosure url=\"test.mp3\" type=\"audio/mpeg\" />",
+            enclosures_xml='<enclosure url="test.mp3" type="audio/mpeg" />',
             original_title="Original Title",
             translated_title="Translated Title",
             original_content="Original content",
@@ -278,7 +273,7 @@ class EntryModelTest(TestCase):
             original_summary="Original summary",
             ai_summary="AI generated summary",
         )
-        
+
         self.assertEqual(entry.guid, "test-guid-123")
         self.assertEqual(entry.translated_title, "Translated Title")
         self.assertEqual(entry.translated_content, "Translated content")
@@ -293,27 +288,26 @@ class EntryModelTest(TestCase):
             link="https://example.com/entry",
             original_title="Test Entry",
         )
-        
+
         # Test forward relationship
         self.assertEqual(entry.feed, self.feed)
-        
+
         # Test reverse relationship
         self.assertIn(entry, self.feed.entries.all())
         self.assertEqual(self.feed.entries.count(), 1)
-    
 
     def test_entry_with_enclosures(self):
         """Test Entry with enclosures XML data."""
-        enclosure_xml = '''<enclosure url="https://example.com/podcast.mp3" 
-                          type="audio/mpeg" length="12345678"/>'''
-        
+        enclosure_xml = """<enclosure url="https://example.com/podcast.mp3" 
+                          type="audio/mpeg" length="12345678"/>"""
+
         entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/entry",
             original_title="Podcast Entry",
-            enclosures_xml=enclosure_xml
+            enclosures_xml=enclosure_xml,
         )
-        
+
         self.assertEqual(entry.enclosures_xml, enclosure_xml)
 
     def test_entry_guid_indexing(self):
@@ -323,9 +317,9 @@ class EntryModelTest(TestCase):
             feed=self.feed,
             link="https://example.com/entry",
             original_title="GUID Test",
-            guid="unique-guid-12345"
+            guid="unique-guid-12345",
         )
-        
+
         # Query by GUID should be efficient due to index
         found_entry = Entry.objects.get(guid="unique-guid-12345")
         self.assertEqual(found_entry, entry)
@@ -337,16 +331,16 @@ class EntryModelTest(TestCase):
             link="https://example.com/entry",
             original_title="DateTime Test",
             pubdate=None,
-            updated=None
+            updated=None,
         )
-        
+
         self.assertIsNone(entry.pubdate)
         self.assertIsNone(entry.updated)
 
     def test_entry_content_fields_maxlength(self):
         """Test Entry content fields can handle long text."""
         long_content = "A" * 10000  # Very long content
-        
+
         entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/entry",
@@ -354,9 +348,9 @@ class EntryModelTest(TestCase):
             original_content=long_content,
             translated_content=long_content,
             original_summary=long_content,
-            ai_summary=long_content
+            ai_summary=long_content,
         )
-        
+
         self.assertEqual(len(entry.original_content), 10000)
         self.assertEqual(len(entry.translated_content), 10000)
         self.assertEqual(len(entry.original_summary), 10000)
@@ -381,7 +375,7 @@ class TagModelTest(TestCase):
         Test creating a Tag instance with basic data.
         """
         tag = Tag.objects.create(name="Technology")
-        
+
         self.assertEqual(tag.name, "Technology")
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNotNone(tag.slug)
@@ -400,11 +394,11 @@ class TagModelTest(TestCase):
         """
         tag = Tag.objects.create(name="Original Name")
         original_slug = tag.slug
-        
+
         # Update the name
         tag.name = "New Name"
         tag.save()
-        
+
         # Slug should be updated
         tag.refresh_from_db()
         self.assertNotEqual(tag.slug, original_slug)
@@ -416,17 +410,17 @@ class TagModelTest(TestCase):
         """
         tag = Tag.objects.create(name="Test Tag")
         tag.filters.add(self.filter)
-        
+
         # Test forward relationship
         self.assertIn(self.filter, tag.filters.all())
-        
+
         # Test reverse relationship
         self.assertIn(tag, self.filter.tags.all())
 
     def test_tag_fields_default_values(self):
         """Test Tag model field default values."""
         tag = Tag.objects.create(name="Default Test")
-        
+
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNone(tag.last_updated)
         self.assertEqual(tag.etag, "")
@@ -554,9 +548,9 @@ class FilterModelAdvancedTest(TestCase):
             original_title="Python Programming",
             original_content="This is about Python programming",
             translated_title="Python 编程",
-            translated_content="这是关于 Python 编程的内容"
+            translated_content="这是关于 Python 编程的内容",
         )
-        
+
     def test_filter_apply_method_keyword_only(self):
         """
         Test Filter apply method with KEYWORD_ONLY filter method.
@@ -565,14 +559,14 @@ class FilterModelAdvancedTest(TestCase):
             name="Python Filter",
             keywords="Python",
             filter_method=Filter.KEYWORD_ONLY,
-            operation=Filter.INCLUDE
+            operation=Filter.INCLUDE,
         )
-        
+
         queryset = Entry.objects.all()
         filtered = filter_obj.apply_filter(queryset)
-        
+
         self.assertIn(self.entry, filtered)
-    
+
     def test_filter_apply_method_ai_only(self):
         """
         Test Filter apply method with AI_ONLY filter method.
@@ -581,15 +575,15 @@ class FilterModelAdvancedTest(TestCase):
             name="AI Filter",
             agent=self.agent,
             filter_method=Filter.AI_ONLY,
-            filter_prompt="Test prompt"
+            filter_prompt="Test prompt",
         )
-        
+
         queryset = Entry.objects.filter(id=self.entry.id)
         filtered = filter_obj.apply_filter(queryset)
-        
+
         # TestAgent return random result
         self.assertTrue(self.entry in filtered or self.entry not in filtered)
-    
+
     def test_filter_apply_method_both(self):
         """
         Test Filter apply method with BOTH filter method.
@@ -599,16 +593,16 @@ class FilterModelAdvancedTest(TestCase):
             keywords="Python",
             agent=self.agent,
             filter_method=Filter.BOTH,
-            operation=Filter.INCLUDE
+            operation=Filter.INCLUDE,
         )
-        
+
         queryset = Entry.objects.all()
         filtered = filter_obj.apply_filter(queryset)
-        
+
         # Entry should pass both keyword and AI filters
         # TestAgent return random result
         self.assertTrue(self.entry in filtered or self.entry not in filtered)
-    
+
     def test_filter_different_content_fields(self):
         """
         Test filtering different content fields.
@@ -621,67 +615,67 @@ class FilterModelAdvancedTest(TestCase):
             filter_translated_title=True,
             filter_original_content=False,
             filter_translated_content=False,
-            operation=Filter.INCLUDE
+            operation=Filter.INCLUDE,
         )
-        
+
         queryset = Entry.objects.all()
         filtered = filter_obj.apply_keywords_filter(queryset)
-        
+
         self.assertTrue(self.entry in filtered or self.entry not in filtered)
 
     def test_filter_content_field_combinations(self):
         """Test different combinations of content field filtering."""
         test_cases = [
             {
-                'filter_original_title': True,
-                'filter_original_content': False,
-                'filter_translated_title': False,
-                'filter_translated_content': False,
-                'keyword': 'Python',
-                'should_match': True
+                "filter_original_title": True,
+                "filter_original_content": False,
+                "filter_translated_title": False,
+                "filter_translated_content": False,
+                "keyword": "Python",
+                "should_match": True,
             },
             {
-                'filter_original_title': False,
-                'filter_original_content': True,
-                'filter_translated_title': False,
-                'filter_translated_content': False,
-                'keyword': 'programming',
-                'should_match': True
+                "filter_original_title": False,
+                "filter_original_content": True,
+                "filter_translated_title": False,
+                "filter_translated_content": False,
+                "keyword": "programming",
+                "should_match": True,
             },
             {
-                'filter_original_title': False,
-                'filter_original_content': False,
-                'filter_translated_title': True,
-                'filter_translated_content': False,
-                'keyword': '编程',
-                'should_match': True
+                "filter_original_title": False,
+                "filter_original_content": False,
+                "filter_translated_title": True,
+                "filter_translated_content": False,
+                "keyword": "编程",
+                "should_match": True,
             },
             {
-                'filter_original_title': False,
-                'filter_original_content': False,
-                'filter_translated_title': False,
-                'filter_translated_content': True,
-                'keyword': 'Python',
-                'should_match': True
-            }
+                "filter_original_title": False,
+                "filter_original_content": False,
+                "filter_translated_title": False,
+                "filter_translated_content": True,
+                "keyword": "Python",
+                "should_match": True,
+            },
         ]
-        
+
         for case in test_cases:
             with self.subTest(case=case):
                 filter_obj = Filter.objects.create(
                     name=f"Test Filter {case['keyword']}",
-                    keywords=case['keyword'],
-                    filter_original_title=case['filter_original_title'],
-                    filter_original_content=case['filter_original_content'],
-                    filter_translated_title=case['filter_translated_title'],
-                    filter_translated_content=case['filter_translated_content'],
-                    operation=Filter.INCLUDE
+                    keywords=case["keyword"],
+                    filter_original_title=case["filter_original_title"],
+                    filter_original_content=case["filter_original_content"],
+                    filter_translated_title=case["filter_translated_title"],
+                    filter_translated_content=case["filter_translated_content"],
+                    operation=Filter.INCLUDE,
                 )
-                
+
                 queryset = Entry.objects.all()
                 filtered = filter_obj.apply_keywords_filter(queryset)
-                
-                if case['should_match']:
+
+                if case["should_match"]:
                     self.assertIn(self.entry, filtered)
                 else:
                     self.assertNotIn(self.entry, filtered)
@@ -695,15 +689,19 @@ class FilterModelAdvancedTest(TestCase):
         """Test Filter operation choices constants."""
         self.assertTrue(Filter.INCLUDE)
         self.assertFalse(Filter.EXCLUDE)
-        
+
         # Test choices tuple structure
         choices = Filter.OPERATION_CHOICES
         self.assertEqual(len(choices), 2)
-        
+
         # Check choice values
-        include_choice = next(choice for choice in choices if choice[0] == Filter.INCLUDE)
-        exclude_choice = next(choice for choice in choices if choice[0] == Filter.EXCLUDE)
-        
+        include_choice = next(
+            choice for choice in choices if choice[0] == Filter.INCLUDE
+        )
+        exclude_choice = next(
+            choice for choice in choices if choice[0] == Filter.EXCLUDE
+        )
+
         self.assertIn("Include", str(include_choice[1]))
         self.assertIn("Exclude", str(exclude_choice[1]))
 
@@ -712,7 +710,7 @@ class FilterModelAdvancedTest(TestCase):
         self.assertEqual(Filter.KEYWORD_ONLY, 0)
         self.assertEqual(Filter.AI_ONLY, 1)
         self.assertEqual(Filter.BOTH, 2)
-        
+
         choices = Filter.FILTER_METHOD_CHOICES
         self.assertEqual(len(choices), 3)
 
@@ -727,7 +725,7 @@ class FilterResultModelTest(TestCase):
         self.entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/entry",
-            original_title="Test Entry"
+            original_title="Test Entry",
         )
 
     def test_create_filter_result(self):
@@ -735,11 +733,9 @@ class FilterResultModelTest(TestCase):
         Test creating a FilterResult instance.
         """
         result = FilterResult.objects.create(
-            filter=self.filter,
-            entry=self.entry,
-            passed=True
+            filter=self.filter, entry=self.entry, passed=True
         )
-        
+
         self.assertEqual(result.filter, self.filter)
         self.assertEqual(result.entry, self.entry)
         self.assertTrue(result.passed)
@@ -750,15 +746,13 @@ class FilterResultModelTest(TestCase):
         Test FilterResult relationships with Filter and Entry.
         """
         result = FilterResult.objects.create(
-            filter=self.filter,
-            entry=self.entry,
-            passed=False
+            filter=self.filter, entry=self.entry, passed=False
         )
-        
+
         # Test forward relationships
         self.assertEqual(result.filter, self.filter)
         self.assertEqual(result.entry, self.entry)
-        
+
         # Test reverse relationships
         self.assertIn(result, self.filter.results.all())
         self.assertIn(result, self.entry.filter_results.all())
@@ -766,23 +760,19 @@ class FilterResultModelTest(TestCase):
     def test_filter_result_passed_field_nullable(self):
         """Test FilterResult passed field can be null."""
         result = FilterResult.objects.create(
-            filter=self.filter,
-            entry=self.entry,
-            passed=None
+            filter=self.filter, entry=self.entry, passed=None
         )
-        
+
         self.assertIsNone(result.passed)
 
     def test_filter_result_auto_timestamp(self):
         """Test FilterResult last_updated is automatically set."""
         before_creation = timezone.now()
         result = FilterResult.objects.create(
-            filter=self.filter,
-            entry=self.entry,
-            passed=True
+            filter=self.filter, entry=self.entry, passed=True
         )
         after_creation = timezone.now()
-        
+
         self.assertGreaterEqual(result.last_updated, before_creation)
         self.assertLessEqual(result.last_updated, after_creation)
 
@@ -811,7 +801,7 @@ class OpenAIAgentModelTest(TestCase):
             mock_completion
         )
         mock_openai_class.return_value = mock_client
-        
+
         # Mock task_manager.submit_task to return a mock task with result
         mock_task = MagicMock()
         mock_task.result.return_value = 4096  # Mock max_tokens value
@@ -869,7 +859,7 @@ class OpenAIAgentModelTest(TestCase):
         """Test the completions method for success and failure cases."""
         # Set max_tokens to avoid ValueError
         self.agent.max_tokens = 4096
-        
+
         # Setup mock client and response
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
@@ -906,7 +896,7 @@ class OpenAIAgentModelTest(TestCase):
         """Test the completions method's chunking logic with robust mocks."""
         # Set max_tokens to avoid ValueError
         self.agent.max_tokens = 4096
-        
+
         long_text = "A very long text that needs to be chunked."
 
         # 1. Mock get_token_count to behave based on input
@@ -926,13 +916,17 @@ class OpenAIAgentModelTest(TestCase):
 
         mock_completion_1 = MagicMock()
         mock_completion_1.choices = [
-            MagicMock(message=MagicMock(content="Translated first."), finish_reason="stop"),
+            MagicMock(
+                message=MagicMock(content="Translated first."), finish_reason="stop"
+            ),
         ]
         mock_completion_1.usage = MagicMock(total_tokens=20)
 
         mock_completion_2 = MagicMock()
         mock_completion_2.choices = [
-            MagicMock(message=MagicMock(content="Translated second."), finish_reason="stop"),
+            MagicMock(
+                message=MagicMock(content="Translated second."), finish_reason="stop"
+            ),
         ]
         mock_completion_2.usage = MagicMock(total_tokens=25)
 
@@ -1179,9 +1173,7 @@ class TestAgentModelTest(TestCase):
         Create a TestAgent instance for testing.
         """
         self.agent = TestAgent.objects.create(
-            name="Test Agent",
-            translated_text="@@Translated@@",
-            interval=1
+            name="Test Agent", translated_text="@@Translated@@", interval=1
         )
 
     def test_create_test_agent(self):
@@ -1209,7 +1201,7 @@ class TestAgentModelTest(TestCase):
         expected = {
             "text": "@@Translated@@",
             "characters": len("Hello world"),
-            "tokens": 10
+            "tokens": 10,
         }
         self.assertEqual(result, expected)
 
@@ -1221,7 +1213,7 @@ class TestAgentModelTest(TestCase):
         expected = {
             "text": "@@Translated@@",
             "characters": len("Long text to summarize"),
-            "tokens": 10
+            "tokens": 10,
         }
         self.assertEqual(result, expected)
 
@@ -1244,11 +1236,10 @@ class TestAgentModelTest(TestCase):
         # Test with max_characters
         expected_min = self.agent.max_characters * 0.7
         expected_max = self.agent.max_characters * 0.9
-        
+
         self.assertEqual(self.agent.min_size(), expected_min)
         self.assertEqual(self.agent.max_size(), expected_max)
 
     def test_agent_str_method(self):
         """Test Agent __str__ method returns name."""
         self.assertEqual(str(self.agent), "Test Agent")
-

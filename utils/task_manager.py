@@ -55,10 +55,12 @@ class TaskManager:
             if task_name in self.tasks:
                 existing_status = self.tasks[task_name]["status"]
                 if existing_status in ("pending", "running"):
-                    logger.warning(f"Task '{task_name}' already exists with status '{existing_status}', returning existing future")
+                    logger.warning(
+                        f"Task '{task_name}' already exists with status '{existing_status}', returning existing future"
+                    )
                     # 返回已存在的Future
                     return self.futures.get(task_name)
-            
+
             if self.tasks_executed_since_restart >= self.restart_threshold:
                 self._restart_executor()
             self.tasks_executed_since_restart += 1
@@ -82,11 +84,11 @@ class TaskManager:
             self._wrap_task, task_name, task_fn, *args, **kwargs
         )
         future.add_done_callback(self._make_done_callback(task_name))
-        
+
         # 存储Future映射
         with self.lock:
             self.futures[task_name] = future
-        
+
         return future
 
     def _cleanup_tasks(self, max_age_seconds=3600):

@@ -20,10 +20,7 @@ class AgentAdmin(admin.ModelAdmin):
         # obj.save()
         try:
             obj.valid = None
-            task_manager.submit_task(
-                f"validate_agent_{obj.id}",
-                obj.validate
-            )
+            task_manager.submit_task(f"validate_agent_{obj.id}", obj.validate)
         except Exception as e:
             obj.valid = False
             logger.error("Error in agent: %s", e)
@@ -74,7 +71,7 @@ class OpenAIAgentAdmin(AgentAdmin):
         "max_tokens",
         "base_url",
     ]
-    readonly_fields = ["show_log","max_tokens"]
+    readonly_fields = ["show_log", "max_tokens"]
     fieldsets = (
         (
             _("Model Information"),

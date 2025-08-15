@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0030_libretranslateagent'),
+        ("core", "0030_libretranslateagent"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='openaiagent',
-            name='max_tokens',
+            model_name="openaiagent",
+            name="max_tokens",
             field=models.IntegerField(default=0),
         ),
     ]
