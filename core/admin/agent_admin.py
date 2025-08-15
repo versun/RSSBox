@@ -7,22 +7,23 @@ from django.shortcuts import redirect
 from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 from utils.modelAdmin_utils import status_icon
 from core.admin import core_admin_site
+from utils.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 
 
 class AgentAdmin(admin.ModelAdmin):
     # get_model_perms = lambda self, request: {}  # 不显示在admin页面
-    readonly_fields = [
-        "show_log",
-    ]
-
     def save_model(self, request, obj, form, change):
         logger.info("Call save_model: %s", obj)
         # obj.valid = None
         # obj.save()
         try:
-            obj.valid = obj.validate()
+            obj.valid = None
+            task_manager.submit_task(
+                f"validate_agent_{obj.id}",
+                obj.validate
+            )
         except Exception as e:
             obj.valid = False
             logger.error("Error in agent: %s", e)
@@ -70,12 +71,10 @@ class OpenAIAgentAdmin(AgentAdmin):
         "is_valid",
         "masked_api_key",
         "model",
-        "title_translate_prompt",
-        "content_translate_prompt",
-        "summary_prompt",
         "max_tokens",
         "base_url",
     ]
+    readonly_fields = ["show_log","max_tokens"]
     fieldsets = (
         (
             _("Model Information"),
@@ -99,8 +98,8 @@ class OpenAIAgentAdmin(AgentAdmin):
                     "top_p",
                     "frequency_penalty",
                     "presence_penalty",
-                    "max_tokens",
                     "rate_limit_rpm",
+                    "max_tokens",
                 )
             },
         ),
@@ -117,6 +116,7 @@ class DeepLAgentAdmin(AgentAdmin):
         "proxy",
         "max_characters",
     ]
+    readonly_fields = ["show_log"]
 
 
 class LibreTranslateAgentAdmin(AgentAdmin):
@@ -128,6 +128,7 @@ class LibreTranslateAgentAdmin(AgentAdmin):
         "server_url",
         "max_characters",
     ]
+    readonly_fields = ["show_log"]
 
 
 class TestAgentAdmin(AgentAdmin):
@@ -140,6 +141,7 @@ class TestAgentAdmin(AgentAdmin):
         "max_tokens",
         "interval",
     ]
+    readonly_fields = ["show_log"]
 
 
 core_admin_site.register(OpenAIAgent, OpenAIAgentAdmin)
