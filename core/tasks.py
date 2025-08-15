@@ -359,7 +359,7 @@ def _translate_title(
     if result:
         translated_title = result.get("text")
         entry.translated_title = (
-            translated_title if translated_title else entry.original_title
+            translated_title if translated_title else None
         )
         total_tokens = result.get("tokens", 0)
         total_characters = result.get("characters", 0)
@@ -412,7 +412,7 @@ def _translate_content(
 
     translated_content = result.get("text")
     entry.translated_content = (
-        translated_content if translated_content else processed_html
+        translated_content if translated_content else None
     )
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
