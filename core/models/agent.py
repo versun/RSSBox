@@ -236,6 +236,7 @@ class OpenAIAgent(Agent):
         text: str,
         system_prompt: str = None,
         user_prompt: str = None,
+        _is_chunk: bool = False,  # 内部参数，用于标记是否为分块调用
         **kwargs,
     ) -> dict:
         client = self._init()
@@ -286,6 +287,7 @@ class OpenAIAgent(Agent):
                         text=chunk,
                         system_prompt=system_prompt,
                         user_prompt=user_prompt,
+                        _is_chunk=True,  # 标记为分块调用
                         **kwargs,
                     )
                     translated_chunks.append(result["text"])
@@ -332,7 +334,8 @@ class OpenAIAgent(Agent):
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
             logger.error(f"{self.name}: {e}")
-        finally:
+
+        if not _is_chunk:
             self.save()
 
         return {"text": result_text, "tokens": tokens}
@@ -439,6 +442,7 @@ class DeepLAgent(Agent):
             usage = translator.get_usage()
             if usage.character.valid:
                 self.log = ""
+                self.valid = True
                 is_valid = True
         except Exception as e:
             logger.error("DeepLTranslator validate ->%s", e)
@@ -573,6 +577,7 @@ class LibreTranslateAgent(Agent):
         try:
             self._api_languages()
             self.log = ""
+            self.valid = True
             is_valid = True
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
@@ -590,6 +595,7 @@ class LibreTranslateAgent(Agent):
             logger.error(
                 f"LibreTranslateAgent->Not support target language: {target_language}"
             )
+            self.save()
             return {"text": "", "characters": 0}
 
         try:
