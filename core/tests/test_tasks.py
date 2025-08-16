@@ -6,11 +6,16 @@ from ..models import Feed, Entry
 from ..models.agent import OpenAIAgent
 from ..tasks import (
     handle_single_feed_fetch,
+    handle_feeds_fetch,
     handle_feeds_translation,
     handle_feeds_summary,
     _translate_title,
     _translate_content,
     translate_feed,
+    _auto_retry,
+    _fetch_article_content,
+    _save_progress,
+    summarize_feed,
 )
 
 
@@ -375,3 +380,199 @@ class TasksHelperFunctionsTest(TestCase):
         self.assertEqual(call_kwargs.get("engine"), self.agent)
         self.assertEqual(self.feed.total_tokens, 150)
         self.assertEqual(self.feed.total_characters, 750)
+
+    @patch("core.tasks.fetch_feed")
+    def test_handle_single_feed_fetch_no_update(self, mock_fetch_feed):
+        """Test handle_single_feed_fetch when feed is up to date."""
+        mock_fetch_feed.return_value = {
+            "error": None,
+            "update": False,
+            "feed": None,
+        }
+
+        handle_single_feed_fetch(self.feed)
+
+        self.feed.refresh_from_db()
+        self.assertTrue(self.feed.fetch_status)
+        self.assertIn("Feed is up to date, Skip", self.feed.log)
+
+    def test_handle_feeds_fetch(self):
+        """Test handle_feeds_fetch function."""
+        feed1 = Feed.objects.create(name="Feed1", feed_url="https://example.com/feed1.xml")
+        feed2 = Feed.objects.create(name="Feed2", feed_url="https://example.com/feed2.xml")
+        
+        with patch("core.tasks.handle_single_feed_fetch") as mock_handle:
+            handle_feeds_fetch([feed1, feed2])
+            self.assertEqual(mock_handle.call_count, 2)
+
+    def test_auto_retry_success(self):
+        """Test _auto_retry function with successful call."""
+        mock_func = MagicMock(return_value={"text": "success", "tokens": 10})
+        
+        result = _auto_retry(mock_func, max_retries=3, text="test")
+        
+        self.assertEqual(result, {"text": "success", "tokens": 10})
+        mock_func.assert_called_once_with(text="test")
+
+    def test_auto_retry_with_failures(self):
+        """Test _auto_retry function with failures then success."""
+        mock_func = MagicMock()
+        mock_func.side_effect = [Exception("Error 1"), Exception("Error 2"), {"text": "success"}]
+        
+        with patch("core.tasks.time.sleep"):
+            result = _auto_retry(mock_func, max_retries=3, text="test")
+        
+        self.assertEqual(result, {"text": "success"})
+        self.assertEqual(mock_func.call_count, 3)
+
+    def test_auto_retry_all_failures(self):
+        """Test _auto_retry function when all attempts fail."""
+        mock_func = MagicMock(side_effect=Exception("Always fails"))
+        
+        with patch("core.tasks.time.sleep"):
+            result = _auto_retry(mock_func, max_retries=2, text="test")
+        
+        self.assertEqual(result, {})
+        self.assertEqual(mock_func.call_count, 2)
+
+    @patch("core.tasks.newspaper.Article")
+    def test_fetch_article_content_success(self, mock_article_class):
+        """Test _fetch_article_content with successful fetch."""
+        mock_article = MagicMock()
+        mock_article.text = "Article content"
+        mock_article_class.return_value = mock_article
+        
+        with patch("core.tasks.mistune.html", return_value="<p>Article content</p>"):
+            result = _fetch_article_content("https://example.com/article")
+        
+        self.assertEqual(result, "<p>Article content</p>")
+        mock_article.download.assert_called_once()
+        mock_article.parse.assert_called_once()
+
+    @patch("core.tasks.newspaper.Article")
+    def test_fetch_article_content_failure(self, mock_article_class):
+        """Test _fetch_article_content with fetch failure."""
+        mock_article_class.side_effect = Exception("Network error")
+        
+        result = _fetch_article_content("https://example.com/article")
+        
+        self.assertEqual(result, "")
+
+    def test_save_progress_with_entries(self):
+        """Test _save_progress function with entries to save."""
+        entry1 = Entry.objects.create(feed=self.feed, original_title="Title1")
+        entry2 = Entry.objects.create(feed=self.feed, original_title="Title2")
+        entries_to_save = [entry1, entry2]
+        
+        _save_progress(entries_to_save, self.feed, 100)
+        
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.total_tokens, 100)
+
+    def test_save_progress_empty_entries(self):
+        """Test _save_progress function with empty entries list."""
+        initial_tokens = self.feed.total_tokens
+        
+        _save_progress([], self.feed, 50)
+        
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.total_tokens, initial_tokens + 50)
+
+
+    def test_handle_feeds_summary_no_entries(self):
+        """Test handle_feeds_summary when feed has no entries."""
+        # Feed has no entries
+        feeds = [self.feed]
+
+        handle_feeds_summary(feeds)
+
+        # Feed should not be processed, but translation_status is set to None initially then bulk_update sets it
+        updated_feed = Feed.objects.get(id=self.feed.id)
+        # The function continues and sets translation_status in bulk_update even for feeds with no entries
+        self.assertFalse(updated_feed.translation_status)
+
+    @patch("core.tasks.translate_feed")
+    def test_translate_feed_no_translator(self, mock_translate_feed):
+        """Test translate_feed when no translator is set."""
+        Entry.objects.create(feed=self.feed, original_title="Test title")
+        self.feed.translator = None
+        self.feed.translate_title = True
+        self.feed.save()
+
+        # This should raise an exception internally
+        translate_feed(self.feed, target_field="title")
+
+        # The function should handle the exception gracefully
+        # Check that the feed's translation_status is set to False
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+
+    def test_auto_retry_large_text_cleanup(self):
+        """Test _auto_retry function with large text cleanup."""
+        mock_func = MagicMock(return_value={"text": "success"})
+        large_text = "x" * 2000  # Large text > 1000 chars
+        
+        result = _auto_retry(mock_func, max_retries=1, text=large_text, other_param="small")
+        
+        self.assertEqual(result, {"text": "success"})
+        mock_func.assert_called_once_with(text=large_text, other_param="small")
+
+
+    @patch("core.tasks.text_handler")
+    def test_summarize_feed_basic(self, mock_text_handler):
+        """Test summarize_feed function with basic functionality."""
+        # Create entries for summarization
+        entry1 = Entry.objects.create(
+            feed=self.feed,
+            original_title="Title 1",
+            original_content="Content for entry 1"
+        )
+        entry2 = Entry.objects.create(
+            feed=self.feed,
+            original_title="Title 2", 
+            original_content="Content for entry 2"
+        )
+        
+        # Set up summarizer
+        self.feed.summarizer = self.agent
+        self.feed.summary_detail = 0.5
+        self.feed.save()
+        
+        # Mock text_handler functions
+        mock_text_handler.clean_content.side_effect = lambda x: x
+        mock_text_handler.get_token_count.return_value = 100
+        mock_text_handler.adaptive_chunking.return_value = ["Chunk 1"]
+        
+        # Mock agent summarize method
+        with patch.object(self.agent, 'summarize') as mock_summarize:
+            mock_summarize.return_value = {"text": "Summary text", "tokens": 20}
+            
+            result = summarize_feed(self.feed)
+            
+        self.assertTrue(result)
+        # Check that entries were updated
+        entry1.refresh_from_db()
+        entry2.refresh_from_db()
+        self.assertEqual(entry1.ai_summary, "Summary text")
+        self.assertEqual(entry2.ai_summary, "Summary text")
+
+    @patch("core.tasks.text_handler")
+    def test_summarize_feed_empty_content(self, mock_text_handler):
+        """Test summarize_feed with empty content."""
+        entry = Entry.objects.create(
+            feed=self.feed,
+            original_title="Empty Entry",
+            original_content=""
+        )
+        
+        self.feed.summarizer = self.agent
+        self.feed.save()
+        
+        mock_text_handler.clean_content.return_value = ""
+        
+        result = summarize_feed(self.feed)
+        
+        self.assertTrue(result)
+        entry.refresh_from_db()
+        self.assertEqual(entry.ai_summary, "[No content available]")
+

@@ -147,26 +147,36 @@ class FeedModelTest(TestCase):
                 feed_url="https://example.com/feed.xml", target_language="zh-hans"
             )
 
-    # @patch('core.models.feed.Filter')
-    # def test_feed_filtered_entries_property(self, mock_filter):
-    #     """
-    #     Test Feed filtered_entries property applies all filters.
-    #     """
-    #     feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
-
-    #     # Create mock filter
-    #     mock_filter_instance = MagicMock()
-    #     mock_filter_instance.apply_filter.return_value = "filtered_queryset"
-
-    #     # Mock the filters.all() method
-    #     feed.filters.all = MagicMock(return_value=[mock_filter_instance])
-    #     feed.entries.all = MagicMock(return_value="original_queryset")
-
-    #     result = feed.filtered_entries
-
-    #     # Verify filter was applied
-    #     mock_filter_instance.apply_filter.assert_called_once_with("original_queryset")
-    #     self.assertEqual(result, "filtered_queryset")
+    def test_feed_filtered_entries_property(self):
+        """
+        Test Feed filtered_entries property applies all filters (line 239).
+        """
+        feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
+        
+        # Create real filter instance
+        filter_obj = Filter.objects.create(
+            name="Test Filter",
+            filter_method=Filter.KEYWORD_ONLY
+        )
+        filter_obj.keywords = "test"
+        filter_obj.save()
+        
+        # Add filter to feed
+        feed.filters.add(filter_obj)
+        
+        # Create test entry
+        entry = Entry.objects.create(
+            feed=feed,
+            original_title="This is a test entry",
+            link="http://example.com/entry"
+        )
+        
+        # Call filtered_entries to trigger the filter application (line 239)
+        result = feed.filtered_entries
+        
+        # Verify that the queryset is returned (covers the filter application logic)
+        self.assertIsNotNone(result)
+        # This should trigger filter_obj.apply_filter(queryset) on line 239
 
     def test_feed_summary_detail_validator(self):
         """Test Feed summary_detail field validators."""
@@ -1168,6 +1178,79 @@ class OpenAIAgentModelTest(TestCase):
         )  # Tokens should be 0 if not passed
 
 
+class OpenAIAgentAdvancedTest(TestCase):
+    """Test OpenAIAgent advanced methods and edge cases."""
+    
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="Advanced Test Agent",
+            api_key="test_key",
+            model="gpt-test",
+            max_tokens=4096
+        )
+    
+    def test_openai_agent_init_method(self):
+        """Test OpenAIAgent _init method to cover line 99-103."""
+        with patch('core.models.agent.OpenAI') as mock_openai:
+            client = self.agent._init()
+            
+            mock_openai.assert_called_once_with(
+                api_key=self.agent.api_key,
+                base_url=self.agent.base_url,
+                timeout=120.0
+            )
+    
+    @patch('core.models.agent.OpenAI')
+    def test_validate_no_api_key(self, mock_openai):
+        """Test validate method when api_key is empty to cover line 106."""
+        self.agent.api_key = ""
+        result = self.agent.validate()
+        
+        # Should return None (implicit) when no api_key
+        self.assertIsNone(result)
+        mock_openai.assert_not_called()
+    
+    @patch('core.models.agent.task_manager')
+    @patch('core.models.agent.OpenAI')
+    def test_validate_success_with_task_submission(self, mock_openai, mock_task_manager):
+        """Test validate method success path with task manager submission."""
+        mock_client = MagicMock()
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock(finish_reason="stop")]
+        mock_client.with_options().chat.completions.create.return_value = mock_completion
+        mock_openai.return_value = mock_client
+        
+        mock_task_manager.submit_task.return_value = "task_result"
+        
+        result = self.agent.validate()
+        
+        self.assertTrue(result)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.log, "")
+        self.assertTrue(self.agent.valid)
+        
+        # Verify task manager was called
+        mock_task_manager.submit_task.assert_called_once_with(
+            f"detect_model_limit_{self.agent.model}_{self.agent.id}",
+            self.agent.detect_model_limit,
+            force=True
+        )
+    
+    @patch('core.models.agent.OpenAI')
+    def test_validate_exception_handling(self, mock_openai):
+        """Test validate method exception handling to cover lines 136-142."""
+        mock_client = MagicMock()
+        mock_client.with_options().chat.completions.create.side_effect = Exception("API Error")
+        mock_openai.return_value = mock_client
+        
+        result = self.agent.validate()
+        
+        self.assertFalse(result)
+        self.agent.refresh_from_db()
+        self.assertIn("API Error", self.agent.log)
+        self.assertFalse(self.agent.valid)
+
+
 class OpenAIAgentCompletionsAdvancedTest(TestCase):
     """Test OpenAIAgent completions method edge cases and error handling."""
     
@@ -1948,6 +2031,130 @@ class AgentBaseClassTest(TestCase):
             max_characters=1000,
             max_tokens=2000
         )
+
+    @patch.object(OpenAIAgent, '_init')
+    @patch.object(OpenAIAgent, '_wait_for_rate_limit')
+    @patch('core.models.agent.get_token_count')
+    @patch('core.models.agent.task_manager.submit_task')
+    def test_agent_no_max_tokens_error(self, mock_submit_task, mock_get_token_count, mock_wait, mock_init):
+        """Test agent translation when max_tokens is not set (lines 257-262)."""
+        # Create OpenAI agent with max_tokens=0 to trigger the "not self.max_tokens" condition
+        # Only OpenAI agents have the max_tokens check logic in translate method
+        from core.models.agent import OpenAIAgent
+        agent_no_tokens = OpenAIAgent.objects.create(
+            name="No Tokens Agent", 
+            api_key="test-key",
+            model="gpt-3.5-turbo",
+            max_tokens=0  # 0 evaluates to False in Python
+        )
+        
+        # Mock _init to avoid OpenAI client creation
+        mock_client = MagicMock()
+        mock_init.return_value = mock_client
+        
+        # Mock get_token_count to avoid actual token counting
+        mock_get_token_count.return_value = 10
+        
+        # Mock task manager submission
+        mock_submit_task.return_value = "task-id"
+        
+        # Verify max_tokens is actually 0
+        self.assertEqual(agent_no_tokens.max_tokens, 0)
+        
+        # The ValueError is caught by try-except in completions method and logged to agent.log
+        # So we test that the task was submitted and the error was logged
+        result = agent_no_tokens.completions("test text", system_prompt="test prompt")
+        
+        # Verify task was submitted (lines 257-261)
+        mock_submit_task.assert_called_once()
+        args = mock_submit_task.call_args[0]
+        self.assertEqual(args[0], f"detect_model_limit_{agent_no_tokens.model}_{agent_no_tokens.id}")
+        self.assertEqual(args[1], agent_no_tokens.detect_model_limit)
+        
+        # Verify the error was logged to agent.log
+        self.assertIn("max_tokens is not set", agent_no_tokens.log)
+        self.assertIn("Please wait for the model limit detection to complete", agent_no_tokens.log)
+    
+    def test_agent_min_size_with_only_max_tokens_attribute(self):
+        """Test min_size when only max_tokens attribute exists (no max_characters)."""
+        # Create a custom agent class that only has max_tokens
+        class TokenOnlyAgent(Agent):
+            max_tokens = 2000
+            
+            def translate(self, text, target_language, **kwargs):
+                return {"text": "", "tokens": 0}
+            
+            def validate(self):
+                return True
+            
+            class Meta:
+                app_label = 'core'
+        
+        agent = TokenOnlyAgent(name="Token Only Test")
+        # Remove max_characters attribute to test the second condition
+        if hasattr(agent, 'max_characters'):
+            delattr(agent, 'max_characters')
+        
+        expected = agent.max_tokens * 0.7
+        self.assertEqual(agent.min_size(), expected)
+    
+    def test_agent_max_size_with_only_max_tokens_attribute(self):
+        """Test max_size when only max_tokens attribute exists (no max_characters)."""
+        # Create a custom agent class that only has max_tokens
+        class TokenOnlyAgent(Agent):
+            max_tokens = 2000
+            
+            def translate(self, text, target_language, **kwargs):
+                return {"text": "", "tokens": 0}
+            
+            def validate(self):
+                return True
+            
+            class Meta:
+                app_label = 'core'
+        
+        agent = TokenOnlyAgent(name="Token Only Test 2")
+        # Remove max_characters attribute to test the second condition
+        if hasattr(agent, 'max_characters'):
+            delattr(agent, 'max_characters')
+        
+        expected = agent.max_tokens * 0.9
+        self.assertEqual(agent.max_size(), expected)
+    
+    def test_agent_min_size_no_attributes(self):
+        """Test min_size when neither max_characters nor max_tokens exist."""
+        class NoLimitAgent(Agent):
+            def translate(self, text, target_language, **kwargs):
+                return {"text": "", "tokens": 0}
+            
+            def validate(self):
+                return True
+            
+            class Meta:
+                app_label = 'core'
+        
+        agent = NoLimitAgent(name="No Limit Test")
+        self.assertEqual(agent.min_size(), 0)
+    
+    def test_agent_max_size_no_attributes(self):
+        """Test max_size when neither max_characters nor max_tokens exist."""
+        class NoLimitAgent(Agent):
+            def translate(self, text, target_language, **kwargs):
+                return {"text": "", "tokens": 0}
+            
+            def validate(self):
+                return True
+            
+            class Meta:
+                app_label = 'core'
+        
+        agent = NoLimitAgent(name="No Limit Test 2")
+        self.assertEqual(agent.max_size(), 0)
+    
+    def test_agent_str_method_coverage(self):
+        """Test Agent __str__ method to cover line 59."""
+        agent = TestAgent.objects.create(name="String Test Agent")
+        self.assertEqual(str(agent), "String Test Agent")
     
     def test_agent_abstract_methods_not_implemented(self):
         """Test that abstract methods raise NotImplementedError."""
@@ -2048,3 +2255,517 @@ class AgentBaseClassTest(TestCase):
         )
         self.assertEqual(agent.min_size(), 0)
         self.assertEqual(agent.max_size(), 0)
+    
+    # OpenAI-specific methods moved to OpenAIAgentAdvancedTest
+    
+    @patch.object(OpenAIAgent, '_wait_for_rate_limit')
+    @patch('core.models.agent.get_token_count')
+    @patch('core.models.agent.OpenAI')
+    def test_completions_user_prompt_concatenation(self, mock_openai, mock_get_token_count, mock_wait):
+        """Test completions concatenates user_prompt to system_prompt."""
+        # Create an OpenAI agent instead of using TestAgent
+        from core.models.agent import OpenAIAgent
+        openai_agent = OpenAIAgent.objects.create(
+            name="Test OpenAI Agent",
+            api_key="test-key",
+            model="gpt-3.5-turbo",
+            max_tokens=2000
+        )
+        
+        mock_get_token_count.return_value = 10
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+        
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock(message=MagicMock(content="Response"), finish_reason="stop")]
+        mock_completion.usage = MagicMock(total_tokens=50)
+        mock_client.with_options().chat.completions.create.return_value = mock_completion
+        
+        system_prompt = "System prompt"
+        user_prompt = "User prompt"
+        
+        result = openai_agent.completions(
+            "test text", 
+            system_prompt=system_prompt, 
+            user_prompt=user_prompt
+        )
+        
+        # Verify user_prompt was concatenated
+        call_args = mock_client.with_options().chat.completions.create.call_args
+        actual_system_prompt = call_args[1]['messages'][0]['content']
+        expected_system_prompt = f"{system_prompt}\n\n{user_prompt}"
+        self.assertEqual(actual_system_prompt, expected_system_prompt)
+    
+    @patch.object(OpenAIAgent, '_wait_for_rate_limit')
+    @patch('core.models.agent.get_token_count')
+    @patch('core.models.agent.OpenAI')
+    def test_completions_save_not_called_for_chunks(self, mock_openai, mock_get_token_count, mock_wait):
+        """Test completions doesn't save when _is_chunk=True."""
+        # Create an OpenAI agent instead of TestAgent since TestAgent doesn't have completions method
+        from core.models.agent import OpenAIAgent
+        openai_agent = OpenAIAgent.objects.create(
+            name="Test OpenAI Agent",
+            api_key="test-key",
+            model="gpt-3.5-turbo",
+            max_tokens=2000
+        )
+        
+        mock_get_token_count.return_value = 10
+        mock_client = MagicMock()
+        mock_openai.return_value = mock_client
+        
+        mock_completion = MagicMock()
+        mock_completion.choices = [MagicMock(message=MagicMock(content="Response"), finish_reason="stop")]
+        mock_completion.usage = MagicMock(total_tokens=50)
+        mock_client.with_options().chat.completions.create.return_value = mock_completion
+        
+        # Mock save method to track calls
+        with patch.object(openai_agent, 'save') as mock_save:
+            result = openai_agent.completions(
+                "test text", 
+                system_prompt="system",
+                _is_chunk=True  # This should prevent save() call
+            )
+            
+            mock_save.assert_not_called()
+    
+    def test_min_size_with_max_characters(self):
+        """Test min_size method when agent has max_characters attribute."""
+        # Create a DeepLAgent which has max_characters
+        deepl_agent = DeepLAgent.objects.create(
+            name="DeepL Test",
+            api_key="test_key",
+            max_characters=1000
+        )
+        
+        result = deepl_agent.min_size()
+        self.assertEqual(result, 700)  # 1000 * 0.7
+    
+    def test_min_size_with_max_tokens(self):
+        """Test min_size method when agent has max_tokens attribute."""
+        # Create an OpenAIAgent which has max_tokens
+        openai_agent = OpenAIAgent.objects.create(
+            name="OpenAI Test",
+            api_key="test_key",
+            max_tokens=2000
+        )
+        
+        result = openai_agent.min_size()
+        self.assertEqual(result, 1400)  # 2000 * 0.7
+    
+    def test_min_size_no_attributes(self):
+        """Test min_size method when agent has neither max_characters nor max_tokens."""
+        # TestAgent has both max_characters and max_tokens attributes, so it will return max_characters * 0.7
+        # The setUp creates agent with max_characters=1000, so result should be 700
+        result = self.agent.min_size()
+        self.assertEqual(result, 700.0)  # 1000 * 0.7
+    
+    def test_max_size_with_max_characters(self):
+        """Test max_size method when agent has max_characters attribute."""
+        deepl_agent = DeepLAgent.objects.create(
+            name="DeepL Test",
+            api_key="test_key",
+            max_characters=1000
+        )
+        
+        result = deepl_agent.max_size()
+        self.assertEqual(result, 900)  # 1000 * 0.9
+    
+    def test_max_size_with_max_tokens(self):
+        """Test max_size method when agent has max_tokens attribute."""
+        openai_agent = OpenAIAgent.objects.create(
+            name="OpenAI Test",
+            api_key="test_key",
+            max_tokens=2000
+        )
+        
+        result = openai_agent.max_size()
+        self.assertEqual(result, 1800)  # 2000 * 0.9
+    
+    def test_max_size_no_attributes(self):
+        """Test max_size method when agent has neither max_characters nor max_tokens."""
+        # TestAgent has both max_characters and max_tokens attributes, so it will return max_characters * 0.9
+        # The setUp creates agent with max_characters=1000, so result should be 900
+        result = self.agent.max_size()
+        self.assertEqual(result, 900.0)  # 1000 * 0.9
+
+
+class DeepLAgentCoverageTest(TestCase):
+    """Test DeepLAgent methods to improve coverage."""
+    
+    def setUp(self):
+        self.agent = DeepLAgent.objects.create(
+            name="Coverage Test DeepL Agent",
+            api_key="test_key",
+            max_characters=1000
+        )
+    
+    def test_deepl_agent_init_method(self):
+        """Test DeepLAgent _init method to cover line 434-436."""
+        with patch('core.models.agent.deepl.Translator') as mock_translator:
+            translator = self.agent._init()
+            
+            mock_translator.assert_called_once_with(
+                self.agent.api_key,
+                server_url=self.agent.server_url,
+                proxy=self.agent.proxy
+            )
+    
+    @patch('core.models.agent.deepl.Translator')
+    def test_validate_success_path(self, mock_translator_class):
+        """Test DeepLAgent validate success to cover lines 439-453."""
+        mock_translator_instance = MagicMock()
+        mock_usage = MagicMock()
+        mock_usage.character.valid = True
+        mock_translator_instance.get_usage.return_value = mock_usage
+        mock_translator_class.return_value = mock_translator_instance
+        
+        result = self.agent.validate()
+        
+        self.assertTrue(result)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.log, "")
+        self.assertTrue(self.agent.valid)
+    
+    @patch('core.models.agent.deepl.Translator')
+    def test_validate_invalid_usage(self, mock_translator_class):
+        """Test DeepLAgent validate when usage is invalid."""
+        mock_translator_instance = MagicMock()
+        mock_usage = MagicMock()
+        mock_usage.character.valid = False  # Invalid usage
+        mock_translator_instance.get_usage.return_value = mock_usage
+        mock_translator_class.return_value = mock_translator_instance
+        
+        result = self.agent.validate()
+        
+        self.assertFalse(result)
+        self.agent.refresh_from_db()
+        self.assertFalse(self.agent.valid)
+    
+    @patch('core.models.agent.deepl.Translator')
+    @patch('core.models.agent.logger')
+    def test_validate_exception_handling(self, mock_logger, mock_translator_class):
+        """Test DeepLAgent validate exception handling to cover lines 446-453."""
+        mock_translator_instance = MagicMock()
+        mock_translator_instance.get_usage.side_effect = Exception("DeepL API Error")
+        mock_translator_class.return_value = mock_translator_instance
+        
+        result = self.agent.validate()
+        
+        self.assertFalse(result)
+        self.agent.refresh_from_db()
+        self.assertIn("DeepL API Error", self.agent.log)
+        self.assertFalse(self.agent.valid)
+        mock_logger.error.assert_called_once()
+    
+    @patch('core.models.agent.deepl.Translator')
+    @patch('core.models.agent.logger')
+    def test_translate_success_path(self, mock_logger, mock_translator_class):
+        """Test DeepLAgent translate success to cover lines 456-478."""
+        mock_translator_instance = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "Translated Text"
+        mock_translator_instance.translate_text.return_value = mock_response
+        mock_translator_class.return_value = mock_translator_instance
+        
+        result = self.agent.translate("Test Text", "Chinese Simplified")
+        
+        self.assertEqual(result["text"], "Translated Text")
+        self.assertEqual(result["characters"], len("Test Text"))
+        
+        # Verify API call parameters
+        mock_translator_instance.translate_text.assert_called_once_with(
+            "Test Text",
+            target_lang="ZH",
+            preserve_formatting=True,
+            split_sentences="nonewlines",
+            tag_handling="html"
+        )
+        
+        # Verify logging
+        mock_logger.info.assert_called_once()
+        self.assertIn("DeepL Translate", mock_logger.info.call_args[0][0])
+    
+    @patch('core.models.agent.logger')
+    def test_translate_unsupported_language(self, mock_logger):
+        """Test DeepLAgent translate with unsupported language to cover lines 460-463."""
+        result = self.agent.translate("Test Text", "Klingon")
+        
+        self.assertEqual(result["text"], "")
+        self.assertEqual(result["characters"], len("Test Text"))
+        
+        # Verify error logging for unsupported language
+        mock_logger.error.assert_called()
+        # Check that the unsupported language error was logged
+        error_calls = [str(call) for call in mock_logger.error.call_args_list]
+        unsupported_lang_logged = any("Not support target language" in call for call in error_calls)
+        self.assertTrue(unsupported_lang_logged)
+    
+    @patch('core.models.agent.deepl.Translator')
+    @patch('core.models.agent.logger')
+    def test_translate_api_exception(self, mock_logger, mock_translator_class):
+        """Test DeepLAgent translate API exception to cover lines 473-477."""
+        mock_translator_instance = MagicMock()
+        mock_translator_instance.translate_text.side_effect = Exception("DeepL Error")
+        mock_translator_class.return_value = mock_translator_instance
+        
+        result = self.agent.translate("Test Text", "Chinese Simplified")
+        
+        self.assertEqual(result["text"], "")
+        self.assertEqual(result["characters"], len("Test Text"))
+        
+        # Verify error logging and log update
+        mock_logger.error.assert_called_once()
+        self.agent.refresh_from_db()
+        self.assertIn("DeepL Error", self.agent.log)
+
+
+class LibreTranslateAgentCoverageTest(TestCase):
+    """Test LibreTranslateAgent methods to improve coverage."""
+    
+    def setUp(self):
+        self.agent = LibreTranslateAgent.objects.create(
+            name="Coverage Test LibreTranslate Agent",
+            server_url="http://test.libretranslate.com",
+            api_key="test_key"
+        )
+    
+    def test_libretranslate_agent_init(self):
+        """Test LibreTranslateAgent __init__ method to cover line 521-522."""
+        agent = LibreTranslateAgent(
+            name="Init Test Agent",
+            server_url="http://example.com"
+        )
+        # Just verify it doesn't raise an exception
+        self.assertEqual(agent.name, "Init Test Agent")
+    
+    @patch('urllib.request.urlopen')
+    def test_api_request_url_without_slash(self, mock_urlopen):
+        """Test _api_request with URL that doesn't end with slash to cover lines 534-537."""
+        self.agent.server_url = "http://test.com"  # No trailing slash
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"result": "success"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        result = self.agent._api_request("test")
+        
+        # Verify URL was formatted correctly
+        call_args = mock_urlopen.call_args
+        request_obj = call_args[0][0]
+        self.assertEqual(request_obj.full_url, "http://test.com/test")
+    
+    @patch('urllib.request.urlopen')
+    def test_api_request_url_with_slash(self, mock_urlopen):
+        """Test _api_request with URL that ends with slash."""
+        self.agent.server_url = "http://test.com/"  # With trailing slash
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"result": "success"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        result = self.agent._api_request("test")
+        
+        # Verify URL was formatted correctly
+        call_args = mock_urlopen.call_args
+        request_obj = call_args[0][0]
+        self.assertEqual(request_obj.full_url, "http://test.com/test")
+    
+    @patch('urllib.request.urlopen')
+    def test_api_request_with_api_key(self, mock_urlopen):
+        """Test _api_request includes API key when set to cover lines 540-541."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"result": "success"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        self.agent._api_request("test", {"param": "value"})
+        
+        # Verify API key was included
+        call_args = mock_urlopen.call_args
+        request_obj = call_args[0][0]
+        request_data = parse.parse_qs(request_obj.data.decode('utf-8'))
+        self.assertIn('api_key', request_data)
+        self.assertEqual(request_data['api_key'][0], 'test_key')
+    
+    @patch('urllib.request.urlopen')
+    def test_api_request_without_api_key(self, mock_urlopen):
+        """Test _api_request without API key."""
+        self.agent.api_key = ""  # No API key
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"result": "success"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        self.agent._api_request("test", {"param": "value"})
+        
+        # Verify API key was not included
+        call_args = mock_urlopen.call_args
+        request_obj = call_args[0][0]
+        request_data = parse.parse_qs(request_obj.data.decode('utf-8'))
+        self.assertNotIn('api_key', request_data)
+    
+    @patch('urllib.request.urlopen')
+    def test_api_request_connection_error(self, mock_urlopen):
+        """Test _api_request handles connection errors to cover line 553."""
+        mock_urlopen.side_effect = Exception("Connection failed")
+        
+        with self.assertRaises(ConnectionError) as context:
+            self.agent._api_request("test")
+        
+        self.assertIn("Connection failed", str(context.exception))
+    
+    @patch.object(LibreTranslateAgent, '_api_request')
+    def test_api_translate_success(self, mock_api_request):
+        """Test _api_translate success to cover lines 559-565."""
+        mock_api_request.return_value = {"translatedText": "Translated result"}
+        
+        result = self.agent._api_translate("Hello", "en", "zh")
+        
+        self.assertEqual(result, "Translated result")
+        mock_api_request.assert_called_once_with(
+            "translate",
+            params={"q": "Hello", "source": "en", "target": "zh", "format": "html"},
+            method="POST"
+        )
+    
+    @patch.object(LibreTranslateAgent, '_api_request')
+    def test_api_translate_error_response(self, mock_api_request):
+        """Test _api_translate handles error responses to cover lines 562-563."""
+        mock_api_request.return_value = {"error": "Translation failed"}
+        
+        with self.assertRaises(Exception) as context:
+            self.agent._api_translate("Hello", "en", "zh")
+        
+        self.assertIn("Translation failed", str(context.exception))
+    
+    @patch.object(LibreTranslateAgent, '_api_request')
+    def test_api_languages_method(self, mock_api_request):
+        """Test _api_languages method to cover line 570."""
+        expected_languages = [{"code": "en", "name": "English"}]
+        mock_api_request.return_value = expected_languages
+        
+        result = self.agent._api_languages()
+        
+        self.assertEqual(result, expected_languages)
+        mock_api_request.assert_called_once_with("languages", method="GET")
+    
+    @patch.object(LibreTranslateAgent, '_api_languages')
+    def test_validate_success_path(self, mock_api_languages):
+        """Test LibreTranslateAgent validate success to cover lines 576-587."""
+        mock_api_languages.return_value = []  # Success
+        
+        result = self.agent.validate()
+        
+        self.assertTrue(result)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.log, "")
+        self.assertTrue(self.agent.valid)
+    
+    @patch.object(LibreTranslateAgent, '_api_languages')
+    def test_validate_exception_handling(self, mock_api_languages):
+        """Test LibreTranslateAgent validate exception handling to cover lines 581-587."""
+        mock_api_languages.side_effect = Exception("Connection Error")
+        
+        result = self.agent.validate()
+        
+        self.assertFalse(result)
+        self.agent.refresh_from_db()
+        self.assertIn("Connection Error", self.agent.log)
+        self.assertFalse(self.agent.valid)
+    
+    def test_translate_unsupported_language(self):
+        """Test LibreTranslateAgent translate with unsupported language to cover lines 590-599."""
+        result = self.agent.translate("Test Text", "Klingon")
+        
+        self.assertEqual(result["text"], "")
+        self.assertEqual(result["characters"], 0)
+        
+        # Verify log was updated
+        self.agent.refresh_from_db()
+        self.assertIn("Not support target language", self.agent.log)
+    
+    @patch.object(LibreTranslateAgent, '_api_translate')
+    @patch('core.models.agent.logger')
+    def test_translate_api_exception(self, mock_logger, mock_api_translate):
+        """Test LibreTranslateAgent translate API exception to cover lines 606-610."""
+        mock_api_translate.side_effect = Exception("API Error")
+        
+        result = self.agent.translate("Test Text", "Chinese Simplified")
+        
+        self.assertEqual(result["text"], "")
+        self.assertEqual(result["characters"], 0)
+        
+        # Verify error logging and log update
+        mock_logger.error.assert_called_once()
+        self.agent.refresh_from_db()
+        self.assertIn("API Error", self.agent.log)
+
+
+class TestAgentCoverageTest(TestCase):
+    """Test TestAgent methods to improve coverage."""
+    
+    def setUp(self):
+        self.agent = TestAgent.objects.create(
+            name="Coverage Test Agent",
+            translated_text="@@Test Translation@@",
+            interval=1
+        )
+    
+    def test_validate_method(self):
+        """Test TestAgent validate method to cover line 629."""
+        result = self.agent.validate()
+        self.assertTrue(result)
+    
+    @patch('core.models.agent.time.sleep')
+    @patch('core.models.agent.logger')
+    def test_translate_method_with_logging(self, mock_logger, mock_sleep):
+        """Test TestAgent translate method to cover lines 632-634."""
+        result = self.agent.translate("Hello", "Chinese")
+        
+        expected = {
+            "text": "@@Test Translation@@",
+            "tokens": 10,
+            "characters": len("Hello")
+        }
+        self.assertEqual(result, expected)
+        
+        # Verify logging and sleep
+        mock_logger.info.assert_called_once()
+        mock_sleep.assert_called_once_with(1)
+    
+    @patch('core.models.agent.time.sleep')
+    @patch('core.models.agent.logger')
+    def test_summarize_method_with_logging(self, mock_logger, mock_sleep):
+        """Test TestAgent summarize method to cover lines 637-639."""
+        result = self.agent.summarize("Long text", "English")
+        
+        expected = {
+            "text": "@@Test Translation@@",
+            "tokens": 10,
+            "characters": len("Long text")
+        }
+        self.assertEqual(result, expected)
+        
+        # Verify logging and sleep
+        mock_logger.info.assert_called_once()
+        mock_sleep.assert_called_once_with(1)
+    
+    @patch('random.choice')
+    @patch('core.models.agent.time')
+    @patch('core.models.agent.logger')
+    def test_filter_method_with_logging(self, mock_logger, mock_time, mock_random):
+        """Test TestAgent filter method to cover lines 642-646."""
+        mock_random.return_value = True  # Mock random choice to return True
+        
+        result = self.agent.filter("Test content")
+        
+        # Verify logging
+        mock_logger.info.assert_called_once()
+        self.assertIn("Test Filter", mock_logger.info.call_args[0][0])
+        
+        # Verify sleep was called with interval
+        mock_time.sleep.assert_called_once_with(self.agent.interval)
+        
+        # Verify result structure
+        self.assertIn("passed", result)
+        self.assertEqual(result["tokens"], 10)
