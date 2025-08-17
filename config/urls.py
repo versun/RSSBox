@@ -25,15 +25,6 @@ from core.admin import core_admin_site
 
 favicon_view = RedirectView.as_view(url="/static/favicon.ico", permanent=True)
 
-
-@login_required
-def log(request):
-    log_file = os.path.join(settings.DATA_FOLDER, "app.log")
-    with open(log_file, "r") as file:
-        log_content = file.read()
-    return HttpResponse(log_content, content_type="text/plain; charset=utf-8")
-
-
 if settings.DEMO:
     # from django.contrib import admin
     class AccessUser:
