@@ -48,3 +48,38 @@ class FetchFeedTests(SimpleTestCase):
         self.assertIs(result["feed"], mock_parse.return_value)
         self.assertIsNone(result["error"])
         mock_manual.assert_not_called()
+
+    @mock.patch("utils.feed_action.manual_fetch_feed")
+    @mock.patch("utils.feed_action.feedparser.parse")
+    def test_fetch_feed_exception_handling(self, mock_parse, mock_manual):
+        """Test fetch_feed exception handling."""
+        # Test exception during feedparser.parse
+        mock_parse.side_effect = Exception("Network error")
+        
+        result = fetch_feed("https://example.com/rss.xml")
+        self.assertFalse(result["update"])
+        self.assertIsNone(result["feed"])
+        self.assertEqual(result["error"], "Network error")
+        
+        # Test with different exception types
+        mock_parse.side_effect = ValueError("Invalid URL")
+        result = fetch_feed("https://example.com/rss.xml")
+        self.assertFalse(result["update"])
+        self.assertIsNone(result["feed"])
+        self.assertEqual(result["error"], "Invalid URL")
+
+    @mock.patch("utils.feed_action.manual_fetch_feed")
+    @mock.patch("utils.feed_action.feedparser.parse")
+    def test_fetch_feed_with_bozo_exception(self, mock_parse, mock_manual):
+        """Test fetch_feed with bozo feed that has exception."""
+        # Test bozo feed with exception
+        dummy = DummyFeed(status=200, bozo=True, entries=[])
+        dummy.get = lambda key, default=None: "bozo exception" if key == "bozo_exception" else default
+        mock_parse.return_value = dummy
+        
+        manual_return = {"feed": "manual", "update": True, "error": None}
+        mock_manual.return_value = manual_return
+        
+        result = fetch_feed("https://example.com/rss.xml")
+        mock_manual.assert_called_once()
+        self.assertEqual(result, manual_return)

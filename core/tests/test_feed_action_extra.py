@@ -81,6 +81,89 @@ class ManualFetchFeedTests(SimpleTestCase):
         self.assertEqual(result["feed"], {})
         self.assertIn("server error", result["error"])
 
+    def test_exception_handling(self):
+        """Test exception handling in manual_fetch_feed."""
+        # Test HTTPStatusError
+        mock_response = mock.Mock(status_code=500, reason_phrase="Internal Server Error")
+        mock_response.raise_for_status.side_effect = Exception("HTTP status error")
+        self.mock_client.get.return_value = mock_response
+        
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("HTTP status error", result["error"])
+        
+        # Test TimeoutException
+        self.mock_client.get.side_effect = Exception("Timeout")
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("Timeout", result["error"])
+        
+        # Test general exception
+        self.mock_client.get.side_effect = Exception("General error")
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("General error", result["error"])
+
+    def test_specific_exception_types(self):
+        """Test specific exception types in manual_fetch_feed."""
+        # Test httpx.HTTPStatusError
+        mock_response = mock.Mock(status_code=500, reason_phrase="Internal Server Error")
+        mock_response.raise_for_status.side_effect = Exception("HTTP status error")
+        self.mock_client.get.return_value = mock_response
+        
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("HTTP status error", result["error"])
+        
+        # Test httpx.TimeoutException
+        self.mock_client.get.side_effect = Exception("Timeout")
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("Timeout", result["error"])
+
+    def test_httpx_specific_exceptions(self):
+        """Test httpx specific exception types to cover lines 67 and 69."""
+        # Mock httpx exceptions
+        import httpx
+        
+        # Test httpx.HTTPStatusError
+        mock_response = mock.Mock(status_code=500, reason_phrase="Internal Server Error")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "HTTP status error", request=mock.Mock(), response=mock_response
+        )
+        self.mock_client.get.return_value = mock_response
+        
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("HTTP status error", result["error"])
+        
+        # Test httpx.TimeoutException
+        self.mock_client.get.side_effect = httpx.TimeoutException("Timeout")
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertFalse(result["update"])
+        self.assertEqual(result["feed"], {})
+        self.assertIn("Timeout", result["error"])
+
+    def test_bozo_feed_with_exception(self):
+        """Test handling of bozo feed with exception."""
+        mock_response = mock.Mock(status_code=200, text="<rss></rss>")
+        self.mock_client.get.return_value = mock_response
+        
+        # Test bozo feed with exception
+        dummy_feed = SimpleNamespace(bozo=True, entries=[], get=lambda key, default=None: "bozo exception" if key == "bozo_exception" else default)
+        self.mock_parse.return_value = dummy_feed
+        
+        result = manual_fetch_feed("http://example.com/rss")
+        self.assertTrue(result["update"])  # update is still True for 200 status
+        self.assertEqual(result["feed"], dummy_feed)
+        self.assertEqual(result["error"], "bozo exception")
+
 
 class AtomFeedTests(SimpleTestCase):
     """Tests for atom feed building, entry addition and finalization."""
@@ -112,3 +195,36 @@ class AtomFeedTests(SimpleTestCase):
         self.assertIn("file.mp3", xml_str)
         self.assertIn("rss.xsl", xml_str)
         self.assertIn("Tran title", xml_str)
+
+    def test_enclosures_parsing_error(self):
+        """Test handling of enclosures parsing errors."""
+        now = timezone.now()
+        fg = _build_atom_feed(
+            feed_id="urn:test-feed", title="Test Feed", author="Tester",
+            link="http://example.com", subtitle="Sub", language="en",
+            updated=now, pubdate=now
+        )
+
+        # Test with invalid XML that will cause parsing error
+        entry_obj = SimpleNamespace(
+            pubdate=now, updated=None, original_summary="Orig summary",
+            original_title="Orig title", original_content="Orig content",
+            translated_title=None, translated_content=None,
+            ai_summary=None, feed=SimpleNamespace(translation_display=1),
+            link="http://example.com/post", author="Author", guid="GUID123", id=1,
+            enclosures_xml='<invalid><xml>'
+        )
+
+        # This should not raise an exception due to try-catch
+        fe = _add_atom_entry(fg, entry_obj, feed_type="o")
+        self.assertIsNotNone(fe)
+        
+        # Test with None enclosures_xml
+        entry_obj.enclosures_xml = None
+        fe = _add_atom_entry(fg, entry_obj, feed_type="o")
+        self.assertIsNotNone(fe)
+        
+        # Test with empty enclosures_xml
+        entry_obj.enclosures_xml = ""
+        fe = _add_atom_entry(fg, entry_obj, feed_type="o")
+        self.assertIsNotNone(fe)
