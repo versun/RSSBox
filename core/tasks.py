@@ -409,7 +409,7 @@ def _translate_content(
     )
 
     translated_content = result.get("text")
-    logger.info(f"Translated content: {translated_content}")
+    logger.info(f"Translated content: {translated_content[:100]}")
     entry.translated_content = translated_content if translated_content else None
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
