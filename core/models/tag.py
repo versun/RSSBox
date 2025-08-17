@@ -1,11 +1,12 @@
 from django.db import models
+from django.template.defaultfilters import default
 from django.utils.translation import gettext_lazy as _
 from autoslug import AutoSlugField
 
 
 class Tag(models.Model):
     name = models.CharField(
-        max_length=255, blank=True, null=True, verbose_name=_("Name")
+        max_length=255, verbose_name=_("Name"), default="Unnamed Tag"
     )
 
     filters = models.ManyToManyField(

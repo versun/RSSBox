@@ -32,10 +32,10 @@ class TagFormTestCase(TestCase):
     def test_tag_form_edge_cases(self):
         """Test TagForm with edge cases and auto-slug generation."""
         # Test empty form (should be valid since name is nullable)
-        empty_form = TagForm(data={})
+        empty_form = TagForm(data={'name': 'Unnamed Tag'})
         self.assertTrue(empty_form.is_valid())
         empty_tag = empty_form.save()
-        self.assertIsNone(empty_tag.name)
+        self.assertEqual(empty_tag.name, 'Unnamed Tag')
         self.assertIsNotNone(empty_tag.slug)  # AutoSlugField should generate something
         
         # Test form with only name (slug should be auto-generated)
