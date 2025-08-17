@@ -1,7 +1,5 @@
 import logging
 import time
-
-logger = logging.getLogger(__name__)
 from django.utils import timezone
 from bs4 import BeautifulSoup
 import mistune
@@ -11,6 +9,7 @@ from utils.feed_action import fetch_feed, convert_struct_time_to_datetime
 from utils import text_handler
 from core.models.agent import Agent
 
+logger = logging.getLogger(__name__)
 
 def handle_single_feed_fetch(feed: Feed):
     """
