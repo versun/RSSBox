@@ -1,0 +1,123 @@
+---
+alwaysApply: false
+---
+# Cursor Rules for Tests Directory
+
+## 测试代码编写规则
+
+### 1. 测试覆盖率要求
+- 不能降低代码覆盖率
+- 使用 `uv run coverage run manage.py test` 进行测试
+- 每次添加测试用例后必须运行测试确保通过
+
+### 2. 代码修改限制
+- 除非用户明确允许，否则不得修改功能代码
+- 只能修改测试代码
+- 保持代码简洁可维护性
+
+### 3. 测试最佳实践
+- 谨慎使用mock，优先使用真实的测试数据
+- 每个测试用例应该独立且可重复运行
+- 测试名称应该清晰描述测试的目的
+- 使用有意义的断言消息
+
+### 4. 错误处理
+- 对于测试报错，修复最多3次则跳过
+- 优先修复明显的语法错误和导入问题
+- 记录无法修复的测试问题
+
+### 5. Django测试特定规则
+- 使用Django的TestCase类
+- 正确设置测试数据库
+- 清理测试数据
+- 使用适当的测试客户端
+
+### 6. 文件组织
+- 测试文件应该与被测试的模块对应
+- 使用描述性的测试类和方法名
+- 保持测试文件结构清晰
+
+### 7. 性能考虑
+- 避免在测试中创建过多数据库对象
+- 使用setUp和tearDown方法优化测试执行
+- 考虑使用数据库事务回滚
+
+## 示例测试结构
+```python
+from django.test import TestCase
+from django.urls import reverse
+from core.models import YourModel
+
+class YourModelTestCase(TestCase):
+    def setUp(self):
+        # 设置测试数据
+        pass
+    
+    def test_specific_functionality(self):
+        # 测试具体功能
+        pass
+    
+    def tearDown(self):
+        # 清理测试数据
+        pass
+```
+# Cursor Rules for Tests Directory
+
+## 测试代码编写规则
+
+### 1. 测试覆盖率要求
+- 不能降低代码覆盖率
+- 使用 `uv run coverage run manage.py test` 进行测试
+- 每次添加测试用例后必须运行测试确保通过
+
+### 2. 代码修改限制
+- 除非用户明确允许，否则不得修改功能代码
+- 只能修改测试代码
+- 保持代码简洁可维护性
+
+### 3. 测试最佳实践
+- 谨慎使用mock，优先使用真实的测试数据
+- 每个测试用例应该独立且可重复运行
+- 测试名称应该清晰描述测试的目的
+- 使用有意义的断言消息
+
+### 4. 错误处理
+- 对于测试报错，修复最多3次则跳过
+- 优先修复明显的语法错误和导入问题
+- 记录无法修复的测试问题
+
+### 5. Django测试特定规则
+- 使用Django的TestCase类
+- 正确设置测试数据库
+- 清理测试数据
+- 使用适当的测试客户端
+
+### 6. 文件组织
+- 测试文件应该与被测试的模块对应
+- 使用描述性的测试类和方法名
+- 保持测试文件结构清晰
+
+### 7. 性能考虑
+- 避免在测试中创建过多数据库对象
+- 使用setUp和tearDown方法优化测试执行
+- 考虑使用数据库事务回滚
+
+## 示例测试结构
+```python
+from django.test import TestCase
+from django.urls import reverse
+from core.models import YourModel
+
+class YourModelTestCase(TestCase):
+    def setUp(self):
+        # 设置测试数据
+        pass
+    
+    def test_specific_functionality(self):
+        # 测试具体功能
+        pass
+    
+    def tearDown(self):
+        # 清理测试数据
+        pass
+```
