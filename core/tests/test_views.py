@@ -157,3 +157,181 @@ class ViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_content = json.loads(response.content)
         self.assertEqual(json_content["title"], "JSON Feed")
+
+    @patch('core.views.feed2json')
+    @patch('core.views.cache')
+    @patch('core.views.cache_rss')
+    def test_rss_view_json_format_no_feed_data(self, mock_cache_rss, mock_cache, mock_feed2json):
+        """Test the rss view with format='json' when no feed data is available."""
+        mock_cache.get.return_value = None  # Cache miss
+        mock_cache_rss.return_value = None  # No feed data
+        mock_feed2json.return_value = {"title": "JSON Feed"}
+
+        request = self.factory.get(f"/rss/{self.feed.slug}")
+        response = rss(request, self.feed.slug, format="json")
+
+        self.assertIsInstance(response, JsonResponse)
+        self.assertEqual(response.status_code, 404)
+        json_content = json.loads(response.content)
+        self.assertEqual(json_content["error"], "No feed data available")
+
+    @patch('core.views.cache')
+    @patch('core.views.cache_rss')
+    def test_rss_view_xml_format_no_feed_data(self, mock_cache_rss, mock_cache):
+        """Test the rss view with format='xml' when no feed data is available."""
+        mock_cache.get.return_value = None  # Cache miss
+        mock_cache_rss.return_value = None  # No feed data
+
+        request = self.factory.get(f"/rss/{self.feed.slug}")
+        response = rss(request, self.feed.slug, format="xml")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
+        # Check that error message is in the response content
+        response_content = b"".join(response.streaming_content)
+        self.assertIn(b"<error>No feed data available</error>", response_content)
+
+    @patch('core.views.cache')
+    @patch('core.views.cache_rss')
+    def test_rss_view_cache_hit(self, mock_cache_rss, mock_cache):
+        """Test the rss view when cache hit occurs."""
+        cached_content = "<rss><channel><title>Cached Feed</title></channel></rss>"
+        mock_cache.get.return_value = cached_content  # Cache hit
+        mock_cache_rss.return_value = "<rss><channel><title>Fresh Feed</title></channel></rss>"
+
+        request = self.factory.get(f"/rss/{self.feed.slug}")
+        response = rss(request, self.feed.slug)
+
+        self.assertEqual(response.status_code, 200)
+        # Should not call cache_rss when cache hits
+        mock_cache_rss.assert_not_called()
+        # Check that cached content is returned
+        response_content = b"".join(response.streaming_content)
+        self.assertEqual(response_content, cached_content.encode())
+
+    @patch('core.views.cache')
+    @patch('core.views.cache_tag')
+    def test_tag_view_cache_hit(self, mock_cache_tag, mock_cache):
+        """Test the tag view when cache hit occurs."""
+        cached_content = "<rss><channel><title>Cached Tag Feed</title></channel></rss>"
+        mock_cache.get.return_value = cached_content  # Cache hit
+        mock_cache_tag.return_value = "<rss><channel><title>Fresh Tag Feed</title></channel></rss>"
+
+        request = self.factory.get(f"/tag/{self.tag.slug}")
+        response = tag_view(request, self.tag.slug)
+
+        self.assertEqual(response.status_code, 200)
+        # Should not call cache_tag when cache hits
+        mock_cache_tag.assert_not_called()
+        # Check that cached content is returned
+        response_content = b"".join(response.streaming_content)
+        self.assertEqual(response_content, cached_content.encode())
+
+    @patch('core.views.cache')
+    @patch('core.views.cache_tag')
+    def test_tag_view_exception_handling(self, mock_cache_tag, mock_cache):
+        """Test the tag view when an exception occurs."""
+        mock_cache.get.return_value = None  # Cache miss
+        mock_cache_tag.side_effect = Exception("Cache tag error")
+
+        request = self.factory.get(f"/tag/{self.tag.slug}")
+        response = tag_view(request, self.tag.slug)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"Feed not found, Maybe it's still in progress, Please try again later.")
+
+    def test_import_opml_get_request(self):
+        """Test the import_opml view with GET request."""
+        request = self.factory.get("/fake-url")
+        response = import_opml(request)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("admin:core_feed_changelist"))
+
+    def test_import_opml_no_file_uploaded(self):
+        """Test the import_opml view when no file is uploaded."""
+        request = self.factory.post("/fake-url", {})
+        messages = self._setup_request_with_messages(request)
+        
+        response = import_opml(request)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("Please upload a valid OPML file.", [str(m) for m in messages])
+
+    def test_import_opml_invalid_file_type(self):
+        """Test the import_opml view with invalid file type."""
+        # Create a mock file that's not InMemoryUploadedFile
+        mock_file = MagicMock()
+        mock_file.name = "test.txt"
+        
+        request = self.factory.post("/fake-url", {"opml_file": mock_file})
+        messages = self._setup_request_with_messages(request)
+        
+        response = import_opml(request)
+        
+        self.assertEqual(response.status_code, 302)
+        # The mock file will cause XML parsing error, so we check for that instead
+        self.assertTrue(any("XML syntax error:" in str(m) for m in messages))
+
+    def test_import_opml_xml_syntax_error(self):
+        """Test the import_opml view with XML syntax error."""
+        invalid_xml = "<opml version='2.0'><body><outline>"
+        opml_file = self._create_opml_file(invalid_xml, "invalid.opml")
+        request = self.factory.post("/fake-url", {"opml_file": opml_file})
+        messages = self._setup_request_with_messages(request)
+
+        initial_feed_count = Feed.objects.count()
+        import_opml(request)
+
+        self.assertEqual(Feed.objects.count(), initial_feed_count)
+        self.assertTrue(any("XML syntax error:" in str(m) for m in messages))
+
+    def test_import_opml_general_exception(self):
+        """Test the import_opml view with general exception."""
+        opml_content = """
+        <opml version="2.0">
+            <body>
+                <outline text="Feed 1" title="Feed 1" type="rss" xmlUrl="http://example.com/feed1.xml" />
+            </body>
+        </opml>
+        """
+        opml_file = self._create_opml_file(opml_content, "feeds.opml")
+        request = self.factory.post("/fake-url", {"opml_file": opml_file})
+        messages = self._setup_request_with_messages(request)
+
+        # Mock Feed.objects.get_or_create to raise an exception
+        with patch('core.views.Feed.objects.get_or_create') as mock_get_or_create:
+            mock_get_or_create.side_effect = Exception("Database error")
+            
+            initial_feed_count = Feed.objects.count()
+            import_opml(request)
+
+            self.assertEqual(Feed.objects.count(), initial_feed_count)
+            self.assertTrue(any("Error importing OPML file:" in str(m) for m in messages))
+
+    def test_import_opml_with_tags(self):
+        """Test importing an OPML file with tags."""
+        opml_content = """
+        <opml version="2.0">
+            <body>
+                <outline text="Technology">
+                    <outline text="Tech Blog" title="Tech Blog" type="rss" xmlUrl="http://example.com/tech.xml" />
+                </outline>
+            </body>
+        </opml>
+        """
+        opml_file = self._create_opml_file(opml_content, "with_tags.opml")
+        request = self.factory.post("/fake-url", {"opml_file": opml_file})
+        self._setup_request_with_messages(request)
+
+        initial_feed_count = Feed.objects.count()
+        initial_tag_count = Tag.objects.count()
+        
+        import_opml(request)
+
+        self.assertEqual(Feed.objects.count(), initial_feed_count + 1)
+        self.assertEqual(Tag.objects.count(), initial_tag_count + 1)
+        
+        new_feed = Feed.objects.get(feed_url="http://example.com/tech.xml")
+        new_tag = Tag.objects.get(name="Technology")
+        self.assertTrue(new_feed.tags.filter(name="Technology").exists())
