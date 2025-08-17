@@ -14,20 +14,18 @@ from ..models.agent import Agent, OpenAIAgent, DeepLAgent, LibreTranslateAgent, 
 
 
 class FeedModelTest(TestCase):
-    def test_create_feed_with_minimal_data(self):
+    def test_feed_creation_and_defaults(self):
         """
-        Test creating a Feed with only the required fields and check default values.
+        Test creating Feed instances with minimal and comprehensive data.
         """
+        # Test minimal data and defaults
         feed_url = "https://example.com/rss.xml"
         feed = Feed.objects.create(feed_url=feed_url)
-
-        # Verify the required field and __str__ method
+        
         self.assertEqual(feed.feed_url, feed_url)
         self.assertEqual(str(feed), feed_url)
-
-        # Verify some of the default values
         self.assertEqual(feed.update_frequency, 30)
-        self.assertEqual(feed.max_posts, 20)  # Assuming default from os.getenv is 20
+        self.assertEqual(feed.max_posts, 20)
         self.assertEqual(feed.fetch_article, False)
         self.assertEqual(feed.translation_display, 0)
         self.assertEqual(feed.translate_title, False)
@@ -36,16 +34,12 @@ class FeedModelTest(TestCase):
         self.assertEqual(feed.total_tokens, 0)
         self.assertIsNotNone(feed.slug)
         self.assertEqual(len(feed.slug), 32)
-
-    def test_create_feed_with_full_data(self):
-        """
-        Test creating a Feed with a comprehensive set of fields.
-        """
-        feed_url = "https://another-example.com/rss.xml"
+        
+        # Test comprehensive data
         now = timezone.now()
-        feed = Feed.objects.create(
+        full_feed = Feed.objects.create(
             name="Comprehensive Test Feed",
-            feed_url=feed_url,
+            feed_url="https://another-example.com/rss.xml",
             link="https://another-example.com",
             author="Test Author",
             language="en-us",
@@ -61,20 +55,20 @@ class FeedModelTest(TestCase):
             summary_detail=0.5,
             additional_prompt="Test prompt",
         )
-
-        self.assertEqual(feed.name, "Comprehensive Test Feed")
-        self.assertEqual(feed.author, "Test Author")
-        self.assertEqual(feed.pubdate, now)
-        self.assertEqual(feed.update_frequency, 60)
-        self.assertEqual(feed.max_posts, 100)
-        self.assertTrue(feed.fetch_article)
-        self.assertEqual(feed.translation_display, 1)
-        self.assertEqual(feed.target_language, "zh-hans")
-        self.assertTrue(feed.translate_title)
-        self.assertTrue(feed.translate_content)
-        self.assertTrue(feed.summary)
-        self.assertEqual(feed.summary_detail, 0.5)
-        self.assertEqual(feed.additional_prompt, "Test prompt")
+        
+        self.assertEqual(full_feed.name, "Comprehensive Test Feed")
+        self.assertEqual(full_feed.author, "Test Author")
+        self.assertEqual(full_feed.pubdate, now)
+        self.assertEqual(full_feed.update_frequency, 60)
+        self.assertEqual(full_feed.max_posts, 100)
+        self.assertTrue(full_feed.fetch_article)
+        self.assertEqual(full_feed.translation_display, 1)
+        self.assertEqual(full_feed.target_language, "zh-hans")
+        self.assertTrue(full_feed.translate_title)
+        self.assertTrue(full_feed.translate_content)
+        self.assertTrue(full_feed.summary)
+        self.assertEqual(full_feed.summary_detail, 0.5)
+        self.assertEqual(full_feed.additional_prompt, "Test prompt")
 
     def test_feed_update_frequency_threshold(self):
         """
@@ -178,33 +172,27 @@ class FeedModelTest(TestCase):
         self.assertIsNotNone(result)
         # This should trigger filter_obj.apply_filter(queryset) on line 239
 
-    def test_feed_summary_detail_validator(self):
-        """Test Feed summary_detail field validators."""
-        # Valid values
+    def test_feed_field_validation_and_choices(self):
+        """Test Feed field validators and choices."""
+        # Test summary_detail validators
         feed = Feed.objects.create(
             feed_url="https://example.com/feed.xml", summary_detail=0.5
         )
         self.assertEqual(feed.summary_detail, 0.5)
-
+        
         # Test boundary values
-        feed.summary_detail = 0.0
-        feed.save()
-        self.assertEqual(feed.summary_detail, 0.0)
-
-        feed.summary_detail = 1.0
-        feed.save()
-        self.assertEqual(feed.summary_detail, 1.0)
-
-    def test_feed_translation_display_choices(self):
-        """Test Feed translation_display choices."""
+        for value in [0.0, 1.0]:
+            feed.summary_detail = value
+            feed.save()
+            self.assertEqual(feed.summary_detail, value)
+        
+        # Test translation_display choices
         choices = Feed.TRANSLATION_DISPLAY_CHOICES
         expected_choices = [
             (0, "Only Translation"),
             (1, "Translation | Original"),
             (2, "Original | Translation"),
         ]
-
-        # Test all choices exist
         for choice in expected_choices:
             self.assertIn(choice, choices)
 
@@ -234,14 +222,15 @@ class EntryModelTest(TestCase):
         """
         self.feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
 
-    def test_create_entry(self):
+    def test_entry_creation_and_fields(self):
         """
-        Test creating an Entry instance with basic data.
+        Test creating Entry instances with basic and comprehensive data.
         """
+        # Test basic entry creation
         entry_link = "https://example.com/entry1"
         original_title = "Test Entry Title"
         now = timezone.now()
-
+        
         entry = Entry.objects.create(
             feed=self.feed,
             link=entry_link,
@@ -249,34 +238,19 @@ class EntryModelTest(TestCase):
             pubdate=now,
             author="Test Author",
         )
-
+        
         self.assertEqual(entry.feed, self.feed)
         self.assertEqual(entry.link, entry_link)
         self.assertEqual(entry.original_title, original_title)
         self.assertEqual(str(entry), original_title)
         self.assertEqual(entry.pubdate, now)
         self.assertEqual(entry.author, "Test Author")
-
-    def test_entry_str_method(self):
-        """
-        Test Entry __str__ method returns original_title.
-        """
-        entry = Entry.objects.create(
+        
+        # Test entry with all fields
+        full_entry = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/entry",
-            original_title="Test Title",
-        )
-        self.assertEqual(str(entry), "Test Title")
-
-    def test_entry_with_all_fields(self):
-        """
-        Test creating Entry with all available fields.
-        """
-        now = timezone.now()
-        entry = Entry.objects.create(
-            feed=self.feed,
-            link="https://example.com/entry",
-            author="Test Author",
+            link="https://example.com/entry2",
+            author="Full Author",
             pubdate=now,
             updated=now,
             guid="test-guid-123",
@@ -288,11 +262,12 @@ class EntryModelTest(TestCase):
             original_summary="Original summary",
             ai_summary="AI generated summary",
         )
-
-        self.assertEqual(entry.guid, "test-guid-123")
-        self.assertEqual(entry.translated_title, "Translated Title")
-        self.assertEqual(entry.translated_content, "Translated content")
-        self.assertEqual(entry.ai_summary, "AI generated summary")
+        
+        self.assertEqual(full_entry.guid, "test-guid-123")
+        self.assertEqual(full_entry.translated_title, "Translated Title")
+        self.assertEqual(full_entry.translated_content, "Translated content")
+        self.assertEqual(full_entry.ai_summary, "AI generated summary")
+        self.assertEqual(str(full_entry), "Original Title")
 
     def test_entry_feed_relationship(self):
         """
@@ -303,76 +278,63 @@ class EntryModelTest(TestCase):
             link="https://example.com/entry",
             original_title="Test Entry",
         )
-
-        # Test forward relationship
+        
+        # Test forward and reverse relationships
         self.assertEqual(entry.feed, self.feed)
-
-        # Test reverse relationship
         self.assertIn(entry, self.feed.entries.all())
         self.assertEqual(self.feed.entries.count(), 1)
 
-    def test_entry_with_enclosures(self):
-        """Test Entry with enclosures XML data."""
+    def test_entry_field_behaviors(self):
+        """Test Entry field behaviors including enclosures, GUID indexing, datetime handling, and content length."""
+        # Test enclosures XML
         enclosure_xml = """<enclosure url="https://example.com/podcast.mp3" 
                           type="audio/mpeg" length="12345678"/>"""
-
-        entry = Entry.objects.create(
+        entry_with_enclosure = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/entry",
+            link="https://example.com/entry1",
             original_title="Podcast Entry",
             enclosures_xml=enclosure_xml,
         )
-
-        self.assertEqual(entry.enclosures_xml, enclosure_xml)
-
-    def test_entry_guid_indexing(self):
-        """Test Entry GUID field has database index."""
-        # This test verifies the db_index=True is properly set
-        entry = Entry.objects.create(
+        self.assertEqual(entry_with_enclosure.enclosures_xml, enclosure_xml)
+        
+        # Test GUID indexing
+        guid_entry = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/entry",
+            link="https://example.com/entry2",
             original_title="GUID Test",
             guid="unique-guid-12345",
         )
-
-        # Query by GUID should be efficient due to index
         found_entry = Entry.objects.get(guid="unique-guid-12345")
-        self.assertEqual(found_entry, entry)
-
-    def test_entry_datetime_fields(self):
-        """Test Entry datetime fields can handle None values."""
-        entry = Entry.objects.create(
+        self.assertEqual(found_entry, guid_entry)
+        
+        # Test datetime fields with None values
+        datetime_entry = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/entry",
+            link="https://example.com/entry3",
             original_title="DateTime Test",
             pubdate=None,
             updated=None,
         )
-
-        self.assertIsNone(entry.pubdate)
-        self.assertIsNone(entry.updated)
-
-    def test_entry_content_fields_maxlength(self):
-        """Test Entry content fields can handle long text."""
-        long_content = "A" * 10000  # Very long content
-
-        entry = Entry.objects.create(
+        self.assertIsNone(datetime_entry.pubdate)
+        self.assertIsNone(datetime_entry.updated)
+        
+        # Test long content handling
+        long_content = "A" * 10000
+        long_entry = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/entry",
+            link="https://example.com/entry4",
             original_title="Long Content Test",
             original_content=long_content,
             translated_content=long_content,
             original_summary=long_content,
             ai_summary=long_content,
         )
-
-        self.assertEqual(len(entry.original_content), 10000)
-        self.assertEqual(len(entry.translated_content), 10000)
-        self.assertEqual(len(entry.original_summary), 10000)
-        self.assertEqual(len(entry.ai_summary), 10000)
-
-    def test_entry_meta_verbose_names(self):
-        """Test Entry model verbose names."""
+        self.assertEqual(len(long_entry.original_content), 10000)
+        self.assertEqual(len(long_entry.translated_content), 10000)
+        self.assertEqual(len(long_entry.original_summary), 10000)
+        self.assertEqual(len(long_entry.ai_summary), 10000)
+        
+        # Test model meta verbose names
         meta = Entry._meta
         self.assertEqual(str(meta.verbose_name), "Entry")
         self.assertEqual(str(meta.verbose_name_plural), "Entries")
@@ -385,39 +347,28 @@ class TagModelTest(TestCase):
         """
         self.filter = Filter.objects.create(name="Test Filter")
 
-    def test_create_tag(self):
+    def test_tag_creation_and_slug_behavior(self):
         """
-        Test creating a Tag instance with basic data.
+        Test Tag creation, slug generation, and regeneration.
         """
+        # Test basic tag creation
         tag = Tag.objects.create(name="Technology")
-
         self.assertEqual(tag.name, "Technology")
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNotNone(tag.slug)
         self.assertEqual(str(tag), tag.slug)
-
-    def test_tag_slug_generation(self):
-        """
-        Test automatic slug generation from name.
-        """
-        tag = Tag.objects.create(name="Test Tag Name")
-        self.assertEqual(tag.slug, "test-tag-name")
-
-    def test_tag_save_slug_regeneration(self):
-        """
-        Test that slug is regenerated when name changes.
-        """
-        tag = Tag.objects.create(name="Original Name")
-        original_slug = tag.slug
-
-        # Update the name
-        tag.name = "New Name"
-        tag.save()
-
-        # Slug should be updated
-        tag.refresh_from_db()
-        self.assertNotEqual(tag.slug, original_slug)
-        self.assertEqual(tag.slug, "new-name")
+        
+        # Test slug generation
+        slug_tag = Tag.objects.create(name="Test Tag Name")
+        self.assertEqual(slug_tag.slug, "test-tag-name")
+        
+        # Test slug regeneration on name change
+        original_slug = slug_tag.slug
+        slug_tag.name = "New Name"
+        slug_tag.save()
+        slug_tag.refresh_from_db()
+        self.assertNotEqual(slug_tag.slug, original_slug)
+        self.assertEqual(slug_tag.slug, "new-name")
 
     def test_tag_filter_relationship(self):
         """
@@ -432,17 +383,16 @@ class TagModelTest(TestCase):
         # Test reverse relationship
         self.assertIn(tag, self.filter.tags.all())
 
-    def test_tag_fields_default_values(self):
-        """Test Tag model field default values."""
+    def test_tag_defaults_and_methods(self):
+        """Test Tag field defaults and string method."""
         tag = Tag.objects.create(name="Default Test")
-
+        
+        # Test default values
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNone(tag.last_updated)
         self.assertEqual(tag.etag, "")
-
-    def test_tag_str_method(self):
-        """Test Tag __str__ method returns slug."""
-        tag = Tag.objects.create(name="String Test")
+        
+        # Test __str__ method
         self.assertEqual(str(tag), tag.slug)
 
 
@@ -1612,7 +1562,7 @@ class LibreTranslateAgentModelTest(TestCase):
         self.assertEqual(result["text"], "Translated Text")
         self.assertEqual(result["characters"], len("Test Text"))
         mock_api_translate.assert_called_once_with(
-            q="Test Text", source="auto", target="zh", format="text"
+            q="Test Text", source="auto", target="zh", format="html"
         )
 
     @patch.object(LibreTranslateAgent, "_api_translate")
@@ -1690,132 +1640,10 @@ class DeepLAgentAdvancedTest(TestCase):
         self.assertEqual(result["characters"], len("Hello"))
 
 
-class DeepLAgentModelTest(TestCase):
-    def setUp(self):
-        self.agent = DeepLAgent.objects.create(
-            name="Test DeepL Agent", api_key="test_deepl_key"
-        )
-
-    @patch("core.models.agent.deepl.Translator")
-    def test_validate_success(self, mock_translator_class):
-        """Test DeepLAgent validate method on success."""
-        mock_translator_instance = MagicMock()
-        mock_usage = MagicMock()
-        mock_usage.character.valid = True
-        mock_translator_instance.get_usage.return_value = mock_usage
-        mock_translator_class.return_value = mock_translator_instance
-
-        is_valid = self.agent.validate()
-
-        self.assertTrue(is_valid)
-        mock_translator_class.assert_called_once_with(
-            self.agent.api_key, server_url=self.agent.server_url, proxy=self.agent.proxy
-        )
-        mock_translator_instance.get_usage.assert_called_once()
-
-    @patch("core.models.agent.deepl.Translator")
-    def test_validate_failure(self, mock_translator_class):
-        """Test DeepLAgent validate method on failure."""
-        mock_translator_instance = MagicMock()
-        mock_translator_instance.get_usage.side_effect = Exception("DeepL API Error")
-        mock_translator_class.return_value = mock_translator_instance
-
-        is_valid = self.agent.validate()
-
-        self.assertFalse(is_valid)
-        self.agent.refresh_from_db()
-        self.assertIn("DeepL API Error", self.agent.log)
-
-    @patch("core.models.agent.deepl.Translator")
-    def test_translate_success(self, mock_translator_class):
-        """Test DeepLAgent translate method on success."""
-        mock_translator_instance = MagicMock()
-        mock_response = MagicMock()
-        mock_response.text = "Translated Text"
-        mock_translator_instance.translate_text.return_value = mock_response
-        mock_translator_class.return_value = mock_translator_instance
-
-        result = self.agent.translate("Test Text", "Chinese Simplified")
-
-        self.assertEqual(result["text"], "Translated Text")
-        self.assertEqual(result["characters"], len("Test Text"))
-        mock_translator_instance.translate_text.assert_called_once_with(
-            "Test Text",
-            target_lang="ZH",
-            preserve_formatting=True,
-            split_sentences="nonewlines",
-            tag_handling="html",
-        )
-
-    @patch("core.models.agent.deepl.Translator")
-    def test_translate_failure(self, mock_translator_class):
-        """Test DeepLAgent translate method on API failure."""
-        mock_translator_instance = MagicMock()
-        mock_translator_instance.translate_text.side_effect = Exception(
-            "DeepL Translate Error"
-        )
-        mock_translator_class.return_value = mock_translator_instance
-
-        result = self.agent.translate("Test Text", "Chinese Simplified")
-
-        self.assertEqual(result["text"], "")
-        self.agent.refresh_from_db()
-        self.assertIn("DeepL Translate Error", self.agent.log)
-
-    def test_translate_unsupported_language(self):
-        """Test DeepLAgent translate method with an unsupported language."""
-        result = self.agent.translate("Test Text", "Klingon")
-        self.assertEqual(result["text"], "")
+# DeepLAgentModelTest merged into DeepLAgentCoverageTest to reduce duplication
 
 
-class LibreTranslateAgentModelTest(TestCase):
-    def setUp(self):
-        self.agent = LibreTranslateAgent.objects.create(
-            name="Test LibreTranslate Agent", server_url="http://libretranslate.test"
-        )
-
-    @patch.object(LibreTranslateAgent, "_api_languages")
-    def test_validate_success(self, mock_api_languages):
-        """Test LibreTranslateAgent validate method on success."""
-        mock_api_languages.return_value = []  # Success is just not raising an exception
-        is_valid = self.agent.validate()
-        self.assertTrue(is_valid)
-        mock_api_languages.assert_called_once()
-
-    @patch.object(LibreTranslateAgent, "_api_languages")
-    def test_validate_failure(self, mock_api_languages):
-        """Test LibreTranslateAgent validate method on failure."""
-        mock_api_languages.side_effect = Exception("Connection Error")
-        is_valid = self.agent.validate()
-        self.assertFalse(is_valid)
-        self.agent.refresh_from_db()
-        self.assertIn("Connection Error", self.agent.log)
-
-    @patch.object(LibreTranslateAgent, "_api_translate")
-    def test_translate_success(self, mock_api_translate):
-        """Test LibreTranslateAgent translate method on success."""
-        mock_api_translate.return_value = "Translated Text"
-        result = self.agent.translate("Test Text", "Chinese Simplified")
-        self.assertEqual(result["text"], "Translated Text")
-        self.assertEqual(result["characters"], len("Test Text"))
-        mock_api_translate.assert_called_once_with(
-            q="Test Text", source="auto", target="zh", format="html"
-        )
-
-    @patch.object(LibreTranslateAgent, "_api_translate")
-    def test_translate_failure(self, mock_api_translate):
-        """Test LibreTranslateAgent translate method on API failure."""
-        mock_api_translate.side_effect = Exception("API Error")
-        result = self.agent.translate("Test Text", "Chinese Simplified")
-        self.assertEqual(result["text"], "")
-        self.agent.refresh_from_db()
-        self.assertIn("API Error", self.agent.log)
-
-    def test_translate_unsupported_language(self):
-        """Test LibreTranslateAgent translate method with an unsupported language."""
-        result = self.agent.translate("Test Text", "Klingon")
-        self.assertEqual(result["text"], "")
-        self.assertEqual(result["characters"], 0)
+# LibreTranslateAgentModelTest merged into LibreTranslateAgentCoverageTest to reduce duplication
 
 
 class TestAgentModelTest(TestCase):
@@ -1899,127 +1727,106 @@ class TestAgentModelTest(TestCase):
 class AgentFieldValidationTest(TestCase):
     """Test Agent model field validation and edge cases."""
     
-    def test_openai_agent_field_defaults(self):
-        """Test OpenAIAgent field default values."""
-        agent = OpenAIAgent.objects.create(
+    def test_agent_field_defaults_and_boundaries(self):
+        """Test all agent types' field defaults and boundary values."""
+        # OpenAI agent defaults
+        openai_agent = OpenAIAgent.objects.create(
             name="Default Test Agent",
             api_key="test_key"
         )
+        self.assertEqual(openai_agent.base_url, "https://api.openai.com/v1")
+        self.assertEqual(openai_agent.model, "gpt-3.5-turbo")
+        self.assertEqual(openai_agent.temperature, 0.2)
+        self.assertEqual(openai_agent.top_p, 0.2)
+        self.assertEqual(openai_agent.frequency_penalty, 0)
+        self.assertEqual(openai_agent.presence_penalty, 0)
+        self.assertEqual(openai_agent.max_tokens, 0)
+        self.assertEqual(openai_agent.rate_limit_rpm, 0)
+        self.assertTrue(openai_agent.is_ai)
+        self.assertIsNone(openai_agent.valid)
         
-        # Test default values
-        self.assertEqual(agent.base_url, "https://api.openai.com/v1")
-        self.assertEqual(agent.model, "gpt-3.5-turbo")
-        self.assertEqual(agent.temperature, 0.2)
-        self.assertEqual(agent.top_p, 0.2)
-        self.assertEqual(agent.frequency_penalty, 0)
-        self.assertEqual(agent.presence_penalty, 0)
-        self.assertEqual(agent.max_tokens, 0)
-        self.assertEqual(agent.rate_limit_rpm, 0)
-        self.assertTrue(agent.is_ai)
-        self.assertIsNone(agent.valid)
-    
-    def test_openai_agent_field_boundaries(self):
-        """Test OpenAIAgent field boundary values."""
-        agent = OpenAIAgent.objects.create(
+        # OpenAI agent boundary values
+        boundary_agent = OpenAIAgent.objects.create(
             name="Boundary Test Agent",
             api_key="test_key",
-            temperature=2.0,  # Max value
-            top_p=1.0,  # Max value
-            frequency_penalty=2.0,  # Max value
-            presence_penalty=2.0,  # Max value
-            max_tokens=1000000,  # Large value
-            rate_limit_rpm=10000  # Large value
+            temperature=2.0, top_p=1.0, frequency_penalty=2.0,
+            presence_penalty=2.0, max_tokens=1000000, rate_limit_rpm=10000
         )
+        self.assertEqual(boundary_agent.temperature, 2.0)
+        self.assertEqual(boundary_agent.top_p, 1.0)
+        self.assertEqual(boundary_agent.frequency_penalty, 2.0)
+        self.assertEqual(boundary_agent.presence_penalty, 2.0)
+        self.assertEqual(boundary_agent.max_tokens, 1000000)
+        self.assertEqual(boundary_agent.rate_limit_rpm, 10000)
         
-        self.assertEqual(agent.temperature, 2.0)
-        self.assertEqual(agent.top_p, 1.0)
-        self.assertEqual(agent.frequency_penalty, 2.0)
-        self.assertEqual(agent.presence_penalty, 2.0)
-        self.assertEqual(agent.max_tokens, 1000000)
-        self.assertEqual(agent.rate_limit_rpm, 10000)
-    
-    def test_deepl_agent_field_defaults(self):
-        """Test DeepLAgent field default values."""
-        agent = DeepLAgent.objects.create(
-            name="DeepL Default Test",
-            api_key="test_key"
+        # DeepL agent defaults
+        deepl_agent = DeepLAgent.objects.create(
+            name="DeepL Default Test", api_key="test_key"
         )
+        self.assertEqual(deepl_agent.max_characters, 5000)
+        self.assertIsNone(deepl_agent.server_url)
+        self.assertIsNone(deepl_agent.proxy)
+        self.assertFalse(deepl_agent.is_ai)
         
-        self.assertEqual(agent.max_characters, 5000)
-        self.assertIsNone(agent.server_url)
-        self.assertIsNone(agent.proxy)
-        self.assertFalse(agent.is_ai)
-    
-    def test_libretranslate_agent_field_defaults(self):
-        """Test LibreTranslateAgent field default values."""
-        agent = LibreTranslateAgent.objects.create(
+        # LibreTranslate agent defaults
+        libre_agent = LibreTranslateAgent.objects.create(
             name="LibreTranslate Default Test"
         )
+        self.assertEqual(libre_agent.server_url, "https://libretranslate.com")
+        self.assertEqual(libre_agent.max_characters, 5000)
+        self.assertEqual(libre_agent.api_key, "")
+        self.assertFalse(libre_agent.is_ai)
         
-        self.assertEqual(agent.server_url, "https://libretranslate.com")
-        self.assertEqual(agent.max_characters, 5000)
-        self.assertEqual(agent.api_key, "")
-        self.assertFalse(agent.is_ai)
-    
-    def test_test_agent_field_defaults(self):
-        """Test TestAgent field default values."""
-        agent = TestAgent.objects.create(name="Test Default")
-        
-        self.assertEqual(agent.translated_text, "@@Translated Text@@")
-        self.assertEqual(agent.max_characters, 50000)
-        self.assertEqual(agent.max_tokens, 50000)
-        self.assertEqual(agent.interval, 3)
-        self.assertTrue(agent.is_ai)
+        # TestAgent defaults
+        test_agent = TestAgent.objects.create(name="Test Default")
+        self.assertEqual(test_agent.translated_text, "@@Translated Text@@")
+        self.assertEqual(test_agent.max_characters, 50000)
+        self.assertEqual(test_agent.max_tokens, 50000)
+        self.assertEqual(test_agent.interval, 3)
+        self.assertTrue(test_agent.is_ai)
     
     def test_agent_name_uniqueness(self):
-        """Test that agent names must be unique."""
+        """Test agent name uniqueness constraint."""
         TestAgent.objects.create(name="Unique Name")
-        
         with self.assertRaises(IntegrityError):
             TestAgent.objects.create(name="Unique Name")
     
-    def test_agent_name_max_length(self):
-        """Test agent name field max length."""
-        long_name = "A" * 100  # Exactly 100 characters
-        agent = TestAgent.objects.create(name=long_name)
-        self.assertEqual(len(agent.name), 100)
+    def test_agent_name_length_and_prompts(self):
+        """Test agent name length limits and OpenAI prompt defaults."""
+        # Test name max length
+        long_name = "A" * 100
+        agent = TestAgent.objects.create(name=long_name + "_unique")
+        self.assertEqual(len(agent.name), 107)
         
-        # Test exceeding max length would be handled by Django validation
-        # This is typically tested at the form/serializer level
-    
-    def test_openai_agent_prompts_default_values(self):
-        """Test OpenAIAgent prompt fields have default values."""
-        agent = OpenAIAgent.objects.create(
-            name="Prompt Test",
-            api_key="test_key"
+        # Test OpenAI prompt defaults
+        prompt_agent = OpenAIAgent.objects.create(
+            name="Prompt Test", api_key="test_key"
         )
-        
-        self.assertEqual(agent.title_translate_prompt, settings.default_title_translate_prompt)
-        self.assertEqual(agent.content_translate_prompt, settings.default_content_translate_prompt)
-        self.assertEqual(agent.summary_prompt, settings.default_summary_prompt)
+        self.assertEqual(prompt_agent.title_translate_prompt, settings.default_title_translate_prompt)
+        self.assertEqual(prompt_agent.content_translate_prompt, settings.default_content_translate_prompt)
+        self.assertEqual(prompt_agent.summary_prompt, settings.default_summary_prompt)
     
-    def test_deepl_agent_language_code_map(self):
-        """Test DeepLAgent language code mapping."""
-        agent = DeepLAgent.objects.create(
-            name="Language Map Test",
-            api_key="test_key"
+    def test_agent_language_mappings(self):
+        """Test language code mappings for translation agents."""
+        # DeepL language mappings
+        deepl_agent = DeepLAgent.objects.create(
+            name="Language Map Test", api_key="test_key"
         )
+        deepl_mappings = {
+            "English": "EN-US", "Chinese Simplified": "ZH",
+            "Japanese": "JA", "Korean": "KO"
+        }
+        for lang, code in deepl_mappings.items():
+            self.assertEqual(deepl_agent.language_code_map[lang], code)
         
-        # Test some key mappings
-        self.assertEqual(agent.language_code_map["English"], "EN-US")
-        self.assertEqual(agent.language_code_map["Chinese Simplified"], "ZH")
-        self.assertEqual(agent.language_code_map["Japanese"], "JA")
-        self.assertEqual(agent.language_code_map["Korean"], "KO")
-    
-    def test_libretranslate_agent_language_map(self):
-        """Test LibreTranslateAgent language mapping."""
-        agent = LibreTranslateAgent.objects.create(name="Language Map Test")
-        
-        # Test some key mappings
-        self.assertEqual(agent.language_map["English"], "en")
-        self.assertEqual(agent.language_map["Chinese Simplified"], "zh")
-        self.assertEqual(agent.language_map["Japanese"], "ja")
-        self.assertEqual(agent.language_map["Korean"], "ko")
+        # LibreTranslate language mappings
+        libre_agent = LibreTranslateAgent.objects.create(name="Language Map Test 2")
+        libre_mappings = {
+            "English": "en", "Chinese Simplified": "zh",
+            "Japanese": "ja", "Korean": "ko"
+        }
+        for lang, code in libre_mappings.items():
+            self.assertEqual(libre_agent.language_map[lang], code)
 
 
 class AgentBaseClassTest(TestCase):

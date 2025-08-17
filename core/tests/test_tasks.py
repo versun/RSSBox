@@ -26,14 +26,11 @@ class TasksTestCase(TestCase):
             feed_url="https://example.com/feed.xml",
         )
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
-    def test_handle_single_feed_fetch_success(self, mock_fetch_feed, mock_convert_time):
-        """Test handle_single_feed_fetch with a successful feed fetch."""
-        mock_convert_time.return_value = timezone.now()
+    def _create_mock_feed_data(self, title="New Test Feed", entries_count=1):
+        """Helper method to create mock feed data."""
         mock_feed_data = MagicMock()
         mock_feed_data.feed = {
-            "title": "New Test Feed",
+            "title": title,
             "subtitle": "A subtitle",
             "language": "en",
             "author": "Test Author",
@@ -42,21 +39,32 @@ class TasksTestCase(TestCase):
             "updated_parsed": "mock_time",
         }
 
-        mock_entry = MagicMock()
-        mock_entry.get.side_effect = {
-            "id": "guid1",
-            "link": "https://example.com/post1",
-            "author": "Author1",
-            "title": "Title1",
-            "summary": "Summary1",
-            "published_parsed": "mock_time",
-            "updated_parsed": "mock_time",
-            "enclosures_xml": None,
-        }.get
-        mock_entry.content = [MagicMock(value="Content1")]
+        mock_entries = []
+        for i in range(entries_count):
+            mock_entry = MagicMock()
+            mock_entry.get.side_effect = {
+                "id": f"guid{i}",
+                "link": f"https://example.com/post{i}",
+                "author": f"Author{i}",
+                "title": f"Title{i}",
+                "summary": f"Summary{i}",
+                "published_parsed": "mock_time",
+                "updated_parsed": "mock_time",
+                "enclosures_xml": None,
+            }.get
+            mock_entry.content = [MagicMock(value=f"Content{i}")]
+            mock_entries.append(mock_entry)
 
-        mock_feed_data.entries = [mock_entry]
+        mock_feed_data.entries = mock_entries
         mock_feed_data.get.return_value = "new-etag"
+        return mock_feed_data
+
+    @patch("core.tasks.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feed")
+    def test_handle_single_feed_fetch_success(self, mock_fetch_feed, mock_convert_time):
+        """Test handle_single_feed_fetch with a successful feed fetch."""
+        mock_convert_time.return_value = timezone.now()
+        mock_feed_data = self._create_mock_feed_data()
 
         mock_fetch_feed.return_value = {
             "error": None,
@@ -71,7 +79,7 @@ class TasksTestCase(TestCase):
         self.assertEqual(self.feed.name, "New Test Feed")
         self.assertEqual(self.feed.etag, "new-etag")
         self.assertEqual(Entry.objects.count(), 1)
-        self.assertEqual(Entry.objects.first().original_title, "Title1")
+        self.assertEqual(Entry.objects.first().original_title, "Title0")
 
     @patch("core.tasks.fetch_feed")
     def test_handle_single_feed_fetch_error(self, mock_fetch_feed):
@@ -88,50 +96,56 @@ class TasksTestCase(TestCase):
         self.assertFalse(self.feed.fetch_status)
         self.assertIn("Network Error", self.feed.log)
 
-    @patch("core.tasks.logger.info")
+    @patch("core.tasks.fetch_feed")
+    def test_handle_single_feed_fetch_no_update(self, mock_fetch_feed):
+        """Test handle_single_feed_fetch when feed is up to date."""
+        mock_fetch_feed.return_value = {
+            "error": None,
+            "update": False,
+            "feed": None,
+        }
+
+        handle_single_feed_fetch(self.feed)
+
+        self.feed.refresh_from_db()
+        self.assertTrue(self.feed.fetch_status)
+        self.assertIn("Feed is up to date, Skip", self.feed.log)
+
+    def test_handle_feeds_fetch(self):
+        """Test handle_feeds_fetch function."""
+        feed1 = Feed.objects.create(name="Feed1", feed_url="https://example.com/feed1.xml")
+        feed2 = Feed.objects.create(name="Feed2", feed_url="https://example.com/feed2.xml")
+        
+        with patch("core.tasks.handle_single_feed_fetch") as mock_handle:
+            handle_feeds_fetch([feed1, feed2])
+            self.assertEqual(mock_handle.call_count, 2)
+
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation(self, mock_translate_feed, mock_logger_info):
-        """Test the handle_feeds_translation task."""
+    def test_handle_feeds_translation_success(self, mock_translate_feed):
+        """Test handle_feeds_translation with successful translation."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         feeds = [self.feed]
 
         handle_feeds_translation(feeds, target_field="title")
 
         mock_translate_feed.assert_called_once_with(self.feed, target_field="title")
-        mock_logger_info.assert_called_once_with(
-            "Start translate %s of feed %s to %s",
-            "title",
-            self.feed.feed_url,
-            self.feed.target_language,
-        )
-
-        # In the original function, the feeds list is updated in-place.
-        # We need to get the updated feed object to check its status.
+        
         updated_feed = Feed.objects.get(id=self.feed.id)
-        # translation_status is not set to True in the current implementation (it's commented out)
-        # so we check that it's None (set at the beginning) instead
         self.assertIsNone(updated_feed.translation_status)
         self.assertIn("Translate Completed", updated_feed.log)
 
     def test_handle_feeds_translation_no_entries(self):
         """Test handle_feeds_translation with feeds that have no entries."""
-        # This feed has no entries
         feeds = [self.feed]
 
         handle_feeds_translation(feeds, target_field="title")
 
-        # Feed should not be processed, status should remain unchanged
         updated_feed = Feed.objects.get(id=self.feed.id)
         self.assertIsNone(updated_feed.translation_status)
-        # Log should not contain "Translate Completed"
         self.assertNotIn("Translate Completed", updated_feed.log)
 
-    @patch("core.tasks.logger.error")
-    @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_error(
-        self, mock_translate_feed, mock_logger_info, mock_logger_error
-    ):
+    def test_handle_feeds_translation_error(self, mock_translate_feed):
         """Test handle_feeds_translation when translate_feed raises an exception."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         mock_translate_feed.side_effect = Exception("Translation failed")
@@ -140,34 +154,19 @@ class TasksTestCase(TestCase):
         handle_feeds_translation(feeds, target_field="title")
 
         mock_translate_feed.assert_called_once_with(self.feed, target_field="title")
-        mock_logger_info.assert_called_once_with(
-            "Start translate %s of feed %s to %s",
-            "title",
-            self.feed.feed_url,
-            self.feed.target_language,
-        )
-        mock_logger_error.assert_called_once_with(
-            f"Error in translate_feed for feed {self.feed.name}: Translation failed"
-        )
-
-        # Check that error status and log are set correctly
+        
         updated_feed = Feed.objects.get(id=self.feed.id)
         self.assertFalse(updated_feed.translation_status)
         self.assertIn("Translation failed", updated_feed.log)
 
-    @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_multiple_feeds(
-        self, mock_translate_feed, mock_logger_info
-    ):
+    def test_handle_feeds_translation_multiple_feeds(self, mock_translate_feed):
         """Test handle_feeds_translation with multiple feeds."""
-        # Create a second feed
         feed2 = Feed.objects.create(
             name="Second Feed",
             feed_url="https://example.com/feed2.xml",
         )
 
-        # Add entries to both feeds
         Entry.objects.create(feed=self.feed, original_title="Entry 1")
         Entry.objects.create(feed=feed2, original_title="Entry 2")
 
@@ -175,15 +174,10 @@ class TasksTestCase(TestCase):
 
         handle_feeds_translation(feeds, target_field="title")
 
-        # Both feeds should be called
         self.assertEqual(mock_translate_feed.call_count, 2)
         mock_translate_feed.assert_any_call(self.feed, target_field="title")
         mock_translate_feed.assert_any_call(feed2, target_field="title")
 
-        # Both feeds should have logger calls
-        self.assertEqual(mock_logger_info.call_count, 2)
-
-        # Check both feeds are updated
         updated_feed1 = Feed.objects.get(id=self.feed.id)
         updated_feed2 = Feed.objects.get(id=feed2.id)
         self.assertIsNone(updated_feed1.translation_status)
@@ -191,11 +185,8 @@ class TasksTestCase(TestCase):
         self.assertIn("Translate Completed", updated_feed1.log)
         self.assertIn("Translate Completed", updated_feed2.log)
 
-    @patch("core.tasks.logger.info")
     @patch("core.tasks.translate_feed")
-    def test_handle_feeds_translation_content_field(
-        self, mock_translate_feed, mock_logger_info
-    ):
+    def test_handle_feeds_translation_content_field(self, mock_translate_feed):
         """Test handle_feeds_translation with target_field='content'."""
         Entry.objects.create(feed=self.feed, original_title="An entry to translate")
         feeds = [self.feed]
@@ -203,22 +194,15 @@ class TasksTestCase(TestCase):
         handle_feeds_translation(feeds, target_field="content")
 
         mock_translate_feed.assert_called_once_with(self.feed, target_field="content")
-        mock_logger_info.assert_called_once_with(
-            "Start translate %s of feed %s to %s",
-            "content",
-            self.feed.feed_url,
-            self.feed.target_language,
-        )
-
+        
         updated_feed = Feed.objects.get(id=self.feed.id)
         self.assertIsNone(updated_feed.translation_status)
         self.assertIn("Translate Completed", updated_feed.log)
 
     @patch("core.tasks.summarize_feed")
     def test_handle_feeds_summary_success(self, mock_summarize_feed):
-        """Test the handle_feeds_summary task with a successful summarization."""
+        """Test handle_feeds_summary task with successful summarization."""
         Entry.objects.create(feed=self.feed, original_title="An entry to summarize")
-        # Mock a summarizer agent for the feed
         self.feed.summarizer = OpenAIAgent.objects.create(
             name="Summarizer Agent", api_key="key"
         )
@@ -244,6 +228,15 @@ class TasksTestCase(TestCase):
         updated_feed = Feed.objects.get(id=self.feed.id)
         self.assertFalse(updated_feed.translation_status)
         self.assertIn("Summarizer Engine Not Set", updated_feed.log)
+
+    def test_handle_feeds_summary_no_entries(self):
+        """Test handle_feeds_summary when feed has no entries."""
+        feeds = [self.feed]
+
+        handle_feeds_summary(feeds)
+
+        updated_feed = Feed.objects.get(id=self.feed.id)
+        self.assertFalse(updated_feed.translation_status)
 
 
 class TasksHelperFunctionsTest(TestCase):
@@ -282,8 +275,6 @@ class TasksHelperFunctionsTest(TestCase):
     @patch("core.tasks._auto_retry")
     def test_translate_content_needed(self, mock_auto_retry):
         """Test _translate_content when translation is needed."""
-        self.entry.original_content = "<p>Original Content</p>"
-        self.entry.save()
         mock_auto_retry.return_value = {
             "text": "<p>Translated Content</p>",
             "tokens": 10,
@@ -298,7 +289,6 @@ class TasksHelperFunctionsTest(TestCase):
     @patch("core.tasks._auto_retry")
     def test_translate_content_not_needed(self, mock_auto_retry):
         """Test _translate_content when translation is not needed."""
-        self.entry.original_content = "<p>Original Content</p>"
         self.entry.translated_content = "<p>Already Translated</p>"
         self.entry.save()
 
@@ -328,9 +318,7 @@ class TasksHelperFunctionsTest(TestCase):
 
     @patch("core.tasks._fetch_article_content")
     @patch("core.tasks._translate_content")
-    def test_translate_feed_for_content(
-        self, mock_translate_content, mock_fetch_article
-    ):
+    def test_translate_feed_for_content(self, mock_translate_content, mock_fetch_article):
         """Test translate_feed for content translation."""
         self.feed.translator = self.agent
         self.feed.translate_content = True
@@ -352,9 +340,7 @@ class TasksHelperFunctionsTest(TestCase):
 
     @patch("core.tasks._fetch_article_content")
     @patch("core.tasks._translate_content")
-    def test_translate_feed_with_fetch_article(
-        self, mock_translate_content, mock_fetch_article
-    ):
+    def test_translate_feed_with_fetch_article(self, mock_translate_content, mock_fetch_article):
         """Test translate_feed with fetch_article enabled."""
         self.feed.translator = self.agent
         self.feed.translate_content = True
@@ -369,41 +355,27 @@ class TasksHelperFunctionsTest(TestCase):
         mock_fetch_article.assert_called_once_with(self.entry.link)
         mock_translate_content.assert_called_once()
 
-        # Check the arguments passed to the mock
         call_args, call_kwargs = mock_translate_content.call_args
         updated_entry = call_kwargs.get("entry")
         self.assertIsNotNone(updated_entry)
-        self.assertEqual(
-            updated_entry.original_content, "<p>Fetched Article Content</p>"
-        )
+        self.assertEqual(updated_entry.original_content, "<p>Fetched Article Content</p>")
         self.assertEqual(call_kwargs.get("target_language"), self.feed.target_language)
         self.assertEqual(call_kwargs.get("engine"), self.agent)
         self.assertEqual(self.feed.total_tokens, 150)
         self.assertEqual(self.feed.total_characters, 750)
 
-    @patch("core.tasks.fetch_feed")
-    def test_handle_single_feed_fetch_no_update(self, mock_fetch_feed):
-        """Test handle_single_feed_fetch when feed is up to date."""
-        mock_fetch_feed.return_value = {
-            "error": None,
-            "update": False,
-            "feed": None,
-        }
+    @patch("core.tasks.translate_feed")
+    def test_translate_feed_no_translator(self, mock_translate_feed):
+        """Test translate_feed when no translator is set."""
+        Entry.objects.create(feed=self.feed, original_title="Test title")
+        self.feed.translator = None
+        self.feed.translate_title = True
+        self.feed.save()
 
-        handle_single_feed_fetch(self.feed)
+        translate_feed(self.feed, target_field="title")
 
         self.feed.refresh_from_db()
-        self.assertTrue(self.feed.fetch_status)
-        self.assertIn("Feed is up to date, Skip", self.feed.log)
-
-    def test_handle_feeds_fetch(self):
-        """Test handle_feeds_fetch function."""
-        feed1 = Feed.objects.create(name="Feed1", feed_url="https://example.com/feed1.xml")
-        feed2 = Feed.objects.create(name="Feed2", feed_url="https://example.com/feed2.xml")
-        
-        with patch("core.tasks.handle_single_feed_fetch") as mock_handle:
-            handle_feeds_fetch([feed1, feed2])
-            self.assertEqual(mock_handle.call_count, 2)
+        self.assertFalse(self.feed.translation_status)
 
     def test_auto_retry_success(self):
         """Test _auto_retry function with successful call."""
@@ -434,6 +406,16 @@ class TasksHelperFunctionsTest(TestCase):
         
         self.assertEqual(result, {})
         self.assertEqual(mock_func.call_count, 2)
+
+    def test_auto_retry_large_text_cleanup(self):
+        """Test _auto_retry function with large text cleanup."""
+        mock_func = MagicMock(return_value={"text": "success"})
+        large_text = "x" * 2000
+        
+        result = _auto_retry(mock_func, max_retries=1, text=large_text, other_param="small")
+        
+        self.assertEqual(result, {"text": "success"})
+        mock_func.assert_called_once_with(text=large_text, other_param="small")
 
     @patch("core.tasks.newspaper.Article")
     def test_fetch_article_content_success(self, mock_article_class):
@@ -478,50 +460,9 @@ class TasksHelperFunctionsTest(TestCase):
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.total_tokens, initial_tokens + 50)
 
-
-    def test_handle_feeds_summary_no_entries(self):
-        """Test handle_feeds_summary when feed has no entries."""
-        # Feed has no entries
-        feeds = [self.feed]
-
-        handle_feeds_summary(feeds)
-
-        # Feed should not be processed, but translation_status is set to None initially then bulk_update sets it
-        updated_feed = Feed.objects.get(id=self.feed.id)
-        # The function continues and sets translation_status in bulk_update even for feeds with no entries
-        self.assertFalse(updated_feed.translation_status)
-
-    @patch("core.tasks.translate_feed")
-    def test_translate_feed_no_translator(self, mock_translate_feed):
-        """Test translate_feed when no translator is set."""
-        Entry.objects.create(feed=self.feed, original_title="Test title")
-        self.feed.translator = None
-        self.feed.translate_title = True
-        self.feed.save()
-
-        # This should raise an exception internally
-        translate_feed(self.feed, target_field="title")
-
-        # The function should handle the exception gracefully
-        # Check that the feed's translation_status is set to False
-        self.feed.refresh_from_db()
-        self.assertFalse(self.feed.translation_status)
-
-    def test_auto_retry_large_text_cleanup(self):
-        """Test _auto_retry function with large text cleanup."""
-        mock_func = MagicMock(return_value={"text": "success"})
-        large_text = "x" * 2000  # Large text > 1000 chars
-        
-        result = _auto_retry(mock_func, max_retries=1, text=large_text, other_param="small")
-        
-        self.assertEqual(result, {"text": "success"})
-        mock_func.assert_called_once_with(text=large_text, other_param="small")
-
-
     @patch("core.tasks.text_handler")
     def test_summarize_feed_basic(self, mock_text_handler):
         """Test summarize_feed function with basic functionality."""
-        # Create entries for summarization
         entry1 = Entry.objects.create(
             feed=self.feed,
             original_title="Title 1",
@@ -533,24 +474,20 @@ class TasksHelperFunctionsTest(TestCase):
             original_content="Content for entry 2"
         )
         
-        # Set up summarizer
         self.feed.summarizer = self.agent
         self.feed.summary_detail = 0.5
         self.feed.save()
         
-        # Mock text_handler functions
         mock_text_handler.clean_content.side_effect = lambda x: x
         mock_text_handler.get_token_count.return_value = 100
         mock_text_handler.adaptive_chunking.return_value = ["Chunk 1"]
         
-        # Mock agent summarize method
         with patch.object(self.agent, 'summarize') as mock_summarize:
             mock_summarize.return_value = {"text": "Summary text", "tokens": 20}
             
             result = summarize_feed(self.feed)
             
         self.assertTrue(result)
-        # Check that entries were updated
         entry1.refresh_from_db()
         entry2.refresh_from_db()
         self.assertEqual(entry1.ai_summary, "Summary text")

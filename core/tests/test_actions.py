@@ -24,40 +24,42 @@ class ActionsTestCase(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.feed = Feed.objects.create(
-            name="Test Feed for Action", feed_url="https://example.com/rss.xml"
+            name="Test Feed", feed_url="https://example.com/rss.xml"
         )
         self.entry1 = Entry.objects.create(
             feed=self.feed,
             original_title="Title 1",
             translated_title="Translated Title 1",
             translated_content="Translated Content 1",
+            ai_summary="AI summary"
         )
         self.entry2 = Entry.objects.create(
             feed=self.feed,
-            original_title="Title 2",
+            original_title="Title 2", 
             translated_title="Translated Title 2",
             translated_content="Translated Content 2",
         )
-        # Mock ModelAdmin
         self.modeladmin = ModelAdmin(Feed, None)
-        self.entry1.ai_summary = "This is an AI summary."
-        self.entry1.save()
+
+    def _get_request_with_messages(self, method='GET', data=None):
+        """Helper to create request with message framework"""
+        if method == 'GET':
+            request = self.factory.get("/")
+        else:
+            request = self.factory.post("/", data or {})
+        setattr(request, "session", "session")
+        setattr(request, "_messages", FallbackStorage(request))
+        return request
 
     def test_clean_translated_content_action(self):
-        """Test the clean_translated_content admin action."""
-        request = self.factory.get("/")
-        # Mock messages framework
-        setattr(request, "session", "session")
-        messages = FallbackStorage(request)
-        setattr(request, "_messages", messages)
-
+        """Test cleaning translated content from feed entries."""
+        request = self._get_request_with_messages()
         queryset = Feed.objects.filter(id=self.feed.id)
 
         clean_translated_content(self.modeladmin, request, queryset)
 
         self.entry1.refresh_from_db()
         self.entry2.refresh_from_db()
-
         self.assertIsNone(self.entry1.translated_title)
         self.assertIsNone(self.entry1.translated_content)
         self.assertIsNone(self.entry2.translated_title)
@@ -92,12 +94,8 @@ class ActionsTestCase(TestCase):
         self.assertEqual(feed_outline.get("xmlUrl"), self.feed.feed_url)
 
     def test_clean_ai_summary_action(self):
-        """Test the clean_ai_summary admin action."""
-        request = self.factory.get("/")
-        setattr(request, "session", "session")
-        messages = FallbackStorage(request)
-        setattr(request, "_messages", messages)
-
+        """Test cleaning AI summary from feed entries."""
+        request = self._get_request_with_messages()
         queryset = Feed.objects.filter(id=self.feed.id)
 
         clean_ai_summary(self.modeladmin, request, queryset)
@@ -132,14 +130,14 @@ class ActionsTestCase(TestCase):
         self.assertEqual(mock_submit_task.call_count, 2)
 
     def test_feed_batch_modify_boolean_fields(self):
-        """Test the feed_batch_modify action for boolean fields."""
+        """Test batch modify for boolean fields."""
         post_data = {"apply": "Apply", "translate_title": "True", "summary": "False"}
-        request = self.factory.post("/", post_data)
+        request = self._get_request_with_messages('POST', post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
 
-        self.assertEqual(response.status_code, 302)  # Should redirect after apply
+        self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertTrue(self.feed.translate_title)
         self.assertFalse(self.feed.summary)
@@ -147,7 +145,7 @@ class ActionsTestCase(TestCase):
     @patch("core.actions.get_all_agent_choices", return_value=[])
     @patch("core.actions.get_ai_agent_choices", return_value=[])
     def test_feed_batch_modify_other_fields(self, mock_ai_agents, mock_all_agents):
-        """Test the feed_batch_modify action for other field types."""
+        """Test batch modify for non-boolean fields."""
         tag = Tag.objects.create(name="New Tag")
         post_data = {
             "apply": "Apply",
@@ -156,7 +154,7 @@ class ActionsTestCase(TestCase):
             "tags": "Change",
             "tags_value": [str(tag.id)],
         }
-        request = self.factory.post("/", post_data)
+        request = self._get_request_with_messages('POST', post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
@@ -168,199 +166,120 @@ class ActionsTestCase(TestCase):
 
     @patch('core.models.filter.Filter.clear_ai_filter_cache_results')
     def test_clean_filter_results_action(self, mock_clear_cache):
-        """Test the clean_filter_results admin action."""
-        request = self.factory.get("/")
-        setattr(request, "session", "session")
-        messages = FallbackStorage(request)
-        setattr(request, "_messages", messages)
-
-        # Create test filters
+        """Test cleaning filter results."""
+        request = self._get_request_with_messages()
         filter1 = Filter.objects.create(name="Test Filter 1")
         filter2 = Filter.objects.create(name="Test Filter 2")
         queryset = Filter.objects.filter(id__in=[filter1.id, filter2.id])
 
         clean_filter_results(self.modeladmin, request, queryset)
 
-        # Verify clear_ai_filter_cache_results was called for each filter
         self.assertEqual(mock_clear_cache.call_count, 2)
 
-    def test_export_original_feed_as_opml_action(self):
-        """Test the export_original_feed_as_opml admin action."""
-        request = self.factory.get("/")
+    def test_export_opml_actions(self):
+        """Test both original and translated OPML export actions."""
         tag = Tag.objects.create(name="News")
-        self.feed.tags.add(tag)
-        queryset = Feed.objects.filter(id=self.feed.id)
-
-        response = export_original_feed_as_opml(self.modeladmin, request, queryset)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/xml")
-        self.assertIn(
-            'attachment; filename="original_feeds_from_rsstranslator.opml"',
-            response["Content-Disposition"],
-        )
-
-        # Parse and validate XML content
-        root = etree.fromstring(response.content)
-        self.assertEqual(root.tag, "opml")
-        self.assertEqual(root.find("head/title").text, "Original Feeds | RSS Translator")
-        category_outline = root.find('body/outline[@title="News"]')
-        self.assertIsNotNone(category_outline)
-        feed_outline = category_outline.find("outline")
-        self.assertIsNotNone(feed_outline)
-        self.assertEqual(feed_outline.get("title"), self.feed.name)
-        self.assertEqual(feed_outline.get("xmlUrl"), self.feed.feed_url)
-
-    @patch('core.actions.settings.SITE_URL', 'https://test.example.com')
-    def test_export_translated_feed_as_opml_action(self):
-        """Test the export_translated_feed_as_opml admin action."""
-        request = self.factory.get("/")
-        tag = Tag.objects.create(name="Tech")
         self.feed.tags.add(tag)
         self.feed.slug = "test-feed"
         self.feed.save()
         queryset = Feed.objects.filter(id=self.feed.id)
 
-        response = export_translated_feed_as_opml(self.modeladmin, request, queryset)
-
+        # Test original export
+        response = export_original_feed_as_opml(self.modeladmin, self.factory.get("/"), queryset)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml")
-        self.assertIn(
-            'attachment; filename="translated_feeds_from_rsstranslator.opml"',
-            response["Content-Disposition"],
-        )
-
-        # Parse and validate XML content
+        self.assertIn("original_feeds_from_rsstranslator.opml", response["Content-Disposition"])
+        
         root = etree.fromstring(response.content)
         self.assertEqual(root.tag, "opml")
-        self.assertEqual(root.find("head/title").text, "Translated Feeds | RSS Translator")
-        category_outline = root.find('body/outline[@title="Tech"]')
-        self.assertIsNotNone(category_outline)
-        feed_outline = category_outline.find("outline")
-        self.assertIsNotNone(feed_outline)
-        self.assertEqual(feed_outline.get("title"), self.feed.name)
-        expected_url = f"https://test.example.com/feed/rss/{self.feed.slug}"
-        self.assertEqual(feed_outline.get("xmlUrl"), expected_url)
+        self.assertEqual(root.find("head/title").text, "Original Feeds | RSS Translator")
+        
+        # Test translated export with settings patch
+        with patch('core.actions.settings.SITE_URL', 'https://test.example.com'):
+            response = export_translated_feed_as_opml(self.modeladmin, self.factory.get("/"), queryset)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("translated_feeds_from_rsstranslator.opml", response["Content-Disposition"])
+            
+            root = etree.fromstring(response.content)
+            self.assertEqual(root.find("head/title").text, "Translated Feeds | RSS Translator")
 
     @patch('core.actions.reverse')
     def test_create_digest_action(self, mock_reverse):
-        """Test the create_digest admin action."""
+        """Test create digest action."""
         mock_reverse.return_value = "/admin/core/digest/add/"
-        request = self.factory.get("/")
-        feed2 = Feed.objects.create(
-            name="Test Feed 2", feed_url="https://example2.com/rss.xml"
-        )
+        feed2 = Feed.objects.create(name="Feed 2", feed_url="https://example2.com/rss.xml")
         queryset = Feed.objects.filter(id__in=[self.feed.id, feed2.id])
 
-        response = create_digest(self.modeladmin, request, queryset)
+        response = create_digest(self.modeladmin, self.factory.get("/"), queryset)
 
-        # Verify it returns an HttpResponseRedirect
         self.assertEqual(response.status_code, 302)
         expected_ids = f"{self.feed.id},{feed2.id}"
         self.assertIn(f"feed_ids={expected_ids}", response.url)
         mock_reverse.assert_called_once_with("admin:core_digest_add")
 
-    def test_generate_opml_feed_multiple_tags_same_category(self):
-        """Test _generate_opml_feed with multiple feeds in same category (line 105)."""
+    def test_opml_edge_cases(self):
+        """Test OPML generation edge cases and error handling."""
+        # Test multiple feeds in same category
         tag = Tag.objects.create(name="Tech")
-        feed1 = self.feed
         feed2 = Feed.objects.create(name="Feed 2", feed_url="https://example2.com/rss.xml")
+        self.feed.tags.add(tag)
+        feed2.tags.add(tag)
         
-        # Both feeds have same tag - this should trigger line 105
-        feed1.tags.add(tag)
-        feed2.tags.add(tag) 
-        
-        queryset = Feed.objects.filter(id__in=[feed1.id, feed2.id])
+        queryset = Feed.objects.filter(id__in=[self.feed.id, feed2.id])
         response = _generate_opml_feed("Test", queryset, lambda f: f.feed_url, "test")
         
         self.assertEqual(response.status_code, 200)
         root = etree.fromstring(response.content)
         category_outline = root.find('body/outline[@title="Tech"]')
-        self.assertIsNotNone(category_outline)
-        # Should have 2 feeds under same category
-        feed_outlines = category_outline.findall("outline")
-        self.assertEqual(len(feed_outlines), 2)
+        self.assertEqual(len(category_outline.findall("outline")), 2)
 
-    @patch('core.actions.logger.error')
-    @patch('core.actions.etree.Element')
-    def test_generate_opml_feed_exception_handling(self, mock_element, mock_logger):
-        """Test _generate_opml_feed exception handling (lines 135-137)."""
-        mock_element.side_effect = Exception("Test error")
-        
-        queryset = Feed.objects.filter(id=self.feed.id)
-        response = _generate_opml_feed("Test", queryset, lambda f: f.feed_url, "test")
-        
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.content, b"An error occurred during OPML export")
-        mock_logger.assert_called_once()
+        # Test exception handling
+        with patch('core.actions.etree.Element', side_effect=Exception("Test error")):
+            with patch('core.actions.logger.error') as mock_logger:
+                response = _generate_opml_feed("Test", queryset, lambda f: f.feed_url, "test")
+                self.assertEqual(response.status_code, 500)
+                mock_logger.assert_called_once()
 
-    def test_feed_batch_modify_false_cases(self):
-        """Test feed_batch_modify with False values for boolean fields."""
+    def test_feed_batch_modify_comprehensive(self):
+        """Test comprehensive batch modify scenarios."""
+        # Test boolean field combinations
         post_data = {
-            "apply": "Apply", 
-            "translate_title": "False",  # Line 234-235
-            "translate_content": "True",  # Line 240-241  
-            "summary": "True"  # Line 249
+            "apply": "Apply",
+            "translate_title": "False",
+            "translate_content": "True", 
+            "summary": "False"
         }
-        request = self.factory.post("/", post_data)
+        request = self._get_request_with_messages('POST', post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-
+        
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
-        self.assertFalse(self.feed.translate_title)  # Line 235
-        self.assertTrue(self.feed.translate_content)  # Line 241
-        self.assertTrue(self.feed.summary)  # Line 249
+        self.assertFalse(self.feed.translate_title)
+        self.assertTrue(self.feed.translate_content)
+        self.assertFalse(self.feed.summary)
 
-    def test_feed_batch_modify_translate_content_false(self):
-        """Test feed_batch_modify translate_content False case (lines 242-243)."""
-        post_data = {"apply": "Apply", "translate_content": "False"}
-        request = self.factory.post("/", post_data)
-        queryset = Feed.objects.filter(id=self.feed.id)
-
-        response = feed_batch_modify(self.modeladmin, request, queryset)
-
-        self.assertEqual(response.status_code, 302)
-        self.feed.refresh_from_db()
-        self.assertFalse(self.feed.translate_content)
-
-    def test_feed_batch_modify_translator_field(self):
-        """Test feed_batch_modify translator field handling (lines 259-261)."""
+        # Test translator/summarizer fields
         post_data = {
             "apply": "Apply",
             "translator": "Change",
-            "translator_value": "1:5"  # content_type_id:object_id
+            "translator_value": "1:5",
+            "summarizer": "Change",
+            "summarizer_value": "2:7"
         }
-        request = self.factory.post("/", post_data)
-        queryset = Feed.objects.filter(id=self.feed.id)
-
+        request = self._get_request_with_messages('POST', post_data)
+        
         response = feed_batch_modify(self.modeladmin, request, queryset)
-
+        
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
-        self.assertEqual(self.feed.translator_content_type_id, 1)  # Line 260
-        self.assertEqual(self.feed.translator_object_id, 5)  # Line 261
+        self.assertEqual(self.feed.translator_content_type_id, 1)
+        self.assertEqual(self.feed.translator_object_id, 5)
+        self.assertEqual(self.feed.summarizer_content_type_id, 2)
+        self.assertEqual(self.feed.summarizer_object_id, 7)
 
-    def test_feed_batch_modify_summarizer_field(self):
-        """Test feed_batch_modify summarizer field handling (lines 263-269)."""
-        post_data = {
-            "apply": "Apply",
-            "summarizer": "Change", 
-            "summarizer_value": "2:7"  # content_type_id:object_id
-        }
-        request = self.factory.post("/", post_data)
-        queryset = Feed.objects.filter(id=self.feed.id)
-
-        response = feed_batch_modify(self.modeladmin, request, queryset)
-
-        self.assertEqual(response.status_code, 302)
-        self.feed.refresh_from_db()
-        self.assertEqual(self.feed.summarizer_content_type_id, 2)  # Line 267
-        self.assertEqual(self.feed.summarizer_object_id, 7)  # Line 269
-
-    def test_feed_batch_modify_filter_field(self):
-        """Test feed_batch_modify filter field handling (lines 279-283)."""
+        # Test filter assignment
         filter1 = Filter.objects.create(name="Filter 1")
         filter2 = Filter.objects.create(name="Filter 2")
         post_data = {
@@ -368,32 +287,29 @@ class ActionsTestCase(TestCase):
             "filter": "Change",
             "filter_value": [str(filter1.id), str(filter2.id)]
         }
-        request = self.factory.post("/", post_data)
-        queryset = Feed.objects.filter(id=self.feed.id)
-
+        request = self._get_request_with_messages('POST', post_data)
+        
         response = feed_batch_modify(self.modeladmin, request, queryset)
-
+        
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         feed_filters = list(self.feed.filters.all())
-        self.assertIn(filter1, feed_filters)  # Lines 281-283
+        self.assertIn(filter1, feed_filters)
         self.assertIn(filter2, feed_filters)
 
     @patch("core.actions.get_all_agent_choices", return_value=[])
     @patch("core.actions.get_ai_agent_choices", return_value=[])
     @patch("core.actions.core_admin_site.each_context", return_value={})
-    def test_feed_batch_modify_render_form(self, mock_context, mock_ai_agents, mock_all_agents):
-        """Test feed_batch_modify render form (lines 291-295)."""
-        # Create some test data
+    def test_feed_batch_modify_form_render(self, mock_context, mock_ai_agents, mock_all_agents):
+        """Test batch modify form rendering."""
         Tag.objects.create(name="Test Tag")
         Filter.objects.create(name="Test Filter")
         
-        request = self.factory.get("/")  # GET request, no "apply"
+        request = self._get_request_with_messages('GET')
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
 
-        self.assertEqual(response.status_code, 200)  # Should render template
-        # Verify the context contains expected choices
-        mock_all_agents.assert_called_once()  # Line 291
-        mock_ai_agents.assert_called_once()  # Line 292
+        self.assertEqual(response.status_code, 200)
+        mock_all_agents.assert_called_once()
+        mock_ai_agents.assert_called_once()

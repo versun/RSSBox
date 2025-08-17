@@ -199,96 +199,64 @@ class FeedAdminDisplayMethodsTest(TestCase):
         args = mock_submit_task.call_args
         self.assertEqual(args[0][0], f"Update Feed: {self.feed.name}")
 
-    def test_simple_update_frequency_5_min(self):
-        """Test simple_update_frequency for 5 min case (lines 197-198)."""
-        self.feed.update_frequency = 5
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "5 min")
-
-    def test_simple_update_frequency_15_min(self):
-        """Test simple_update_frequency for 15 min case (lines 199-200)."""
-        self.feed.update_frequency = 15
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "15 min")
-
-    def test_simple_update_frequency_30_min(self):
-        """Test simple_update_frequency for 30 min case (lines 201-202)."""
-        self.feed.update_frequency = 30
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "30 min")
-
-    def test_simple_update_frequency_hourly(self):
-        """Test simple_update_frequency for hourly case (lines 203-204)."""
-        self.feed.update_frequency = 60
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "hourly")
-
-    def test_simple_update_frequency_daily(self):
-        """Test simple_update_frequency for daily case (lines 205-206)."""
-        self.feed.update_frequency = 1440
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "daily")
-
-    def test_simple_update_frequency_weekly(self):
-        """Test simple_update_frequency for weekly case (lines 207-208)."""
-        self.feed.update_frequency = 10080
-        result = self.admin.simple_update_frequency(self.feed)
-        self.assertEqual(result, "weekly")
+    def test_simple_update_frequency_cases(self):
+        """Test simple_update_frequency for different time intervals."""
+        test_cases = [
+            (5, "5 min"),
+            (15, "15 min"),
+            (30, "30 min"),
+            (60, "hourly"),
+            (1440, "daily"),
+            (10080, "weekly")
+        ]
+        
+        for frequency, expected in test_cases:
+            with self.subTest(frequency=frequency):
+                self.feed.update_frequency = frequency
+                result = self.admin.simple_update_frequency(self.feed)
+                self.assertEqual(result, expected)
 
     def test_translator_method(self):
         """Test translator method (line 212)."""
         result = self.admin.translator(self.feed)
         self.assertEqual(result, self.feed.translator)
 
-    def test_generate_feed_no_translation(self):
-        """Test generate_feed when no translation options are enabled (lines 216-220)."""
+    @patch('core.admin.feed_admin.status_icon')
+    def test_generate_feed_scenarios(self, mock_status_icon):
+        """Test generate_feed for different translation scenarios."""
+        # Test no translation
         self.feed.translate_title = False
         self.feed.translate_content = False
         self.feed.summary = False
         
         result = self.admin.generate_feed(self.feed)
-        
-        self.assertIn("-", result)  # Should show "-" when no translation
+        self.assertIn("-", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
         self.assertIn(f"/rss/json/{self.feed.slug}", result)
-
-    @patch('core.admin.feed_admin.status_icon')
-    def test_generate_feed_with_translation(self, mock_status_icon):
-        """Test generate_feed when translation options are enabled (line 219)."""
+        
+        # Test with translation
         mock_status_icon.return_value = "✓"
         self.feed.translate_title = True
-        self.feed.translate_content = False
-        self.feed.summary = False
         self.feed.translation_status = True
         
         result = self.admin.generate_feed(self.feed)
-        
         mock_status_icon.assert_called_with(self.feed.translation_status)
         self.assertIn("✓", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
 
-    def test_fetch_feed_with_pk(self):
-        """Test fetch_feed method with existing pk (lines 231-235)."""
+    def test_fetch_feed_scenarios(self):
+        """Test fetch_feed method with and without pk."""
+        # Test with existing pk
         self.feed.fetch_status = True
-        
         result = self.admin.fetch_feed(self.feed)
-        
         self.assertIn(self.feed.feed_url, result)
         self.assertIn(f"/rss/proxy/{self.feed.slug}", result)
         self.assertIn("url", result)
         self.assertIn("proxy", result)
-
-    def test_fetch_feed_without_pk(self):
-        """Test fetch_feed method without pk (line 234)."""
-        # Create a new feed without saving to get one without pk
-        new_feed = Feed(
-            name="Unsaved Feed",
-            feed_url="http://test.com/rss"
-        )
         
+        # Test without pk
+        new_feed = Feed(name="Unsaved Feed", feed_url="http://test.com/rss")
         result = self.admin.fetch_feed(new_feed)
-        
-        # Should still contain the URLs but status will be different
         self.assertIn(new_feed.feed_url, result)
         self.assertIn("url", result)
         self.assertIn("proxy", result)
@@ -316,77 +284,57 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.assertIn("30 min", result)  # from update_frequency
         self.assertIn(self.feed.last_fetch.strftime("%Y-%m-%d %H:%M:%S"), result)
 
-    def test_cost_info_under_1000(self):
-        """Test cost_info method for numbers under 1000 (lines 287-297)."""
-        self.feed.total_tokens = 500
-        self.feed.total_characters = 800
+    def test_cost_info_formatting(self):
+        """Test cost_info method for different number formats."""
+        test_cases = [
+            (500, 800, "tokens:500", "characters:800"),
+            (2500, 15000, "tokens:2.5K", "characters:15K"),
+            (2500000, 15000000, "tokens:2.5M", "characters:15M")
+        ]
         
-        result = self.admin.cost_info(self.feed)
-        
-        self.assertIn("tokens:500", result)
-        self.assertIn("characters:800", result)
+        for tokens, chars, expected_tokens, expected_chars in test_cases:
+            with self.subTest(tokens=tokens, chars=chars):
+                self.feed.total_tokens = tokens
+                self.feed.total_characters = chars
+                result = self.admin.cost_info(self.feed)
+                self.assertIn(expected_tokens, result)
+                self.assertIn(expected_chars, result)
 
-    def test_cost_info_thousands(self):
-        """Test cost_info method for thousands (lines 291-293)."""
-        self.feed.total_tokens = 2500
-        self.feed.total_characters = 15000
-        
-        result = self.admin.cost_info(self.feed)
-        
-        self.assertIn("tokens:2.5K", result)
-        self.assertIn("characters:15K", result)
-
-    def test_cost_info_millions(self):
-        """Test cost_info method for millions (lines 294-296)."""
-        self.feed.total_tokens = 2500000
-        self.feed.total_characters = 15000000
-        
-        result = self.admin.cost_info(self.feed)
-        
-        self.assertIn("tokens:2.5M", result)
-        self.assertIn("characters:15M", result)
-
-    def test_show_filters_no_filters(self):
-        """Test show_filters when no filters exist (lines 305-311)."""
+    def test_show_filters_scenarios(self):
+        """Test show_filters with and without filters."""
+        # Test no filters
         result = self.admin.show_filters(self.feed)
         self.assertEqual(result, "-")
-
-    def test_show_filters_with_filters(self):
-        """Test show_filters with existing filters."""
+        
+        # Test with filters
         from core.models import Filter
         filter1 = Filter.objects.create(name="Test Filter 1")
         filter2 = Filter.objects.create(name="Test Filter 2")
         self.feed.filters.add(filter1, filter2)
         
         result = self.admin.show_filters(self.feed)
-        
         self.assertIn("Test Filter 1", result)
         self.assertIn("Test Filter 2", result)
         self.assertIn(f"/core/filter/{filter1.id}/change/", result)
 
-    def test_show_tags_no_tags(self):
-        """Test show_tags when no tags exist (line 316)."""
-        # Create a new feed to ensure it has no tags
+    def test_show_tags_scenarios(self):
+        """Test show_tags with and without tags."""
+        # Test no tags
         feed_without_tags = Feed.objects.create(
             name="Feed Without Tags",
             feed_url="http://example.com/rss",
             target_language="en"
         )
-        
         result = self.admin.show_tags(feed_without_tags)
-        # Based on the test failure, it returns empty string when no tags
-        # This might be due to obj.tags behavior - let's accept the actual result
         self.assertIn(result, ["", "-"])
-
-    def test_show_tags_with_tags(self):
-        """Test show_tags with existing tags."""
+        
+        # Test with tags
         from core.models import Tag
         tag1 = Tag.objects.create(name="Tag1")
         tag2 = Tag.objects.create(name="Tag2")
         self.feed.tags.add(tag1, tag2)
         
         result = self.admin.show_tags(self.feed)
-        
         self.assertIn("#Tag1", result)
         self.assertIn("#Tag2", result)
         self.assertIn(f"/core/tag/{tag1.id}/change/", result)

@@ -13,23 +13,19 @@ class EntryModelTestCase(TestCase):
         )
 
     def test_entry_str_method(self):
-        """Test Entry __str__ method (line 23)."""
+        """Test Entry __str__ method with different title values."""
+        # Test with normal title
         entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/article",
             original_title="Test Article Title"
         )
+        self.assertEqual(str(entry), "Test Article Title")
         
-        result = str(entry)
-        self.assertEqual(result, "Test Article Title")
-
-    def test_entry_str_method_empty_title(self):
-        """Test Entry __str__ method with empty title."""
-        entry = Entry.objects.create(
+        # Test with empty title
+        entry_empty = Entry.objects.create(
             feed=self.feed,
-            link="https://example.com/article", 
+            link="https://example.com/article2", 
             original_title=""
         )
-        
-        result = str(entry)
-        self.assertEqual(result, "")
+        self.assertEqual(str(entry_empty), "")
