@@ -7,10 +7,14 @@ from django.core.cache import cache
 import datetime
 import time
 import json
+import warnings
 from urllib import request, parse
 
 from ..models import Feed, Entry, Filter, FilterResult, Tag
 from ..models.agent import Agent, OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
+
+# Suppress RuntimeWarning about model registration during testing
+warnings.filterwarnings("ignore", message="Model.*was already registered", category=RuntimeWarning)
 
 
 class FeedModelTest(TestCase):
