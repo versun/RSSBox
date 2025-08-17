@@ -3,7 +3,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.utils import timezone
 from tagulous.models import TagField
 from utils import text_handler
 import json
@@ -229,13 +228,7 @@ class Filter(models.Model):
                 "filter_translated_title",
                 "filter_translated_content",
             ]
-            # 检查关键词是否变化
-            keyword_changed = False
-            original_keywords = sorted([tag.name for tag in original.keywords.all()])
-            current_keywords = sorted([tag.name for tag in self.keywords.all()])
-            if original_keywords != current_keywords:
-                keyword_changed = True
-
+   
             ai_fields_changed = any(
                 getattr(original, field) != getattr(self, field) for field in ai_fields
             ) and self.filter_method in [self.AI_ONLY, self.BOTH]
