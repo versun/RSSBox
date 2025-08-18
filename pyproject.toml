@@ -53,6 +53,8 @@ omit = [
     "*/migrations/*",
     "config/wsgi.py",
     "config/asgi.py",
+    "scripts/*",
+    "config/settings.py",
 ]
 
 [tool.coverage.report]
