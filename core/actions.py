@@ -13,7 +13,7 @@ from django.conf import settings
 from lxml import etree
 from utils.modelAdmin_utils import get_all_agent_choices, get_ai_agent_choices
 from core.admin import core_admin_site
-from core.models import Feed, Filter, Tag
+from core.models import Filter, Tag
 from utils.task_manager import task_manager
 from .management.commands.update_feeds import update_multiple_feeds
 from core.cache import cache_tag
