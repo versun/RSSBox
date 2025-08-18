@@ -234,7 +234,7 @@ class FeedAdmin(admin.ModelAdmin):
             status = "-"
         return format_html(
             "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
-            status_icon(obj.fetch_status),  # 0
+            status,  # 0
             obj.feed_url,  # 1
             "url",  # 2
             f"/rss/proxy/{obj.slug}",  # 3
@@ -312,7 +312,7 @@ class FeedAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("tags"))
     def show_tags(self, obj):
-        if not obj.tags:
+        if not obj.tags.exists(): # obj.tags 返回一个QuerySet对象，bool(obj.tags) 总是True，因为QuerySet对象总是被认为是True
             return "-"
         tags_html = "<br>".join(
             f"<a href='{reverse('admin:core_tag_change', args=[t.id])}'>#{t.name}</a>"
