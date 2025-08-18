@@ -15,9 +15,7 @@ class ViewsTestCase(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.feed = Feed.objects.create(
-            name="Test Feed", 
-            feed_url="https://example.com/rss.xml", 
-            slug="test-feed"
+            name="Test Feed", feed_url="https://example.com/rss.xml", slug="test-feed"
         )
         self.tag = Tag.objects.create(name="Test Tag", slug="test-tag")
 
@@ -39,16 +37,18 @@ class ViewsTestCase(TestCase):
         setattr(request, "_messages", messages)
         return messages
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_rss')
+    @patch("core.views.cache")
+    @patch("core.views.cache_rss")
     def test_rss_feed_view_found(self, mock_cache_rss, mock_cache):
         """Test the rss view when the feed is found."""
         mock_cache.get.return_value = None  # Cache miss
-        mock_cache_rss.return_value = "<rss><channel><title>Test Feed</title></channel></rss>"
-        
+        mock_cache_rss.return_value = (
+            "<rss><channel><title>Test Feed</title></channel></rss>"
+        )
+
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
         mock_cache_rss.assert_called_once_with(self.feed.slug, "t", "xml")
@@ -59,16 +59,18 @@ class ViewsTestCase(TestCase):
         response = rss(request, "non-existent-slug")
         self.assertEqual(response.status_code, 404)
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_tag')
+    @patch("core.views.cache")
+    @patch("core.views.cache_tag")
     def test_tag_view_found(self, mock_cache_tag, mock_cache):
         """Test the tag view when the tag is found."""
         mock_cache.get.return_value = None  # Cache miss
-        mock_cache_tag.return_value = "<rss><channel><title>Tag Feed</title></channel></rss>"
-        
+        mock_cache_tag.return_value = (
+            "<rss><channel><title>Tag Feed</title></channel></rss>"
+        )
+
         request = self.factory.get(f"/tag/{self.tag.slug}")
         response = tag_view(request, self.tag.slug)
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
         mock_cache_tag.assert_called_once_with(self.tag.slug, "t", "xml")
@@ -139,29 +141,35 @@ class ViewsTestCase(TestCase):
         self.assertEqual(Feed.objects.count(), initial_feed_count)
         self.assertIn("Invalid OPML: Missing body element", [str(m) for m in messages])
 
-    @patch('core.views.feed2json')
-    @patch('core.views.cache')
-    @patch('core.views.cache_rss')
+    @patch("core.views.feed2json")
+    @patch("core.views.cache")
+    @patch("core.views.cache_rss")
     def test_rss_view_json_format(self, mock_cache_rss, mock_cache, mock_feed2json):
         """Test the rss view with format='json'."""
         mock_cache.get.return_value = None  # Cache miss
-        mock_cache_rss.return_value = "<rss><channel><title>Test Feed</title></channel></rss>"
+        mock_cache_rss.return_value = (
+            "<rss><channel><title>Test Feed</title></channel></rss>"
+        )
         mock_feed2json.return_value = {"title": "JSON Feed"}
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug, feed_type="o", format="json")
 
         mock_cache_rss.assert_called_once_with(self.feed.slug, "o", "json")
-        mock_feed2json.assert_called_once_with("<rss><channel><title>Test Feed</title></channel></rss>")
+        mock_feed2json.assert_called_once_with(
+            "<rss><channel><title>Test Feed</title></channel></rss>"
+        )
         self.assertIsInstance(response, JsonResponse)
         self.assertEqual(response.status_code, 200)
         json_content = json.loads(response.content)
         self.assertEqual(json_content["title"], "JSON Feed")
 
-    @patch('core.views.feed2json')
-    @patch('core.views.cache')
-    @patch('core.views.cache_rss')
-    def test_rss_view_json_format_no_feed_data(self, mock_cache_rss, mock_cache, mock_feed2json):
+    @patch("core.views.feed2json")
+    @patch("core.views.cache")
+    @patch("core.views.cache_rss")
+    def test_rss_view_json_format_no_feed_data(
+        self, mock_cache_rss, mock_cache, mock_feed2json
+    ):
         """Test the rss view with format='json' when no feed data is available."""
         mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = None  # No feed data
@@ -175,8 +183,8 @@ class ViewsTestCase(TestCase):
         json_content = json.loads(response.content)
         self.assertEqual(json_content["error"], "No feed data available")
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_rss')
+    @patch("core.views.cache")
+    @patch("core.views.cache_rss")
     def test_rss_view_xml_format_no_feed_data(self, mock_cache_rss, mock_cache):
         """Test the rss view with format='xml' when no feed data is available."""
         mock_cache.get.return_value = None  # Cache miss
@@ -191,13 +199,15 @@ class ViewsTestCase(TestCase):
         response_content = b"".join(response.streaming_content)
         self.assertIn(b"<error>No feed data available</error>", response_content)
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_rss')
+    @patch("core.views.cache")
+    @patch("core.views.cache_rss")
     def test_rss_view_cache_hit(self, mock_cache_rss, mock_cache):
         """Test the rss view when cache hit occurs."""
         cached_content = "<rss><channel><title>Cached Feed</title></channel></rss>"
         mock_cache.get.return_value = cached_content  # Cache hit
-        mock_cache_rss.return_value = "<rss><channel><title>Fresh Feed</title></channel></rss>"
+        mock_cache_rss.return_value = (
+            "<rss><channel><title>Fresh Feed</title></channel></rss>"
+        )
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug)
@@ -209,13 +219,15 @@ class ViewsTestCase(TestCase):
         response_content = b"".join(response.streaming_content)
         self.assertEqual(response_content, cached_content.encode())
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_tag')
+    @patch("core.views.cache")
+    @patch("core.views.cache_tag")
     def test_tag_view_cache_hit(self, mock_cache_tag, mock_cache):
         """Test the tag view when cache hit occurs."""
         cached_content = "<rss><channel><title>Cached Tag Feed</title></channel></rss>"
         mock_cache.get.return_value = cached_content  # Cache hit
-        mock_cache_tag.return_value = "<rss><channel><title>Fresh Tag Feed</title></channel></rss>"
+        mock_cache_tag.return_value = (
+            "<rss><channel><title>Fresh Tag Feed</title></channel></rss>"
+        )
 
         request = self.factory.get(f"/tag/{self.tag.slug}")
         response = tag_view(request, self.tag.slug)
@@ -227,8 +239,8 @@ class ViewsTestCase(TestCase):
         response_content = b"".join(response.streaming_content)
         self.assertEqual(response_content, cached_content.encode())
 
-    @patch('core.views.cache')
-    @patch('core.views.cache_tag')
+    @patch("core.views.cache")
+    @patch("core.views.cache_tag")
     def test_tag_view_exception_handling(self, mock_cache_tag, mock_cache):
         """Test the tag view when an exception occurs."""
         mock_cache.get.return_value = None  # Cache miss
@@ -238,13 +250,16 @@ class ViewsTestCase(TestCase):
         response = tag_view(request, self.tag.slug)
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.content, b"Feed not found, Maybe it's still in progress, Please try again later.")
+        self.assertEqual(
+            response.content,
+            b"Feed not found, Maybe it's still in progress, Please try again later.",
+        )
 
     def test_import_opml_get_request(self):
         """Test the import_opml view with GET request."""
         request = self.factory.get("/fake-url")
         response = import_opml(request)
-        
+
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("admin:core_feed_changelist"))
 
@@ -252,9 +267,9 @@ class ViewsTestCase(TestCase):
         """Test the import_opml view when no file is uploaded."""
         request = self.factory.post("/fake-url", {})
         messages = self._setup_request_with_messages(request)
-        
+
         response = import_opml(request)
-        
+
         self.assertEqual(response.status_code, 302)
         self.assertIn("Please upload a valid OPML file.", [str(m) for m in messages])
 
@@ -263,12 +278,12 @@ class ViewsTestCase(TestCase):
         # Create a mock file that's not InMemoryUploadedFile
         mock_file = MagicMock()
         mock_file.name = "test.txt"
-        
+
         request = self.factory.post("/fake-url", {"opml_file": mock_file})
         messages = self._setup_request_with_messages(request)
-        
+
         response = import_opml(request)
-        
+
         self.assertEqual(response.status_code, 302)
         # The mock file will cause XML parsing error, so we check for that instead
         self.assertTrue(any("XML syntax error:" in str(m) for m in messages))
@@ -300,14 +315,16 @@ class ViewsTestCase(TestCase):
         messages = self._setup_request_with_messages(request)
 
         # Mock Feed.objects.get_or_create to raise an exception
-        with patch('core.views.Feed.objects.get_or_create') as mock_get_or_create:
+        with patch("core.views.Feed.objects.get_or_create") as mock_get_or_create:
             mock_get_or_create.side_effect = Exception("Database error")
-            
+
             initial_feed_count = Feed.objects.count()
             import_opml(request)
 
             self.assertEqual(Feed.objects.count(), initial_feed_count)
-            self.assertTrue(any("Error importing OPML file:" in str(m) for m in messages))
+            self.assertTrue(
+                any("Error importing OPML file:" in str(m) for m in messages)
+            )
 
     def test_import_opml_with_tags(self):
         """Test importing an OPML file with tags."""
@@ -326,12 +343,12 @@ class ViewsTestCase(TestCase):
 
         initial_feed_count = Feed.objects.count()
         initial_tag_count = Tag.objects.count()
-        
+
         import_opml(request)
 
         self.assertEqual(Feed.objects.count(), initial_feed_count + 1)
         self.assertEqual(Tag.objects.count(), initial_tag_count + 1)
-        
+
         new_feed = Feed.objects.get(feed_url="http://example.com/tech.xml")
         new_tag = Tag.objects.get(name="Technology")
         self.assertTrue(new_feed.tags.filter(name="Technology").exists())

@@ -4,15 +4,16 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0031_alter_openaiagent_max_tokens'),
+        ("core", "0031_alter_openaiagent_max_tokens"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='tag',
-            name='name',
-            field=models.CharField(default='Unnamed Tag', max_length=255, verbose_name='Name'),
+            model_name="tag",
+            name="name",
+            field=models.CharField(
+                default="Unnamed Tag", max_length=255, verbose_name="Name"
+            ),
         ),
     ]

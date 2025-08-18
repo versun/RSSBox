@@ -29,17 +29,17 @@ class FetchFeedTests(SimpleTestCase):
         self.assertFalse(result["update"])
         self.assertIsNone(result["feed"])
         self.assertIsNone(result["error"])
-        
+
         # Test bozo feed triggers manual fetch
         dummy = DummyFeed(status=200, bozo=True, entries=[])
         mock_parse.return_value = dummy
         manual_return = {"feed": "manual", "update": True, "error": None}
         mock_manual.return_value = manual_return
-        
+
         result = fetch_feed("https://example.com/rss.xml")
         mock_manual.assert_called_once()
         self.assertEqual(result, manual_return)
-        
+
         # Test normal success
         mock_manual.reset_mock()
         mock_parse.return_value = DummyFeed(status=200, bozo=False)
@@ -55,12 +55,12 @@ class FetchFeedTests(SimpleTestCase):
         """Test fetch_feed exception handling."""
         # Test exception during feedparser.parse
         mock_parse.side_effect = Exception("Network error")
-        
+
         result = fetch_feed("https://example.com/rss.xml")
         self.assertFalse(result["update"])
         self.assertIsNone(result["feed"])
         self.assertEqual(result["error"], "Network error")
-        
+
         # Test with different exception types
         mock_parse.side_effect = ValueError("Invalid URL")
         result = fetch_feed("https://example.com/rss.xml")
@@ -74,12 +74,16 @@ class FetchFeedTests(SimpleTestCase):
         """Test fetch_feed with bozo feed that has exception."""
         # Test bozo feed with exception
         dummy = DummyFeed(status=200, bozo=True, entries=[])
-        dummy.get = lambda key, default=None: "bozo exception" if key == "bozo_exception" else default
+        dummy.get = (
+            lambda key, default=None: "bozo exception"
+            if key == "bozo_exception"
+            else default
+        )
         mock_parse.return_value = dummy
-        
+
         manual_return = {"feed": "manual", "update": True, "error": None}
         mock_manual.return_value = manual_return
-        
+
         result = fetch_feed("https://example.com/rss.xml")
         mock_manual.assert_called_once()
         self.assertEqual(result, manual_return)

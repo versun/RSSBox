@@ -71,7 +71,7 @@ class OpenAIAgentAdmin(AgentAdmin):
         "show_max_tokens",
         "base_url",
     ]
-    readonly_fields = ["show_log","show_max_tokens"]
+    readonly_fields = ["show_log", "show_max_tokens"]
     fieldsets = (
         (
             _("Model Information"),

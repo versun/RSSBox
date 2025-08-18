@@ -154,12 +154,12 @@ class FeedAdminSaveModelTest(TestCase):
 
         form = MagicMock()
         form.changed_data = ["name"]
-        
+
         # Test with empty name
         self.feed.name = ""
         self.admin.save_model(request, self.feed, form, True)
         self.assertEqual(self.feed.name, "Empty")
-        
+
         # Test with None name
         self.feed.name = None
         self.admin.save_model(request, self.feed, form, True)
@@ -181,7 +181,9 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_translation_options_changed(self, mock_submit_task, mock_on_commit):
+    def test_save_model_translation_options_changed(
+        self, mock_submit_task, mock_on_commit
+    ):
         """Test save_model when translation_options field is changed."""
         request = self.factory.post("/")
         request.user = self.user
@@ -202,7 +204,9 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_summary_engine_option_changed(self, mock_submit_task, mock_on_commit):
+    def test_save_model_summary_engine_option_changed(
+        self, mock_submit_task, mock_on_commit
+    ):
         """Test save_model when summary_engine_option field is changed."""
         request = self.factory.post("/")
         request.user = self.user
@@ -245,10 +249,10 @@ class FeedAdminViewTest(TestCase):
         """Test changelist_view with existing extra_context."""
         request = self.factory.get("/")
         request.user = self.user
-        
+
         extra_context = {"existing_key": "existing_value"}
         response = self.admin.changelist_view(request, extra_context)
-        
+
         self.assertIn("import_opml_button", response.context_data)
         self.assertIn("existing_key", response.context_data)
         self.assertEqual(response.context_data["existing_key"], "existing_value")
@@ -256,17 +260,17 @@ class FeedAdminViewTest(TestCase):
     def test_get_urls_includes_custom_urls(self):
         """Test that get_urls includes custom import_opml URL."""
         urls = self.admin.get_urls()
-        url_names = [url.name for url in urls if hasattr(url, 'name')]
-        
+        url_names = [url.name for url in urls if hasattr(url, "name")]
+
         self.assertIn("core_feed_import_opml", url_names)
-        
+
         # Check that the custom URL is properly configured
         import_url = None
         for url in urls:
-            if hasattr(url, 'name') and url.name == "core_feed_import_opml":
+            if hasattr(url, "name") and url.name == "core_feed_import_opml":
                 import_url = url
                 break
-        
+
         self.assertIsNotNone(import_url)
         self.assertIn("import_opml", str(import_url.pattern))
 
@@ -290,21 +294,19 @@ class FeedAdminDisplayMethodsTest(TestCase):
             translate_title=True,
             translate_content=True,
             summary=False,
-            log="Test log content"
+            log="Test log content",
         )
 
     @patch("utils.task_manager.task_manager.submit_task")
     def test_submit_feed_update_task(self, mock_submit_task):
         """Test _submit_feed_update_task method (lines 190-193)."""
         mock_submit_task.return_value = "task-123"
-        
+
         self.admin._submit_feed_update_task(self.feed)
-        
+
         mock_submit_task.assert_called_once()
         args = mock_submit_task.call_args
         self.assertEqual(args[0][0], f"Update Feed: {self.feed.name}")
-
-
 
     def test_simple_update_frequency_cases(self):
         """Test simple_update_frequency for different time intervals."""
@@ -314,9 +316,9 @@ class FeedAdminDisplayMethodsTest(TestCase):
             (30, "30 min"),
             (60, "hourly"),
             (1440, "daily"),
-            (10080, "weekly")
+            (10080, "weekly"),
         ]
-        
+
         for frequency, expected in test_cases:
             with self.subTest(frequency=frequency):
                 self.feed.update_frequency = frequency
@@ -328,13 +330,13 @@ class FeedAdminDisplayMethodsTest(TestCase):
         # Test boundary values
         self.feed.update_frequency = 1
         self.assertEqual(self.admin.simple_update_frequency(self.feed), "5 min")
-        
+
         self.feed.update_frequency = 4
         self.assertEqual(self.admin.simple_update_frequency(self.feed), "5 min")
-        
+
         self.feed.update_frequency = 6
         self.assertEqual(self.admin.simple_update_frequency(self.feed), "15 min")
-        
+
         # Test large values - should return None for values > 10080
         self.feed.update_frequency = 10081
         self.assertIsNone(self.admin.simple_update_frequency(self.feed))
@@ -344,57 +346,57 @@ class FeedAdminDisplayMethodsTest(TestCase):
         result = self.admin.translator(self.feed)
         self.assertEqual(result, self.feed.translator)
 
-    @patch('core.admin.feed_admin.status_icon')
+    @patch("core.admin.feed_admin.status_icon")
     def test_generate_feed_scenarios(self, mock_status_icon):
         """Test generate_feed for different translation scenarios."""
         # Test no translation
         self.feed.translate_title = False
         self.feed.translate_content = False
         self.feed.summary = False
-        
+
         result = self.admin.generate_feed(self.feed)
         self.assertIn("-", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
         self.assertIn(f"/rss/json/{self.feed.slug}", result)
-        
+
         # Test with translation
         mock_status_icon.return_value = "✓"
         self.feed.translate_title = True
         self.feed.translation_status = True
-        
+
         result = self.admin.generate_feed(self.feed)
         mock_status_icon.assert_called_with(self.feed.translation_status)
         self.assertIn("✓", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
 
-    @patch('core.admin.feed_admin.status_icon')
+    @patch("core.admin.feed_admin.status_icon")
     def test_generate_feed_mixed_translation_scenarios(self, mock_status_icon):
         """Test generate_feed with mixed translation settings."""
         mock_status_icon.return_value = "✓"
-        
+
         # Test only title translation
         self.feed.translate_title = True
         self.feed.translate_content = False
         self.feed.summary = False
-        
+
         result = self.admin.generate_feed(self.feed)
         self.assertIn("✓", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
-        
+
         # Test only content translation
         self.feed.translate_title = False
         self.feed.translate_content = True
         self.feed.summary = False
-        
+
         result = self.admin.generate_feed(self.feed)
         self.assertIn("✓", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
-        
+
         # Test only summary
         self.feed.translate_title = False
         self.feed.translate_content = False
         self.feed.summary = True
-        
+
         result = self.admin.generate_feed(self.feed)
         self.assertIn("✓", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
@@ -408,7 +410,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.assertIn(f"/rss/proxy/{self.feed.slug}", result)
         self.assertIn("url", result)
         self.assertIn("proxy", result)
-        
+
         # Test without pk
         new_feed = Feed(name="Unsaved Feed", feed_url="http://test.com/rss")
         result = self.admin.fetch_feed(new_feed)
@@ -416,32 +418,32 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.assertIn("url", result)
         self.assertIn("proxy", result)
 
-    @patch('core.admin.feed_admin.status_icon')
+    @patch("core.admin.feed_admin.status_icon")
     def test_fetch_feed_with_different_statuses(self, mock_status_icon):
         """Test fetch_feed with different fetch_status values."""
         mock_status_icon.return_value = "✓"
-        
+
         # Test with True status
         self.feed.fetch_status = True
         result = self.admin.fetch_feed(self.feed)
         # status_icon is called twice in fetch_feed method
         self.assertEqual(mock_status_icon.call_count, 1)
         self.assertIn("✓", result)
-        
+
         # Reset mock for next test
         mock_status_icon.reset_mock()
         mock_status_icon.return_value = "✗"
-        
+
         # Test with False status
         self.feed.fetch_status = False
         result = self.admin.fetch_feed(self.feed)
         self.assertEqual(mock_status_icon.call_count, 1)
         self.assertIn("✗", result)
-        
+
         # Reset mock for next test
         mock_status_icon.reset_mock()
         mock_status_icon.return_value = "⏳"
-        
+
         # Test with None status
         self.feed.fetch_status = None
         result = self.admin.fetch_feed(self.feed)
@@ -451,7 +453,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
     def test_translation_options_display(self):
         """Test translation_options display method (lines 246-253)."""
         result = self.admin.translation_options(self.feed)
-        
+
         # Should show green circles for enabled options
         self.assertIn("🟢", result)  # translate_title is True
         self.assertIn("⚪", result)  # summary is False
@@ -461,9 +463,9 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.feed.translate_title = True
         self.feed.translate_content = True
         self.feed.summary = True
-        
+
         result = self.admin.translation_options(self.feed)
-        
+
         # Should show green circles for all options
         self.assertIn("🟢", result)
         self.assertNotIn("⚪", result)
@@ -473,9 +475,9 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.feed.translate_title = False
         self.feed.translate_content = False
         self.feed.summary = False
-        
+
         result = self.admin.translation_options(self.feed)
-        
+
         # Should show white circles for all options
         self.assertIn("⚪", result)
         self.assertNotIn("🟢", result)
@@ -483,7 +485,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
     def test_show_log_method(self):
         """Test show_log method (line 265)."""
         result = self.admin.show_log(self.feed)
-        
+
         self.assertIn("<details>", result)
         self.assertIn("Test log content", result)
         self.assertIn("<summary>show</summary>", result)
@@ -492,7 +494,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         """Test show_log method with empty log content."""
         self.feed.log = ""
         result = self.admin.show_log(self.feed)
-        
+
         self.assertIn("<details>", result)
         self.assertIn("<summary>show</summary>", result)
         self.assertIn("</div>", result)
@@ -501,7 +503,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         """Test show_log method with None log content."""
         self.feed.log = None
         result = self.admin.show_log(self.feed)
-        
+
         self.assertIn("<details>", result)
         self.assertIn("<summary>show</summary>", result)
         self.assertIn("</div>", result)
@@ -509,7 +511,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
     def test_fetch_info_method(self):
         """Test fetch_info method (line 279)."""
         result = self.admin.fetch_info(self.feed)
-        
+
         self.assertIn("30 min", result)  # from update_frequency
         self.assertIn(self.feed.last_fetch.strftime("%Y-%m-%d %H:%M:%S"), result)
 
@@ -517,7 +519,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         """Test fetch_info method when last_fetch is None."""
         self.feed.last_fetch = None
         result = self.admin.fetch_info(self.feed)
-        
+
         self.assertIn("30 min", result)  # from update_frequency
         self.assertIn("-", result)  # for None last_fetch
 
@@ -526,9 +528,9 @@ class FeedAdminDisplayMethodsTest(TestCase):
         test_cases = [
             (500, 800, "tokens:500", "characters:800"),
             (2500, 15000, "tokens:2.5K", "characters:15K"),
-            (2500000, 15000000, "tokens:2.5M", "characters:15M")
+            (2500000, 15000000, "tokens:2.5M", "characters:15M"),
         ]
-        
+
         for tokens, chars, expected_tokens, expected_chars in test_cases:
             with self.subTest(tokens=tokens, chars=chars):
                 self.feed.total_tokens = tokens
@@ -545,14 +547,14 @@ class FeedAdminDisplayMethodsTest(TestCase):
         result = self.admin.cost_info(self.feed)
         self.assertIn("tokens:0", result)
         self.assertIn("characters:0", result)
-        
+
         # Test exact boundary values
         self.feed.total_tokens = 1000
         self.feed.total_characters = 1000
         result = self.admin.cost_info(self.feed)
         self.assertIn("tokens:1K", result)
         self.assertIn("characters:1K", result)
-        
+
         # Test values just below boundaries
         self.feed.total_tokens = 999
         self.feed.total_characters = 999
@@ -565,13 +567,14 @@ class FeedAdminDisplayMethodsTest(TestCase):
         # Test no filters
         result = self.admin.show_filters(self.feed)
         self.assertEqual(result, "-")
-        
+
         # Test with filters
         from core.models import Filter
+
         filter1 = Filter.objects.create(name="Test Filter 1")
         filter2 = Filter.objects.create(name="Test Filter 2")
         self.feed.filters.add(filter1, filter2)
-        
+
         result = self.admin.show_filters(self.feed)
         self.assertIn("Test Filter 1", result)
         self.assertIn("Test Filter 2", result)
@@ -580,9 +583,10 @@ class FeedAdminDisplayMethodsTest(TestCase):
     def test_show_filters_single_filter(self):
         """Test show_filters with single filter."""
         from core.models import Filter
+
         filter1 = Filter.objects.create(name="Single Filter")
         self.feed.filters.add(filter1)
-        
+
         result = self.admin.show_filters(self.feed)
         self.assertIn("Single Filter", result)
         self.assertNotIn("<br>", result)  # No line break for single filter
@@ -593,17 +597,18 @@ class FeedAdminDisplayMethodsTest(TestCase):
         feed_without_tags = Feed.objects.create(
             name="Feed Without Tags",
             feed_url="http://example.com/rss",
-            target_language="en"
+            target_language="en",
         )
         result = self.admin.show_tags(feed_without_tags)
         self.assertIn(result, ["", "-"])
-        
+
         # Test with tags
         from core.models import Tag
+
         tag1 = Tag.objects.create(name="Tag1")
         tag2 = Tag.objects.create(name="Tag2")
         self.feed.tags.add(tag1, tag2)
-        
+
         result = self.admin.show_tags(self.feed)
         self.assertIn("#Tag1", result)
         self.assertIn("#Tag2", result)
@@ -612,9 +617,10 @@ class FeedAdminDisplayMethodsTest(TestCase):
     def test_show_tags_single_tag(self):
         """Test show_tags with single tag."""
         from core.models import Tag
+
         tag1 = Tag.objects.create(name="SingleTag")
         self.feed.tags.add(tag1)
-        
+
         result = self.admin.show_tags(self.feed)
         self.assertIn("#SingleTag", result)
         self.assertNotIn("<br>", result)  # No line break for single tag
@@ -625,9 +631,9 @@ class FeedAdminDisplayMethodsTest(TestCase):
         feed_without_tags = Feed.objects.create(
             name="Feed Without Tags",
             feed_url="http://example.com/rss",
-            target_language="en"
+            target_language="en",
         )
-        
+
         result = self.admin.show_tags(feed_without_tags)
         # Empty tags should return "-"
         self.assertEqual(result, "-")
@@ -657,7 +663,7 @@ class FeedAdminErrorHandlingTest(TestCase):
         form.changed_data = ["feed_url"]
 
         # Mock database error during save
-        with patch.object(Feed, 'save', side_effect=DatabaseError("Database error")):
+        with patch.object(Feed, "save", side_effect=DatabaseError("Database error")):
             with self.assertRaises(DatabaseError):
                 self.admin.save_model(request, self.feed, form, True)
 
@@ -666,7 +672,9 @@ class FeedAdminErrorHandlingTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_validation_error_handling(self, mock_submit_task, mock_on_commit):
+    def test_save_model_validation_error_handling(
+        self, mock_submit_task, mock_on_commit
+    ):
         """Test save_model handles validation errors gracefully."""
         request = self.factory.post("/")
         request.user = self.user
@@ -675,7 +683,9 @@ class FeedAdminErrorHandlingTest(TestCase):
         form.changed_data = ["feed_url"]
 
         # Mock validation error during save
-        with patch.object(Feed, 'save', side_effect=ValidationError("Validation error")):
+        with patch.object(
+            Feed, "save", side_effect=ValidationError("Validation error")
+        ):
             with self.assertRaises(ValidationError):
                 self.admin.save_model(request, self.feed, form, True)
 
@@ -687,7 +697,7 @@ class FeedAdminErrorHandlingTest(TestCase):
         """Test _submit_feed_update_task handles task submission errors."""
         # Mock task submission error
         mock_submit_task.side_effect = Exception("Task submission failed")
-        
+
         # Should raise exception since there's no error handling in the method
         with self.assertRaises(Exception):
             self.admin._submit_feed_update_task(self.feed)
@@ -705,65 +715,113 @@ class FeedAdminIntegrationTest(TestCase):
         """Test that FeedAdmin is properly configured."""
         # Test list_display configuration
         expected_list_display = [
-            "name", "fetch_feed", "generate_feed", "translator",
-            "target_language", "translation_options", "show_filters",
-            "fetch_info", "cost_info", "show_tags"
+            "name",
+            "fetch_feed",
+            "generate_feed",
+            "translator",
+            "target_language",
+            "translation_options",
+            "show_filters",
+            "fetch_info",
+            "cost_info",
+            "show_tags",
         ]
         self.assertEqual(self.admin.list_display, expected_list_display)
-        
+
         # Test search_fields configuration
         expected_search_fields = ["name", "feed_url", "slug", "author", "link"]
         self.assertEqual(self.admin.search_fields, expected_search_fields)
-        
+
         # Test list_filter configuration
         expected_list_filters = [
-            "tags", "fetch_status", "translation_status",
-            "translate_title", "translate_content", "summary"
+            "tags",
+            "fetch_status",
+            "translation_status",
+            "translate_title",
+            "translate_content",
+            "summary",
         ]
         self.assertEqual(self.admin.list_filter, expected_list_filters)
-        
+
         # Test readonly_fields configuration
         expected_readonly_fields = [
-            "fetch_feed", "generate_feed", "fetch_status",
-            "translation_status", "total_tokens", "total_characters",
-            "last_fetch", "last_translate", "show_log"
+            "fetch_feed",
+            "generate_feed",
+            "fetch_status",
+            "translation_status",
+            "total_tokens",
+            "total_characters",
+            "last_fetch",
+            "last_translate",
+            "show_log",
         ]
         self.assertEqual(self.admin.readonly_fields, expected_readonly_fields)
-        
+
         # Test autocomplete_fields configuration
         expected_autocomplete_fields = ["filters", "tags"]
         self.assertEqual(self.admin.autocomplete_fields, expected_autocomplete_fields)
-        
+
         # Test actions configuration
         expected_actions = [
-            "feed_force_update", "export_original_feed_as_opml",
-            "export_translated_feed_as_opml", "feed_batch_modify",
-            "clean_translated_content", "clean_ai_summary"
+            "feed_force_update",
+            "export_original_feed_as_opml",
+            "export_translated_feed_as_opml",
+            "feed_batch_modify",
+            "clean_translated_content",
+            "clean_ai_summary",
         ]
-        self.assertEqual([action.__name__ for action in self.admin.actions], expected_actions)
+        self.assertEqual(
+            [action.__name__ for action in self.admin.actions], expected_actions
+        )
 
     def test_fieldsets_configuration(self):
         """Test that fieldsets are properly configured."""
         expected_fieldsets = [
-            ("Feed Information", {"fields": (
-                "feed_url", "name", "max_posts", "simple_update_frequency",
-                "tags", "fetch_article", "show_log"
-            )}),
-            ("Content Processing", {"fields": (
-                "target_language", "translation_options", "translator_option",
-                "summary_engine_option", "summary_detail", "additional_prompt"
-            )}),
-            ("Output Control", {"fields": (
-                "slug", "translation_display", "filters"
-            )}),
-            ("Status", {"fields": (
-                "fetch_status", "translation_status", "total_tokens",
-                "total_characters", "last_fetch", "last_translate"
-            )})
+            (
+                "Feed Information",
+                {
+                    "fields": (
+                        "feed_url",
+                        "name",
+                        "max_posts",
+                        "simple_update_frequency",
+                        "tags",
+                        "fetch_article",
+                        "show_log",
+                    )
+                },
+            ),
+            (
+                "Content Processing",
+                {
+                    "fields": (
+                        "target_language",
+                        "translation_options",
+                        "translator_option",
+                        "summary_engine_option",
+                        "summary_detail",
+                        "additional_prompt",
+                    )
+                },
+            ),
+            ("Output Control", {"fields": ("slug", "translation_display", "filters")}),
+            (
+                "Status",
+                {
+                    "fields": (
+                        "fetch_status",
+                        "translation_status",
+                        "total_tokens",
+                        "total_characters",
+                        "last_fetch",
+                        "last_translate",
+                    )
+                },
+            ),
         ]
-        
+
         self.assertEqual(len(self.admin.fieldsets), len(expected_fieldsets))
-        
+
         for i, (expected_name, expected_config) in enumerate(expected_fieldsets):
             actual_name, actual_config = self.admin.fieldsets[i]
             self.assertEqual(actual_name, expected_name)
@@ -772,13 +830,13 @@ class FeedAdminIntegrationTest(TestCase):
     def test_change_form_template(self):
         """Test that change_form_template is properly set."""
         self.assertEqual(
-            self.admin.change_form_template,
-            "admin/change_form_with_tabs.html"
+            self.admin.change_form_template, "admin/change_form_with_tabs.html"
         )
 
     def test_form_class(self):
         """Test that form class is properly set."""
         from core.forms import FeedForm
+
         self.assertEqual(self.admin.form, FeedForm)
 
     def test_list_per_page(self):

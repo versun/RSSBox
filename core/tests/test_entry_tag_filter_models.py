@@ -13,7 +13,7 @@ class EntryModelTest(TestCase):
     def test_entry_creation_and_relationships(self):
         """Test Entry creation, fields, and Feed relationship."""
         now = timezone.now()
-        
+
         # Test basic entry creation
         entry = Entry.objects.create(
             feed=self.feed,
@@ -22,14 +22,14 @@ class EntryModelTest(TestCase):
             pubdate=now,
             author="Test Author",
         )
-        
+
         self.assertEqual(entry.feed, self.feed)
         self.assertEqual(entry.link, "https://example.com/entry1")
         self.assertEqual(entry.original_title, "Test Entry Title")
         self.assertEqual(str(entry), "Test Entry Title")
         self.assertEqual(entry.pubdate, now)
         self.assertEqual(entry.author, "Test Author")
-        
+
         # Test feed relationship
         self.assertIn(entry, self.feed.entries.all())
         self.assertEqual(self.feed.entries.count(), 1)
@@ -39,7 +39,7 @@ class EntryModelTest(TestCase):
         now = timezone.now()
         enclosure_xml = '<enclosure url="https://example.com/podcast.mp3" type="audio/mpeg" length="12345678"/>'
         long_content = "A" * 10000
-        
+
         entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/entry2",
@@ -55,18 +55,18 @@ class EntryModelTest(TestCase):
             original_summary=long_content,
             ai_summary=long_content,
         )
-        
+
         # Test all fields
         self.assertEqual(entry.guid, "unique-guid-12345")
         self.assertEqual(entry.translated_title, "Translated Title")
         self.assertEqual(entry.enclosures_xml, enclosure_xml)
         self.assertEqual(len(entry.original_content), 10000)
         self.assertEqual(len(entry.translated_content), 10000)
-        
+
         # Test GUID indexing
         found_entry = Entry.objects.get(guid="unique-guid-12345")
         self.assertEqual(found_entry, entry)
-        
+
         # Test model meta
         meta = Entry._meta
         self.assertEqual(str(meta.verbose_name), "Entry")
@@ -97,11 +97,11 @@ class TagModelTest(TestCase):
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNotNone(tag.slug)
         self.assertEqual(str(tag), tag.slug)
-        
+
         # Test slug generation and regeneration
         slug_tag = Tag.objects.create(name="Test Tag Name")
         self.assertEqual(slug_tag.slug, "test-tag-name")
-        
+
         original_slug = slug_tag.slug
         slug_tag.name = "New Name"
         slug_tag.save()
@@ -117,7 +117,7 @@ class TagModelTest(TestCase):
         # Test relationships
         self.assertIn(self.filter, tag.filters.all())
         self.assertIn(tag, self.filter.tags.all())
-        
+
         # Test defaults
         self.assertEqual(tag.total_tokens, 0)
         self.assertIsNone(tag.last_updated)
@@ -149,7 +149,7 @@ class FilterModelTest(TestCase):
         self.assertEqual(filter_obj.name, "Test Filter")
         self.assertEqual(str(filter_obj), "Test Filter")
         self.assertEqual(filter_obj.operation, Filter.EXCLUDE)
-        
+
         retrieved_keywords = [tag.name for tag in filter_obj.keywords.all()]
         self.assertCountEqual(retrieved_keywords, ["test", "python"])
 

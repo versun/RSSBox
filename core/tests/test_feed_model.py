@@ -11,7 +11,7 @@ class FeedModelTest(TestCase):
         # Test minimal data and defaults
         feed_url = "https://example.com/rss.xml"
         feed = Feed.objects.create(feed_url=feed_url)
-        
+
         self.assertEqual(feed.feed_url, feed_url)
         self.assertEqual(str(feed), feed_url)
         self.assertEqual(feed.update_frequency, 30)
@@ -24,7 +24,7 @@ class FeedModelTest(TestCase):
         self.assertEqual(feed.total_tokens, 0)
         self.assertIsNotNone(feed.slug)
         self.assertEqual(len(feed.slug), 32)
-        
+
         # Test comprehensive data
         now = timezone.now()
         full_feed = Feed.objects.create(
@@ -45,7 +45,7 @@ class FeedModelTest(TestCase):
             summary_detail=0.5,
             additional_prompt="Test prompt",
         )
-        
+
         self.assertEqual(full_feed.name, "Comprehensive Test Feed")
         self.assertEqual(full_feed.author, "Test Author")
         self.assertEqual(full_feed.pubdate, now)
@@ -63,9 +63,7 @@ class FeedModelTest(TestCase):
     def test_feed_behavior_and_validation(self):
         """Test Feed update frequency, log truncation, and validation."""
         # Test update frequency thresholds
-        test_cases = [
-            (3, 5), (7, 15), (25, 30), (45, 60), (500, 1440), (5000, 10080)
-        ]
+        test_cases = [(3, 5), (7, 15), (25, 30), (45, 60), (500, 1440), (5000, 10080)]
         for input_freq, expected_freq in test_cases:
             feed = Feed.objects.create(
                 feed_url=f"https://example.com/feed{input_freq}.xml",
@@ -94,7 +92,8 @@ class FeedModelTest(TestCase):
         )
         with self.assertRaises(IntegrityError):
             Feed.objects.create(
-                feed_url="https://example.com/unique-test.xml", target_language="zh-hans"
+                feed_url="https://example.com/unique-test.xml",
+                target_language="zh-hans",
             )
 
     def test_feed_generic_foreign_key_cleanup(self):
@@ -128,7 +127,7 @@ class FeedModelTest(TestCase):
         Entry.objects.create(
             feed=feed,
             original_title="This is a test entry",
-            link="http://example.com/entry"
+            link="http://example.com/entry",
         )
         result = feed.filtered_entries
         self.assertIsNotNone(result)
@@ -139,13 +138,13 @@ class FeedModelTest(TestCase):
             feed_url="https://example.com/choices-test.xml", summary_detail=0.5
         )
         self.assertEqual(feed.summary_detail, 0.5)
-        
+
         # Test boundary values
         for value in [0.0, 1.0]:
             feed.summary_detail = value
             feed.save()
             self.assertEqual(feed.summary_detail, value)
-        
+
         # Test translation display choices
         choices = Feed.TRANSLATION_DISPLAY_CHOICES
         expected_choices = [

@@ -31,26 +31,28 @@ class ActionsTestCase(TestCase):
             original_title="Title 1",
             translated_title="Translated Title 1",
             translated_content="Translated Content 1",
-            ai_summary="AI summary"
+            ai_summary="AI summary",
         )
         self.entry2 = Entry.objects.create(
             feed=self.feed,
-            original_title="Title 2", 
+            original_title="Title 2",
             translated_title="Translated Title 2",
             translated_content="Translated Content 2",
         )
         self.modeladmin = ModelAdmin(Feed, None)
 
-    def _get_request_with_messages(self, method='GET', data=None):
+    def _get_request_with_messages(self, method="GET", data=None):
         """Helper to create request with message framework"""
-        if method == 'GET':
+        if method == "GET":
             request = self.factory.get("/")
         else:
             request = self.factory.post("/", data or {})
         setattr(request, "session", "session")
         setattr(request, "_messages", FallbackStorage(request))
         # 添加用户属性以避免认证错误
-        setattr(request, "user", type('User', (), {'is_active': True, 'is_staff': True})())
+        setattr(
+            request, "user", type("User", (), {"is_active": True, "is_staff": True})()
+        )
         return request
 
     def test_clean_translated_content_action(self):
@@ -134,7 +136,7 @@ class ActionsTestCase(TestCase):
     def test_feed_batch_modify_boolean_fields(self):
         """Test batch modify for boolean fields."""
         post_data = {"apply": "Apply", "translate_title": "True", "summary": "False"}
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
@@ -156,7 +158,7 @@ class ActionsTestCase(TestCase):
             "tags": "Change",
             "tags_value": [str(tag.id)],
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
@@ -166,7 +168,7 @@ class ActionsTestCase(TestCase):
         self.assertEqual(self.feed.update_frequency, 60)
         self.assertIn(tag, self.feed.tags.all())
 
-    @patch('core.models.filter.Filter.clear_ai_filter_cache_results')
+    @patch("core.models.filter.Filter.clear_ai_filter_cache_results")
     def test_clean_filter_results_action(self, mock_clear_cache):
         """Test cleaning filter results."""
         request = self._get_request_with_messages()
@@ -187,29 +189,44 @@ class ActionsTestCase(TestCase):
         queryset = Feed.objects.filter(id=self.feed.id)
 
         # Test original export
-        response = export_original_feed_as_opml(self.modeladmin, self.factory.get("/"), queryset)
+        response = export_original_feed_as_opml(
+            self.modeladmin, self.factory.get("/"), queryset
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml")
-        self.assertIn("original_feeds_from_rsstranslator.opml", response["Content-Disposition"])
-        
+        self.assertIn(
+            "original_feeds_from_rsstranslator.opml", response["Content-Disposition"]
+        )
+
         root = etree.fromstring(response.content)
         self.assertEqual(root.tag, "opml")
-        self.assertEqual(root.find("head/title").text, "Original Feeds | RSS Translator")
-        
-        # Test translated export with settings patch
-        with patch('core.actions.settings.SITE_URL', 'https://test.example.com'):
-            response = export_translated_feed_as_opml(self.modeladmin, self.factory.get("/"), queryset)
-            self.assertEqual(response.status_code, 200)
-            self.assertIn("translated_feeds_from_rsstranslator.opml", response["Content-Disposition"])
-            
-            root = etree.fromstring(response.content)
-            self.assertEqual(root.find("head/title").text, "Translated Feeds | RSS Translator")
+        self.assertEqual(
+            root.find("head/title").text, "Original Feeds | RSS Translator"
+        )
 
-    @patch('core.actions.reverse')
+        # Test translated export with settings patch
+        with patch("core.actions.settings.SITE_URL", "https://test.example.com"):
+            response = export_translated_feed_as_opml(
+                self.modeladmin, self.factory.get("/"), queryset
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(
+                "translated_feeds_from_rsstranslator.opml",
+                response["Content-Disposition"],
+            )
+
+            root = etree.fromstring(response.content)
+            self.assertEqual(
+                root.find("head/title").text, "Translated Feeds | RSS Translator"
+            )
+
+    @patch("core.actions.reverse")
     def test_create_digest_action(self, mock_reverse):
         """Test create digest action."""
         mock_reverse.return_value = "/admin/core/digest/add/"
-        feed2 = Feed.objects.create(name="Feed 2", feed_url="https://example2.com/rss.xml")
+        feed2 = Feed.objects.create(
+            name="Feed 2", feed_url="https://example2.com/rss.xml"
+        )
         queryset = Feed.objects.filter(id__in=[self.feed.id, feed2.id])
 
         response = create_digest(self.modeladmin, self.factory.get("/"), queryset)
@@ -223,22 +240,26 @@ class ActionsTestCase(TestCase):
         """Test OPML generation edge cases and error handling."""
         # Test multiple feeds in same category
         tag = Tag.objects.create(name="Tech")
-        feed2 = Feed.objects.create(name="Feed 2", feed_url="https://example2.com/rss.xml")
+        feed2 = Feed.objects.create(
+            name="Feed 2", feed_url="https://example2.com/rss.xml"
+        )
         self.feed.tags.add(tag)
         feed2.tags.add(tag)
-        
+
         queryset = Feed.objects.filter(id__in=[self.feed.id, feed2.id])
         response = _generate_opml_feed("Test", queryset, lambda f: f.feed_url, "test")
-        
+
         self.assertEqual(response.status_code, 200)
         root = etree.fromstring(response.content)
         category_outline = root.find('body/outline[@title="Tech"]')
         self.assertEqual(len(category_outline.findall("outline")), 2)
 
         # Test exception handling
-        with patch('core.actions.etree.Element', side_effect=Exception("Test error")):
-            with patch('core.actions.logger.error') as mock_logger:
-                response = _generate_opml_feed("Test", queryset, lambda f: f.feed_url, "test")
+        with patch("core.actions.etree.Element", side_effect=Exception("Test error")):
+            with patch("core.actions.logger.error") as mock_logger:
+                response = _generate_opml_feed(
+                    "Test", queryset, lambda f: f.feed_url, "test"
+                )
                 self.assertEqual(response.status_code, 500)
                 mock_logger.assert_called_once()
 
@@ -248,14 +269,14 @@ class ActionsTestCase(TestCase):
         post_data = {
             "apply": "Apply",
             "translate_title": "False",
-            "translate_content": "True", 
-            "summary": "False"
+            "translate_content": "True",
+            "summary": "False",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertFalse(self.feed.translate_title)
@@ -268,12 +289,12 @@ class ActionsTestCase(TestCase):
             "translator": "Change",
             "translator_value": "1:5",
             "summarizer": "Change",
-            "summarizer_value": "2:7"
+            "summarizer_value": "2:7",
         }
-        request = self._get_request_with_messages('POST', post_data)
-        
+        request = self._get_request_with_messages("POST", post_data)
+
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.translator_content_type_id, 1)
@@ -287,12 +308,12 @@ class ActionsTestCase(TestCase):
         post_data = {
             "apply": "Apply",
             "filter": "Change",
-            "filter_value": [str(filter1.id), str(filter2.id)]
+            "filter_value": [str(filter1.id), str(filter2.id)],
         }
-        request = self._get_request_with_messages('POST', post_data)
-        
+        request = self._get_request_with_messages("POST", post_data)
+
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         feed_filters = list(self.feed.filters.all())
@@ -302,12 +323,14 @@ class ActionsTestCase(TestCase):
     @patch("core.actions.get_all_agent_choices", return_value=[])
     @patch("core.actions.get_ai_agent_choices", return_value=[])
     @patch("core.actions.core_admin_site.each_context", return_value={})
-    def test_feed_batch_modify_form_render(self, mock_context, mock_ai_agents, mock_all_agents):
+    def test_feed_batch_modify_form_render(
+        self, mock_context, mock_ai_agents, mock_all_agents
+    ):
         """Test batch modify form rendering."""
         Tag.objects.create(name="Test Tag")
         Filter.objects.create(name="Test Filter")
-        
-        request = self._get_request_with_messages('GET')
+
+        request = self._get_request_with_messages("GET")
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
@@ -323,18 +346,18 @@ class ActionsTestCase(TestCase):
         self.feed.translate_content = False
         self.feed.summary = True
         self.feed.save()
-        
+
         post_data = {
             "apply": "Apply",
             "translate_title": "Keep",
-            "translate_content": "Keep", 
-            "summary": "Keep"
+            "translate_content": "Keep",
+            "summary": "Keep",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         # 字段应该保持原值不变
@@ -349,13 +372,13 @@ class ActionsTestCase(TestCase):
             "target_language": "Change",
             "target_language_value": "zh-CN",
             "additional_prompt": "Change",
-            "additional_prompt_value": "Custom prompt"
+            "additional_prompt_value": "Custom prompt",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.target_language, "zh-CN")
@@ -368,13 +391,13 @@ class ActionsTestCase(TestCase):
             "tags": "Change",
             "tags_value": [],  # 空列表
             "filter": "Change",
-            "filter_value": []  # 空列表
+            "filter_value": [],  # 空列表
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         # 空值不应该影响现有数据
@@ -390,13 +413,13 @@ class ActionsTestCase(TestCase):
             "max_posts": "Change",
             "max_posts_value": "100",
             "summary_detail": "Change",
-            "summary_detail_value": "0.8"
+            "summary_detail_value": "0.8",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.update_frequency, 30)
@@ -408,13 +431,13 @@ class ActionsTestCase(TestCase):
         post_data = {
             "apply": "Apply",
             "translation_display": "Change",
-            "translation_display_value": "2"
+            "translation_display_value": "2",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.translation_display, 2)
@@ -426,13 +449,13 @@ class ActionsTestCase(TestCase):
             "apply": "Apply",
             "translate_title": "True",
             "translate_content": "Keep",
-            "summary": "False"
+            "summary": "False",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
         self.assertTrue(self.feed.translate_title)
@@ -444,16 +467,16 @@ class ActionsTestCase(TestCase):
         # 设置初始值
         self.feed.translate_title = False
         self.feed.save()
-        
+
         post_data = {
             "translate_title": "True",  # 没有 "apply" 键
-            "translate_title_value": "True"
+            "translate_title_value": "True",
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         # 应该显示表单而不是处理数据
         self.assertEqual(response.status_code, 200)
         self.feed.refresh_from_db()
@@ -463,11 +486,11 @@ class ActionsTestCase(TestCase):
     def test_feed_batch_modify_empty_queryset(self):
         """Test batch modify with empty queryset."""
         post_data = {"apply": "Apply"}
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         empty_queryset = Feed.objects.none()
 
         response = feed_batch_modify(self.modeladmin, request, empty_queryset)
-        
+
         # 应该正常处理空查询集
         self.assertEqual(response.status_code, 302)
 
@@ -478,7 +501,7 @@ class ActionsTestCase(TestCase):
             "update_frequency": "Change",
             "update_frequency_value": "invalid_number",  # 无效数字
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         # 应该能够处理无效值而不崩溃
@@ -494,7 +517,7 @@ class ActionsTestCase(TestCase):
         """Test multiple operations on a single feed in one batch."""
         tag = Tag.objects.create(name="Test Tag")
         filter_obj = Filter.objects.create(name="Test Filter")
-        
+
         post_data = {
             "apply": "Apply",
             "translate_title": "True",
@@ -505,16 +528,16 @@ class ActionsTestCase(TestCase):
             "tags": "Change",
             "tags_value": [str(tag.id)],
             "filter": "Change",
-            "filter_value": [str(filter_obj.id)]
+            "filter_value": [str(filter_obj.id)],
         }
-        request = self._get_request_with_messages('POST', post_data)
+        request = self._get_request_with_messages("POST", post_data)
         queryset = Feed.objects.filter(id=self.feed.id)
 
         response = feed_batch_modify(self.modeladmin, request, queryset)
-        
+
         self.assertEqual(response.status_code, 302)
         self.feed.refresh_from_db()
-        
+
         # 验证所有字段都被正确更新
         self.assertTrue(self.feed.translate_title)
         self.assertFalse(self.feed.translate_content)

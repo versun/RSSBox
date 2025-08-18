@@ -187,7 +187,9 @@ class TextHandlerChunkingTests(SimpleTestCase):
     def test_split_large_sentence_recursive_splitting(self):
         """Test split_large_sentence recursive splitting behavior."""
         sentence = "Very long sentence that needs multiple levels of splitting"
-        result = split_large_sentence(sentence, max_tokens=2, delimiters=[",", " ", "e"])
+        result = split_large_sentence(
+            sentence, max_tokens=2, delimiters=[",", " ", "e"]
+        )
         self.assertGreaterEqual(len(result), 1)
         for chunk in result:
             self.assertLessEqual(get_token_count(chunk), 2)
@@ -250,7 +252,9 @@ class TextHandlerChunkingTests(SimpleTestCase):
     def test_chunk_on_delimiter_unicode_delimiters(self):
         """Test chunk_on_delimiter with unicode delimiters."""
         text = "第一句。第二句！第三句？"
-        result = chunk_on_delimiter(text, max_tokens=5, delimiter="。", fallback_delimiters=["！", "？"])
+        result = chunk_on_delimiter(
+            text, max_tokens=5, delimiter="。", fallback_delimiters=["！", "？"]
+        )
         self.assertGreaterEqual(len(result), 1)
 
     @patch("utils.text_handler.get_token_count", _token_per_char.__func__)
@@ -362,7 +366,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
         script_tag = soup.find("script")
         normal_p = soup.find("p")
         katex_span = soup.find("span", class_="katex")
-        
+
         self.assertFalse(should_skip(script_tag))
         self.assertFalse(should_skip(normal_p))
         self.assertFalse(should_skip(katex_span))
@@ -398,7 +402,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
 
     def test_should_skip_element_matching_url_pattern(self):
         """Test should_skip with element matching URL pattern (line 271)."""
-        html = '<span>https://example.com</span>'
+        html = "<span>https://example.com</span>"
         soup = BeautifulSoup(html, "html.parser")
         span_tag = soup.find("span")
         result = should_skip(span_tag)
@@ -406,7 +410,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
 
     def test_should_skip_element_matching_email_pattern(self):
         """Test should_skip with element matching email pattern (line 271)."""
-        html = '<span>test@example.com</span>'
+        html = "<span>test@example.com</span>"
         soup = BeautifulSoup(html, "html.parser")
         span_tag = soup.find("span")
         result = should_skip(span_tag)
@@ -414,7 +418,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
 
     def test_should_skip_element_matching_number_pattern(self):
         """Test should_skip with element matching number pattern (line 271)."""
-        html = '<span>12345</span>'
+        html = "<span>12345</span>"
         soup = BeautifulSoup(html, "html.parser")
         span_tag = soup.find("span")
         result = should_skip(span_tag)
@@ -422,7 +426,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
 
     def test_should_skip_element_with_symbols_pattern(self):
         """Test should_skip with element matching symbols pattern (line 271)."""
-        html = '<span>!@#$%</span>'
+        html = "<span>!@#$%</span>"
         soup = BeautifulSoup(html, "html.parser")
         span_tag = soup.find("span")
         result = should_skip(span_tag)
@@ -430,7 +434,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
 
     def test_should_skip_normal_element(self):
         """Test should_skip with normal element that should not be skipped."""
-        html = '<p>Normal text content</p>'
+        html = "<p>Normal text content</p>"
         soup = BeautifulSoup(html, "html.parser")
         p_tag = soup.find("p")
         result = should_skip(p_tag)
@@ -441,7 +445,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
         html = "<p><strong>Bold</strong> and <em>italic</em></p>"
         soup = BeautifulSoup(html, "html.parser")
         result = unwrap_tags(soup)
-        
+
         self.assertNotIn("strong", result)
         self.assertNotIn("em", result)
         self.assertIn("Bold", result)
@@ -452,7 +456,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
             "<div><p>paragraph</p><span>span text</span></div>", "html.parser"
         )
         unwrap_tags(soup)
-        
+
         self.assertIsNotNone(soup.find("p"))
         self.assertIsNone(soup.find("span"))
 
@@ -462,7 +466,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
             "<div><span>text</span><em>emphasis</em></div>", "html.parser"
         )
         unwrap_tags(soup)
-        
+
         self.assertIsNone(soup.find("span"))
         self.assertIsNone(soup.find("em"))
         self.assertIn("text", soup.get_text())
@@ -487,7 +491,7 @@ class TextHandlerHTMLTests(SimpleTestCase):
             "<div><span><strong><em>Nested</em></strong></span></div>", "html.parser"
         )
         unwrap_tags(soup)
-        
+
         # All unwrappable tags should be removed
         self.assertIsNone(soup.find("span"))
         self.assertIsNone(soup.find("strong"))
@@ -497,10 +501,11 @@ class TextHandlerHTMLTests(SimpleTestCase):
     def test_unwrap_tags_mixed_content(self):
         """Test unwrap_tags with mixed content (unwrappable and regular tags)."""
         soup = BeautifulSoup(
-            "<div><p>Paragraph</p><span>Span</span><h1>Heading</h1></div>", "html.parser"
+            "<div><p>Paragraph</p><span>Span</span><h1>Heading</h1></div>",
+            "html.parser",
         )
         unwrap_tags(soup)
-        
+
         # Unwrappable tags should be removed
         self.assertIsNone(soup.find("span"))
         # Regular tags should remain
@@ -516,10 +521,8 @@ class TextHandlerTranslationTests(SimpleTestCase):
         """Test set_translation_display with all display modes."""
         original = "原文"
         translation = "翻译"
-        
-        self.assertEqual(
-            set_translation_display(original, translation, 0), translation
-        )
+
+        self.assertEqual(set_translation_display(original, translation, 0), translation)
         self.assertEqual(
             set_translation_display(original, translation, 1),
             f"{translation} || {original}",
@@ -554,15 +557,15 @@ class TextHandlerTranslationTests(SimpleTestCase):
         # Empty translation
         result = set_translation_display("Original", "", 1)
         self.assertEqual(result, " || Original")
-        
+
         # Empty original
         result = set_translation_display("", "Translation", 0)
         self.assertEqual(result, "Translation")
-        
+
         # Both empty
         result = set_translation_display("", "", 2)
         self.assertEqual(result, " || ")
-        
+
         # Invalid mode
         result = set_translation_display("Original", "Translation", 99)
         self.assertEqual(result, "")
@@ -571,7 +574,7 @@ class TextHandlerTranslationTests(SimpleTestCase):
         """Test set_translation_display with special characters."""
         original = "原文：Hello & World"
         translation = "Translation: Hello & World"
-        
+
         result = set_translation_display(original, translation, 1)
         self.assertEqual(result, f"{translation} || {original}")
 
@@ -579,7 +582,7 @@ class TextHandlerTranslationTests(SimpleTestCase):
         """Test set_translation_display with unicode characters."""
         original = "中文原文"
         translation = "English Translation"
-        
+
         result = set_translation_display(original, translation, 2)
         self.assertEqual(result, f"{original} || {translation}")
 
@@ -587,7 +590,7 @@ class TextHandlerTranslationTests(SimpleTestCase):
         """Test set_translation_display with numbers."""
         original = "12345"
         translation = "Five"
-        
+
         result = set_translation_display(original, translation, 1)
         self.assertEqual(result, f"{translation} || {original}")
 
@@ -605,12 +608,12 @@ class TaskManagerTests(TestCase):
         tm = TaskManager(max_workers=1)
         fut = tm.submit_task("noop", lambda: None)
         fut.result(timeout=2)
-        
+
         task_id = next(iter(tm.list_tasks().keys()))
         tm.update_progress(task_id, 50)
-        
+
         self.assertEqual(tm.get_task_status(task_id)["progress"], 50)
-        
+
         # Test filtering
         completed = tm.list_tasks(filter_status="completed")
         self.assertIn(task_id, completed)

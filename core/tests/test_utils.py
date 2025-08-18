@@ -29,10 +29,10 @@ class TextHandlerTests(SimpleTestCase):
     def test_chunk_on_delimiter(self):
         text = "Sentence one. Sentence two. Sentence three."
         chunks = chunk_on_delimiter(text, max_tokens=15, delimiter=".")
-        
+
         # 验证所有块都不超过最大token数
         self.assertTrue(all(len(c) <= 15 for c in chunks))
-        
+
         # 验证重建的文本包含原始内容
         rebuilt = " ".join(c.strip() for c in chunks)
         self.assertIn("Sentence one", rebuilt)
@@ -42,7 +42,7 @@ class TextHandlerTests(SimpleTestCase):
     def test_adaptive_chunking_target_chunks(self):
         long_text = "Lorem ipsum dolor sit amet, " * 20
         chunks = adaptive_chunking(long_text, target_chunks=4)
-        
+
         # 验证块数量在合理范围内
         self.assertGreaterEqual(len(chunks), 1)
         self.assertLessEqual(len(chunks), 8)
@@ -58,14 +58,14 @@ class TaskManagerTests(SimpleTestCase):
 
         tm = TaskManager(max_workers=2, restart_threshold=10)
         future = tm.submit_task("add", add, 1, 2)
-        
+
         # 验证任务执行结果
         self.assertEqual(future.result(timeout=5), 3)
-        
+
         # 验证任务状态
         tasks = tm.list_tasks()
         self.assertEqual(len(tasks), 1)
-        
+
         task_id, info = next(iter(tasks.items()))
         self.assertEqual(info["status"], "completed")
         self.assertEqual(info["result"], 3)
@@ -73,10 +73,10 @@ class TaskManagerTests(SimpleTestCase):
 
     def test_restart_threshold(self):
         tm = TaskManager(max_workers=1, restart_threshold=3)
-        
+
         # 执行4个任务触发重启阈值
         for _ in range(4):
             tm.submit_task("noop", lambda: None).result(timeout=2)
-        
+
         # 验证重启后任务计数重置
         self.assertLessEqual(tm.tasks_executed_since_restart, 1)

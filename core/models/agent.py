@@ -88,9 +88,10 @@ class OpenAIAgent(Agent):
         help_text=_("Maximum requests per minute (0 = no limit)"),
     )
     EXTRA_HEADERS = {
-                        "HTTP-Referer": "https://www.rsstranslator.com",
-                        "X-Title": "RSS Translator",
-                    }
+        "HTTP-Referer": "https://www.rsstranslator.com",
+        "X-Title": "RSS Translator",
+    }
+
     class Meta:
         verbose_name = "OpenAI"
         verbose_name_plural = "OpenAI"
@@ -116,7 +117,7 @@ class OpenAIAgent(Agent):
                         },
                         {"role": "user", "content": "1"},
                     ],
-                    #max_tokens=50,
+                    # max_tokens=50,
                     max_completion_tokens=50,
                 )
                 # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
@@ -168,7 +169,7 @@ class OpenAIAgent(Agent):
                         },
                         {"role": "user", "content": "1"},
                     ],
-                    #max_tokens=mid,
+                    # max_tokens=mid,
                     max_completion_tokens=mid,
                     temperature=0,  # 确保结果一致性
                     stop=[",", "\n", " ", ".", "1"],
@@ -318,7 +319,7 @@ class OpenAIAgent(Agent):
                 top_p=self.top_p,
                 frequency_penalty=self.frequency_penalty,
                 presence_penalty=self.presence_penalty,
-                #max_tokens=output_token_limit,
+                # max_tokens=output_token_limit,
                 max_completion_tokens=output_token_limit,
                 reasoning_effort="minimal",  # 关闭深度思考
             )

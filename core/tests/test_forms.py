@@ -30,13 +30,13 @@ class FeedFormTest(TestCase):
             summarizer_content_type=self.ct,
             summarizer_object_id=self.agent.id,
         )
-        
+
         form = FeedForm(instance=feed)
         assert form.fields["translator_option"].initial == self.agent_value
         assert form.fields["summary_engine_option"].initial == self.agent_value
         assert form.fields["simple_update_frequency"].initial == 15
         assert set(form.fields["translation_options"].initial) == {"title", "summary"}
-        
+
         # Test save processes custom fields
         form_data = {
             "update_frequency": 60,
@@ -51,11 +51,11 @@ class FeedFormTest(TestCase):
             "summary_engine_option": self.agent_value,
             "target_language": "English",
         }
-        
+
         form = FeedForm(data=form_data)
         assert form.is_valid(), form.errors
         saved_feed = form.save()
-        
+
         assert saved_feed.update_frequency == 60
         assert saved_feed.translate_title is True
         assert saved_feed.translate_content is True

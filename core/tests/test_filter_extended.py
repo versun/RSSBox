@@ -30,45 +30,48 @@ class FilterExtendedTestCase(TestCase):
             translated_content="<p>JavaScript基础知识</p>",
         )
 
-    @patch('core.models.filter.FilterResult.objects.filter')
+    @patch("core.models.filter.FilterResult.objects.filter")
     def test_filter_save_keyword_changed(self, mock_filter_result):
         """Test Filter save method when keywords change (line 237)."""
         # Create filter with initial keywords
         filter_obj = Filter.objects.create(
-            name="Test Filter",
-            filter_method=Filter.KEYWORD_ONLY
+            name="Test Filter", filter_method=Filter.KEYWORD_ONLY
         )
         filter_obj.keywords = "python, programming"
         filter_obj.save()
-        
+
         # Mock the FilterResult queryset to avoid actual cache clearing
         mock_filter_result.return_value.delete.return_value = None
-        
+
         # Change keywords to trigger line 237
         filter_obj.keywords = "javascript, guide"
         filter_obj.save()  # This should trigger keyword_changed = True on line 237
-        
+
         # If we get here without errors, the keyword change logic was executed
         self.assertTrue(True)  # Test passes if no exception is raised
 
     def test_apply_keywords_filter_no_keywords_scenarios(self):
         """Test apply_keywords_filter when no keywords are set for different operations."""
         queryset = Entry.objects.all()
-        
+
         # Test INCLUDE operation with no keywords
-        filter_include = Filter.objects.create(name="No Keywords Include", operation=Filter.INCLUDE)
+        filter_include = Filter.objects.create(
+            name="No Keywords Include", operation=Filter.INCLUDE
+        )
         result = filter_include.apply_keywords_filter(queryset)
         self.assertEqual(result.count(), 0)
-        
+
         # Test EXCLUDE operation with no keywords
-        filter_exclude = Filter.objects.create(name="No Keywords Exclude", operation=Filter.EXCLUDE)
+        filter_exclude = Filter.objects.create(
+            name="No Keywords Exclude", operation=Filter.EXCLUDE
+        )
         result = filter_exclude.apply_keywords_filter(queryset)
         self.assertEqual(result.count(), 2)
 
     def test_apply_keywords_filter_field_targeting(self):
         """Test apply_keywords_filter with different field targeting."""
         queryset = Entry.objects.all()
-        
+
         # Test translated title filtering
         filter_title = Filter.objects.create(
             name="Title Filter", operation=Filter.INCLUDE, filter_translated_title=True
@@ -77,10 +80,12 @@ class FilterExtendedTestCase(TestCase):
         result = filter_title.apply_keywords_filter(queryset)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result.first(), self.entry1)
-        
+
         # Test translated content filtering
         filter_content = Filter.objects.create(
-            name="Content Filter", operation=Filter.INCLUDE, filter_translated_content=True
+            name="Content Filter",
+            operation=Filter.INCLUDE,
+            filter_translated_content=True,
         )
         filter_content.keywords.add("基础")
         result = filter_content.apply_keywords_filter(queryset)
@@ -167,36 +172,49 @@ class FilterExtendedTestCase(TestCase):
     def test_apply_filter_methods(self):
         """Test apply_filter with different filtering methods."""
         queryset = Entry.objects.all()
-        
+
         # Test KEYWORD_ONLY method
         filter_keyword = Filter.objects.create(
-            name="Keyword Filter", filter_method=Filter.KEYWORD_ONLY,
-            operation=Filter.INCLUDE, filter_original_title=True
+            name="Keyword Filter",
+            filter_method=Filter.KEYWORD_ONLY,
+            operation=Filter.INCLUDE,
+            filter_original_title=True,
         )
         filter_keyword.keywords.add("Python")
         result = filter_keyword.apply_filter(queryset)
         self.assertEqual(result.count(), 1)
         self.assertEqual(result.first(), self.entry1)
-        
+
         # Test AI_ONLY method
         self.entry2.delete()
         filter_ai = Filter.objects.create(
-            name="AI Filter", filter_method=Filter.AI_ONLY,
-            agent=self.agent, filter_prompt="Test prompt", filter_original_title=True
+            name="AI Filter",
+            filter_method=Filter.AI_ONLY,
+            agent=self.agent,
+            filter_prompt="Test prompt",
+            filter_original_title=True,
         )
-        with patch.object(self.agent, "filter", return_value={"passed": True, "tokens": 20}) as mock_filter:
+        with patch.object(
+            self.agent, "filter", return_value={"passed": True, "tokens": 20}
+        ) as mock_filter:
             result = filter_ai.apply_filter(Entry.objects.all())
             mock_filter.assert_called_once()
         filter_ai.refresh_from_db()
         self.assertEqual(filter_ai.total_tokens, 20)
-        
+
         # Test BOTH methods
         filter_both = Filter.objects.create(
-            name="Both Filter", filter_method=Filter.BOTH, operation=Filter.INCLUDE,
-            agent=self.agent, filter_prompt="Test prompt", filter_original_title=True
+            name="Both Filter",
+            filter_method=Filter.BOTH,
+            operation=Filter.INCLUDE,
+            agent=self.agent,
+            filter_prompt="Test prompt",
+            filter_original_title=True,
         )
         filter_both.keywords.add("Python")
-        with patch.object(self.agent, "filter", return_value={"passed": True, "tokens": 25}):
+        with patch.object(
+            self.agent, "filter", return_value={"passed": True, "tokens": 25}
+        ):
             filter_both.apply_filter(Entry.objects.all())
         filter_both.refresh_from_db()
         self.assertEqual(filter_both.total_tokens, 25)
@@ -204,13 +222,13 @@ class FilterExtendedTestCase(TestCase):
     def test_needs_re_evaluation_scenarios(self):
         """Test needs_re_evaluation for different scenarios."""
         filter_obj = Filter.objects.create(name="Test Filter")
-        
+
         # Test never evaluated
         result_never = FilterResult.objects.create(
             filter=filter_obj, entry=self.entry1, passed=None
         )
         self.assertTrue(filter_obj.needs_re_evaluation(result_never, self.entry1))
-        
+
         # Test entry updated after evaluation
         old_time = timezone.now() - timezone.timedelta(hours=1)
         result_old = FilterResult.objects.create(
@@ -226,7 +244,7 @@ class FilterExtendedTestCase(TestCase):
         new_filter = Filter(name="New Filter")
         new_filter.save()
         self.assertIsNotNone(new_filter.pk)
-        
+
         # Test existing filter with no changes
         existing_filter = Filter.objects.create(name="Existing Filter")
         existing_filter.save()  # Should not raise errors
@@ -238,31 +256,37 @@ class FilterExtendedTestCase(TestCase):
             name="Keywords Filter", filter_method=Filter.AI_ONLY, agent=self.agent
         )
         filter_keywords.keywords.add("original")
-        FilterResult.objects.create(filter=filter_keywords, entry=self.entry1, passed=True)
-        
-        with patch.object(filter_keywords, "clear_ai_filter_cache_results") as mock_clear:
+        FilterResult.objects.create(
+            filter=filter_keywords, entry=self.entry1, passed=True
+        )
+
+        with patch.object(
+            filter_keywords, "clear_ai_filter_cache_results"
+        ) as mock_clear:
             filter_keywords.keywords.add("new_keyword")
             filter_keywords.save()
             mock_clear.assert_not_called()
-        
+
         # Test AI fields changed (should clear cache)
         filter_ai = Filter.objects.create(
-            name="AI Filter", filter_method=Filter.AI_ONLY,
-            agent=self.agent, filter_prompt="Original prompt"
+            name="AI Filter",
+            filter_method=Filter.AI_ONLY,
+            agent=self.agent,
+            filter_prompt="Original prompt",
         )
         FilterResult.objects.create(filter=filter_ai, entry=self.entry1, passed=True)
-        
+
         with patch.object(filter_ai, "clear_ai_filter_cache_results") as mock_clear:
             filter_ai.filter_prompt = "New prompt"
             filter_ai.save()
             mock_clear.assert_called_once()
-        
+
         # Test agent changed (should clear cache)
         new_agent = OpenAIAgent.objects.create(name="New Agent", api_key="test-key")
         filter_agent = Filter.objects.create(
             name="Agent Filter", filter_method=Filter.BOTH, agent=self.agent
         )
-        
+
         with patch.object(filter_agent, "clear_ai_filter_cache_results") as mock_clear:
             filter_agent.agent = new_agent
             filter_agent.save()
@@ -275,22 +299,25 @@ class FilterExtendedTestCase(TestCase):
         FilterResult.objects.create(filter=filter_obj, entry=self.entry1, passed=True)
         FilterResult.objects.create(filter=filter_obj, entry=self.entry2, passed=False)
         self.assertEqual(FilterResult.objects.filter(filter=filter_obj).count(), 2)
-        
+
         filter_obj.clear_ai_filter_cache_results()
         self.assertEqual(FilterResult.objects.filter(filter=filter_obj).count(), 0)
-        
+
         # Test KEYWORD_ONLY doesn't use AI even if agent is set
         filter_keyword_no_ai = Filter.objects.create(
-            name="Keyword Only No AI", filter_method=Filter.KEYWORD_ONLY,
-            agent=self.agent, operation=Filter.INCLUDE, filter_original_title=True
+            name="Keyword Only No AI",
+            filter_method=Filter.KEYWORD_ONLY,
+            agent=self.agent,
+            operation=Filter.INCLUDE,
+            filter_original_title=True,
         )
         filter_keyword_no_ai.keywords.add("Python")
-        
+
         with patch.object(self.agent, "filter") as mock_filter:
             result = filter_keyword_no_ai.apply_filter(Entry.objects.all())
             mock_filter.assert_not_called()
             self.assertEqual(result.count(), 1)
-        
+
         # Test AI filter with no agent
         filter_no_agent = Filter.objects.create(
             name="No Agent Filter", filter_method=Filter.AI_ONLY, agent=None

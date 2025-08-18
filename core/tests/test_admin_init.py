@@ -10,6 +10,7 @@ class AdminInitTestCase(TestCase):
         """Helper to reload admin module for testing."""
         import importlib
         import core.admin
+
         importlib.reload(core.admin)
 
     @override_settings(USER_MANAGEMENT=True)

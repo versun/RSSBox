@@ -312,7 +312,7 @@ class FeedAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("tags"))
     def show_tags(self, obj):
-        if not obj.tags.exists(): # obj.tags 返回一个QuerySet对象，bool(obj.tags) 总是True，因为QuerySet对象总是被认为是True
+        if not obj.tags.exists():  # obj.tags 返回一个QuerySet对象，bool(obj.tags) 总是True，因为QuerySet对象总是被认为是True
             return "-"
         tags_html = "<br>".join(
             f"<a href='{reverse('admin:core_tag_change', args=[t.id])}'>#{t.name}</a>"

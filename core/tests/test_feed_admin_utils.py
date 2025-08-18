@@ -14,12 +14,12 @@ class AdminUtilsTests(SimpleTestCase):
         """Test status_icon for different states."""
         # Test loading state
         self.assertIn("icon-loading.svg", str(status_icon(None)))
-        
+
         # Test success state
         html = status_icon(True)
         self.assertIsInstance(html, SafeString)
         self.assertIn("icon-yes.svg", str(html))
-        
+
         # Test error state
         self.assertIn("icon-no.svg", str(status_icon(False)))
 
@@ -34,7 +34,7 @@ class FeedActionUtilityTests(TestCase):
         dt = convert_struct_time_to_datetime(struct_t)
         self.assertEqual(int(dt.timestamp()), 0)
         self.assertIsNone(convert_struct_time_to_datetime(None))
-        
+
         # Test atom feed generation
         feed = Feed.objects.create(feed_url="https://example.com/rss.xml", name="Test")
         xml = generate_atom_feed(feed, feed_type="o")

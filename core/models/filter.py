@@ -228,7 +228,7 @@ class Filter(models.Model):
                 "filter_translated_title",
                 "filter_translated_content",
             ]
-   
+
             ai_fields_changed = any(
                 getattr(original, field) != getattr(self, field) for field in ai_fields
             ) and self.filter_method in [self.AI_ONLY, self.BOTH]

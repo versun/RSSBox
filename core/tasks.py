@@ -11,6 +11,7 @@ from core.models.agent import Agent
 
 logger = logging.getLogger(__name__)
 
+
 def handle_single_feed_fetch(feed: Feed):
     """
     Fetch feeds and update entries with batch processing optimization.

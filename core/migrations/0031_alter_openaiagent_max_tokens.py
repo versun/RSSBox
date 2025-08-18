@@ -3,9 +3,9 @@
 from django.db import migrations, models
 
 
-def set_max_tokens_to_zero(apps, schema_editor): # 将会在下次翻译时自动更新max_tokens
+def set_max_tokens_to_zero(apps, schema_editor):  # 将会在下次翻译时自动更新max_tokens
     """Set all existing OpenAIAgent max_tokens to 0"""
-    OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
+    OpenAIAgent = apps.get_model("core", "OpenAIAgent")
     OpenAIAgent.objects.all().update(max_tokens=0)
 
 

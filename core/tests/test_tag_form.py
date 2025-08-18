@@ -14,39 +14,38 @@ class TagFormTestCase(TestCase):
 
     def test_tag_form_validation_and_save(self):
         """Test TagForm validation and save functionality."""
-        form_data = {
-            'name': 'Test Tag',
-            'slug': 'test-tag'
-        }
+        form_data = {"name": "Test Tag", "slug": "test-tag"}
         form = TagForm(data=form_data)
         self.assertTrue(form.is_valid())
-        
+
         # Test save functionality
         tag = form.save()
-        self.assertEqual(tag.name, 'Test Tag')
-        self.assertEqual(tag.slug, 'test-tag')
-        
+        self.assertEqual(tag.name, "Test Tag")
+        self.assertEqual(tag.slug, "test-tag")
+
         # Verify tag was saved to database
-        self.assertTrue(Tag.objects.filter(name='Test Tag', slug='test-tag').exists())
+        self.assertTrue(Tag.objects.filter(name="Test Tag", slug="test-tag").exists())
 
     def test_tag_form_edge_cases(self):
         """Test TagForm with edge cases and auto-slug generation."""
         # Test empty form (should be valid since name is nullable)
-        empty_form = TagForm(data={'name': 'Unnamed Tag'})
+        empty_form = TagForm(data={"name": "Unnamed Tag"})
         self.assertTrue(empty_form.is_valid())
         empty_tag = empty_form.save()
-        self.assertEqual(empty_tag.name, 'Unnamed Tag')
+        self.assertEqual(empty_tag.name, "Unnamed Tag")
         self.assertIsNotNone(empty_tag.slug)  # AutoSlugField should generate something
-        
+
         # Test form with only name (slug should be auto-generated)
-        name_only_form = TagForm(data={'name': 'Auto Slug Tag'})
+        name_only_form = TagForm(data={"name": "Auto Slug Tag"})
         self.assertTrue(name_only_form.is_valid())
         tag = name_only_form.save()
-        self.assertEqual(tag.name, 'Auto Slug Tag')
-        self.assertEqual(tag.slug, 'auto-slug-tag')  # Should be auto-generated from name
-        
+        self.assertEqual(tag.name, "Auto Slug Tag")
+        self.assertEqual(
+            tag.slug, "auto-slug-tag"
+        )  # Should be auto-generated from name
+
         # Test form with duplicate slug handling
-        duplicate_form = TagForm(data={'name': 'Auto Slug Tag'})
+        duplicate_form = TagForm(data={"name": "Auto Slug Tag"})
         self.assertTrue(duplicate_form.is_valid())
         duplicate_tag = duplicate_form.save()
         self.assertNotEqual(tag.slug, duplicate_tag.slug)  # Should be unique

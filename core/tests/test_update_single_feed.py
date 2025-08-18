@@ -17,7 +17,7 @@ class UpdateSingleFeedTests(TestCase):
             name="Example",
             translate_title=False,
             translate_content=False,
-            summary=False
+            summary=False,
         )
 
     def _create_feed_with_options(self, **kwargs):
@@ -27,7 +27,7 @@ class UpdateSingleFeedTests(TestCase):
             name="Example2",
             translate_title=False,
             translate_content=False,
-            summary=False
+            summary=False,
         )
         for key, value in kwargs.items():
             setattr(feed, key, value)
@@ -38,7 +38,9 @@ class UpdateSingleFeedTests(TestCase):
     @patch("core.management.commands.update_feeds.handle_feeds_summary")
     @patch("core.management.commands.update_feeds.handle_feeds_translation")
     @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    def test_update_single_feed_success(self, mock_fetch, mock_translate, mock_summary, mock_close_conn):
+    def test_update_single_feed_success(
+        self, mock_fetch, mock_translate, mock_summary, mock_close_conn
+    ):
         """When no internal task raises, should return True and call helpers."""
         feed = self._create_feed_with_options(translate_title=True, summary=True)
 
@@ -55,7 +57,9 @@ class UpdateSingleFeedTests(TestCase):
     @patch("core.management.commands.update_feeds.logger")
     @patch("core.management.commands.update_feeds.close_old_connections")
     @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    def test_update_single_feed_exception(self, mock_fetch, mock_close_conn, mock_logger):
+    def test_update_single_feed_exception(
+        self, mock_fetch, mock_close_conn, mock_logger
+    ):
         """If internal helper raises, function should swallow and return False."""
         mock_fetch.side_effect = RuntimeError("boom")
 
@@ -71,20 +75,26 @@ class UpdateSingleFeedTests(TestCase):
     @patch("core.management.commands.update_feeds.close_old_connections")
     @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
     @patch("core.management.commands.update_feeds.logger")
-    def test_update_single_feed_feed_not_exist(self, mock_logger, mock_fetch, mock_close_conn):
+    def test_update_single_feed_feed_not_exist(
+        self, mock_logger, mock_fetch, mock_close_conn
+    ):
         """Test handling of Feed.DoesNotExist exception."""
         mock_fetch.side_effect = Feed.DoesNotExist("Feed not found")
 
         result = cmd.update_single_feed(self.feed)
 
         self.assertFalse(result)
-        mock_logger.error.assert_called_once_with(f"Feed not found: ID {self.feed.name}")
+        mock_logger.error.assert_called_once_with(
+            f"Feed not found: ID {self.feed.name}"
+        )
         mock_close_conn.assert_called()
 
     @patch("core.management.commands.update_feeds.close_old_connections")
     @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
     @patch("core.management.commands.update_feeds.logger")
-    def test_update_single_feed_no_translation_or_summary(self, mock_logger, mock_fetch, mock_close_conn):
+    def test_update_single_feed_no_translation_or_summary(
+        self, mock_logger, mock_fetch, mock_close_conn
+    ):
         """Test feed update without translation or summary."""
         result = cmd.update_single_feed(self.feed)
 
