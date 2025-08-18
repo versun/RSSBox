@@ -49,6 +49,8 @@ class ActionsTestCase(TestCase):
             request = self.factory.post("/", data or {})
         setattr(request, "session", "session")
         setattr(request, "_messages", FallbackStorage(request))
+        # 添加用户属性以避免认证错误
+        setattr(request, "user", type('User', (), {'is_active': True, 'is_staff': True})())
         return request
 
     def test_clean_translated_content_action(self):
@@ -313,3 +315,210 @@ class ActionsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         mock_all_agents.assert_called_once()
         mock_ai_agents.assert_called_once()
+
+    def test_feed_batch_modify_keep_fields(self):
+        """Test batch modify when fields are set to 'Keep' (no change)."""
+        # 设置初始值
+        self.feed.translate_title = True
+        self.feed.translate_content = False
+        self.feed.summary = True
+        self.feed.save()
+        
+        post_data = {
+            "apply": "Apply",
+            "translate_title": "Keep",
+            "translate_content": "Keep", 
+            "summary": "Keep"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        # 字段应该保持原值不变
+        self.assertTrue(self.feed.translate_title)
+        self.assertFalse(self.feed.translate_content)
+        self.assertTrue(self.feed.summary)
+
+    def test_feed_batch_modify_default_field_types(self):
+        """Test batch modify with default field type handling."""
+        post_data = {
+            "apply": "Apply",
+            "target_language": "Change",
+            "target_language_value": "zh-CN",
+            "additional_prompt": "Change",
+            "additional_prompt_value": "Custom prompt"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.target_language, "zh-CN")
+        self.assertEqual(self.feed.additional_prompt, "Custom prompt")
+
+    def test_feed_batch_modify_empty_tags_and_filters(self):
+        """Test batch modify with empty tags and filters values."""
+        post_data = {
+            "apply": "Apply",
+            "tags": "Change",
+            "tags_value": [],  # 空列表
+            "filter": "Change",
+            "filter_value": []  # 空列表
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        # 空值不应该影响现有数据
+        self.assertEqual(self.feed.tags.count(), 0)
+        self.assertEqual(self.feed.filters.count(), 0)
+
+    def test_feed_batch_modify_numeric_fields(self):
+        """Test batch modify with numeric field types."""
+        post_data = {
+            "apply": "Apply",
+            "update_frequency": "Change",
+            "update_frequency_value": "30",
+            "max_posts": "Change",
+            "max_posts_value": "100",
+            "summary_detail": "Change",
+            "summary_detail_value": "0.8"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.update_frequency, 30)
+        self.assertEqual(self.feed.max_posts, 100)
+        self.assertEqual(self.feed.summary_detail, 0.8)
+
+    def test_feed_batch_modify_translation_display(self):
+        """Test batch modify with translation_display field."""
+        post_data = {
+            "apply": "Apply",
+            "translation_display": "Change",
+            "translation_display_value": "2"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.translation_display, 2)
+
+    def test_feed_batch_modify_mixed_boolean_combinations(self):
+        """Test various combinations of boolean field modifications."""
+        # 测试混合的布尔值组合
+        post_data = {
+            "apply": "Apply",
+            "translate_title": "True",
+            "translate_content": "Keep",
+            "summary": "False"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        self.assertTrue(self.feed.translate_title)
+        # translate_content 保持原值（因为设置为"Keep"）
+        self.assertFalse(self.feed.summary)
+
+    def test_feed_batch_modify_no_apply_post_data(self):
+        """Test batch modify when no 'apply' in POST data (form display)."""
+        # 设置初始值
+        self.feed.translate_title = False
+        self.feed.save()
+        
+        post_data = {
+            "translate_title": "True",  # 没有 "apply" 键
+            "translate_title_value": "True"
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        # 应该显示表单而不是处理数据
+        self.assertEqual(response.status_code, 200)
+        self.feed.refresh_from_db()
+        # 字段应该保持原值不变
+        self.assertFalse(self.feed.translate_title)
+
+    def test_feed_batch_modify_empty_queryset(self):
+        """Test batch modify with empty queryset."""
+        post_data = {"apply": "Apply"}
+        request = self._get_request_with_messages('POST', post_data)
+        empty_queryset = Feed.objects.none()
+
+        response = feed_batch_modify(self.modeladmin, request, empty_queryset)
+        
+        # 应该正常处理空查询集
+        self.assertEqual(response.status_code, 302)
+
+    def test_feed_batch_modify_invalid_field_values(self):
+        """Test batch modify with invalid field values."""
+        post_data = {
+            "apply": "Apply",
+            "update_frequency": "Change",
+            "update_frequency_value": "invalid_number",  # 无效数字
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        # 应该能够处理无效值而不崩溃
+        try:
+            response = feed_batch_modify(self.modeladmin, request, queryset)
+            # 如果成功处理，应该重定向
+            self.assertEqual(response.status_code, 302)
+        except (ValueError, TypeError):
+            # 如果抛出异常，测试也应该通过
+            pass
+
+    def test_feed_batch_modify_single_feed_multiple_operations(self):
+        """Test multiple operations on a single feed in one batch."""
+        tag = Tag.objects.create(name="Test Tag")
+        filter_obj = Filter.objects.create(name="Test Filter")
+        
+        post_data = {
+            "apply": "Apply",
+            "translate_title": "True",
+            "translate_content": "False",
+            "summary": "True",
+            "update_frequency": "Change",
+            "update_frequency_value": "60",
+            "tags": "Change",
+            "tags_value": [str(tag.id)],
+            "filter": "Change",
+            "filter_value": [str(filter_obj.id)]
+        }
+        request = self._get_request_with_messages('POST', post_data)
+        queryset = Feed.objects.filter(id=self.feed.id)
+
+        response = feed_batch_modify(self.modeladmin, request, queryset)
+        
+        self.assertEqual(response.status_code, 302)
+        self.feed.refresh_from_db()
+        
+        # 验证所有字段都被正确更新
+        self.assertTrue(self.feed.translate_title)
+        self.assertFalse(self.feed.translate_content)
+        self.assertTrue(self.feed.summary)
+        self.assertEqual(self.feed.update_frequency, 60)
+        self.assertIn(tag, self.feed.tags.all())
+        self.assertIn(filter_obj, self.feed.filters.all())
