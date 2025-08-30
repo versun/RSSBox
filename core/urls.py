@@ -1,9 +1,22 @@
 from django.urls import path
 
 from . import views
+from . import digest_views
 
 app_name = "core"
 urlpatterns = [
+    # 日报相关URL
+    path("digest/", digest_views.digest_list, name="digest_list"),
+    path("digest/rss/<str:digest_slug>", digest_views.digest_rss, name="digest_rss"),
+    path("digest/rss/<str:digest_slug>/", digest_views.digest_rss, name="digest_rss_trailing"),
+    path("digest/json/<str:digest_slug>", digest_views.digest_json, name="digest_json"),
+    path("digest/json/<str:digest_slug>/", digest_views.digest_json, name="digest_json_trailing"),
+    path("digest/status/<str:digest_slug>", digest_views.digest_status, name="digest_status"),
+    path("digest/status/<str:digest_slug>/", digest_views.digest_status, name="digest_status_trailing"),
+    path("digest/article/<int:article_id>", digest_views.digest_article_detail, name="digest_article_detail"),
+    path("digest/article/<int:article_id>/", digest_views.digest_article_detail, name="digest_article_detail_trailing"),
+    
+    # 原有的URL模式
     # path("filter/<str:name>", views.filter, name="filter"),
     path(
         "tag/proxy/<str:tag>",

@@ -9,3 +9,4 @@ from core.models.agent import (
     TestAgent,
 )
 from core.models.tag import Tag
+from core.models.digest import Digest, DigestArticle

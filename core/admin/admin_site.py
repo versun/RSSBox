@@ -11,6 +11,7 @@ from utils.modelAdmin_utils import (
 from django.shortcuts import redirect, render
 
 from core.models import Feed, Filter, Tag
+from core.models.digest import Digest
 
 
 class CoreAdminSite(AdminSite):
@@ -61,6 +62,20 @@ class CoreAdminSite(AdminSite):
                         },
                         "admin_url": "/core/tag/",
                         "add_url": "/core/tag/add/",
+                        "view_only": False,
+                    },
+                    {
+                        "model": Digest,
+                        "name": "Digests",
+                        "object_name": "Digest",
+                        "perms": {
+                            "add": True,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/digest/",
+                        "add_url": "/core/digest/add/",
                         "view_only": False,
                     },
                 ],
