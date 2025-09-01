@@ -91,10 +91,7 @@ class OpenAIAgentAdmin(AgentAdmin):
             _("Advanced"),
             {
                 "fields": (
-                    "temperature",
-                    "top_p",
-                    "frequency_penalty",
-                    "presence_penalty",
+                    "advanced_params",
                     "rate_limit_rpm",
                     "show_max_tokens",
                 )

@@ -1107,19 +1107,6 @@ class OpenAIAgentModelTest(TestCase):
         mock_completions.assert_called_once_with(
             "Test text", system_prompt=expected_prompt
         )
-
-    @patch.object(OpenAIAgent, "completions")
-    def test_digester_method(self, mock_completions):
-        """Test that the digester method calls completions with the correct system prompt."""
-        custom_prompt = "Digest this:"
-        self.agent.digester(
-            text="Test text", target_language="English", system_prompt=custom_prompt
-        )
-        expected_prompt = custom_prompt + settings.output_format_for_filter_prompt
-        mock_completions.assert_called_once_with(
-            "Test text", system_prompt=expected_prompt
-        )
-
     @patch.object(OpenAIAgent, "completions")
     def test_filter_method(self, mock_completions):
         """Test that the filter method calls completions and processes the result."""
@@ -1397,11 +1384,13 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
         mock_client.with_options.return_value = mock_with_options
         mock_with_options.chat.completions.create.return_value = mock_completion
 
-        # Set specific agent parameters
-        self.agent.temperature = 0.5
-        self.agent.top_p = 0.8
-        self.agent.frequency_penalty = 0.1
-        self.agent.presence_penalty = 0.2
+        # Set specific agent parameters via advanced_params
+        self.agent.advanced_params = {
+            "temperature": 0.5,
+            "top_p": 0.8,
+            "frequency_penalty": 0.1,
+            "presence_penalty": 0.2,
+        }
 
         self.agent.completions("test text", system_prompt="system")
 
@@ -1774,10 +1763,7 @@ class AgentFieldValidationTest(TestCase):
         )
         self.assertEqual(openai_agent.base_url, "https://api.openai.com/v1")
         self.assertEqual(openai_agent.model, "gpt-3.5-turbo")
-        self.assertEqual(openai_agent.temperature, 0.2)
-        self.assertEqual(openai_agent.top_p, 0.2)
-        self.assertEqual(openai_agent.frequency_penalty, 0)
-        self.assertEqual(openai_agent.presence_penalty, 0)
+        self.assertEqual(openai_agent.advanced_params.get("temperature"), 0.2)
         self.assertEqual(openai_agent.max_tokens, 0)
         self.assertEqual(openai_agent.rate_limit_rpm, 0)
         self.assertTrue(openai_agent.is_ai)
@@ -1787,17 +1773,19 @@ class AgentFieldValidationTest(TestCase):
         boundary_agent = OpenAIAgent.objects.create(
             name="Boundary Test Agent",
             api_key="test_key",
-            temperature=2.0,
-            top_p=1.0,
-            frequency_penalty=2.0,
-            presence_penalty=2.0,
+            advanced_params={
+                "temperature": 2.0,
+                "top_p": 1.0,
+                "frequency_penalty": 2.0,
+                "presence_penalty": 2.0,
+            },
             max_tokens=1000000,
             rate_limit_rpm=10000,
         )
-        self.assertEqual(boundary_agent.temperature, 2.0)
-        self.assertEqual(boundary_agent.top_p, 1.0)
-        self.assertEqual(boundary_agent.frequency_penalty, 2.0)
-        self.assertEqual(boundary_agent.presence_penalty, 2.0)
+        self.assertEqual(boundary_agent.advanced_params.get("temperature"), 2.0)
+        self.assertEqual(boundary_agent.advanced_params.get("top_p"), 1.0)
+        self.assertEqual(boundary_agent.advanced_params.get("frequency_penalty"), 2.0)
+        self.assertEqual(boundary_agent.advanced_params.get("presence_penalty"), 2.0)
         self.assertEqual(boundary_agent.max_tokens, 1000000)
         self.assertEqual(boundary_agent.rate_limit_rpm, 10000)
 

@@ -58,6 +58,9 @@ class Agent(models.Model):
     def __str__(self):
         return self.name
 
+def openai_advanced_default():
+    return {"temperature": 0.2}
+
 
 class OpenAIAgent(Agent):
     # https://platform.openai.com/docs/api-reference/chat
@@ -77,10 +80,12 @@ class OpenAIAgent(Agent):
     )
     summary_prompt = models.TextField(default=settings.default_summary_prompt)
 
-    temperature = models.FloatField(default=0.2)
-    top_p = models.FloatField(default=0.2)
-    frequency_penalty = models.FloatField(default=0)
-    presence_penalty = models.FloatField(default=0)
+    advanced_params = models.JSONField(
+        default=openai_advanced_default,
+        help_text=(
+            "Advanced OpenAI chat params as JSON."
+        ),
+    )
     max_tokens = models.IntegerField(default=0)
     rate_limit_rpm = models.IntegerField(
         _("Rate Limit (RPM)"),
@@ -308,6 +313,20 @@ class OpenAIAgent(Agent):
             )
 
             # 正常流程
+            adv_params = self.advanced_params or {}
+            if not isinstance(adv_params, dict):
+                adv_params = {}
+
+            call_kwargs = {**adv_params}
+            # 仅在未显式提供时设置安全的默认/限制
+            if (
+                "max_completion_tokens" not in call_kwargs
+                and "max_tokens" not in call_kwargs
+            ):
+                call_kwargs["max_completion_tokens"] = output_token_limit
+            if "reasoning_effort" not in call_kwargs:
+                call_kwargs["reasoning_effort"] = "minimal"  # 关闭深度思考
+
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers=self.EXTRA_HEADERS,
                 model=self.model,
@@ -315,13 +334,7 @@ class OpenAIAgent(Agent):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": text},
                 ],
-                temperature=self.temperature,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty,
-                presence_penalty=self.presence_penalty,
-                # max_tokens=output_token_limit,
-                max_completion_tokens=output_token_limit,
-                reasoning_effort="minimal",  # 关闭深度思考
+                **call_kwargs,
             )
             if (
                 res.choices
@@ -375,8 +388,10 @@ class OpenAIAgent(Agent):
         **kwargs,
     ) -> dict:
         logger.info(f">>> Start Digesting [{target_language}]: {text[:50]}...")
-        system_prompt += settings.output_format_for_filter_prompt
-        return self.completions(text, system_prompt=system_prompt, **kwargs)
+        prompt = system_prompt.replace(
+                "{target_language}", target_language
+            )
+        return self.completions(text, system_prompt=prompt, **kwargs)
 
     def filter(self, text: str, system_prompt: str, **kwargs) -> dict:
         logger.info(f">>> Start Filter: {text[:50]}...")
