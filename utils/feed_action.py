@@ -156,14 +156,14 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
                 translation_display or entry.feed.translation_display,
                 "<br />---------------<br />",
             )
-            summary = content[:100] + "..." if len(content) > 100 else content
 
         if entry.ai_summary:
             html_summary = (
                 f"<br />🤖:{mistune.html(entry.ai_summary)}<br />---------------<br />"
             )
             content = html_summary + content
-            summary = entry.ai_summary
+        
+        summary = content or "" #确保summary始终是全文内容
 
     # 创建条目
     fe = fg.add_entry()
