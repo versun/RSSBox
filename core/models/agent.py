@@ -112,6 +112,9 @@ class OpenAIAgent(Agent):
         if self.api_key:
             try:
                 client = self._init()
+                # 应用速率限制
+                self._wait_for_rate_limit()
+                
                 res = client.with_options(max_retries=3).chat.completions.create(
                     extra_headers=self.EXTRA_HEADERS,
                     model=self.model,
@@ -152,8 +155,6 @@ class OpenAIAgent(Agent):
         if not force and self.max_tokens > 0:
             return self.max_tokens
 
-        # test_range = [1024, 4096, 8192, 16384, 32768, 65536, 128000, 200000, 400000, 500000, 1000000]
-
         # 二分搜索找到确切限制
         def binary_search_limit(low, high):
             """使用二分搜索找到确切的token限制"""
@@ -163,6 +164,8 @@ class OpenAIAgent(Agent):
             mid = (low + high) // 2
 
             try:
+                # 应用速率限制
+                self._wait_for_rate_limit()
                 # 使用最小的测试内容减少token消耗
                 response = self._init().chat.completions.create(
                     extra_headers=self.EXTRA_HEADERS,
