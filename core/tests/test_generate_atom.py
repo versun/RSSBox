@@ -1,11 +1,11 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from utils.feed_action import generate_atom_feed, merge_feeds_into_one_atom
+from core.cache import generate_atom_feed, merge_feeds_into_one_atom
 from core.models import Feed, Entry, Tag
 
 
-class FeedActionAtomTests(TestCase):
+class GenerateAtomTests(TestCase):
     """Tests covering generate_atom_feed and merge_feeds_into_one_atom."""
 
     def setUp(self):
@@ -228,7 +228,7 @@ class FeedActionAtomTests(TestCase):
         # Mock _finalize_atom_feed to raise an exception
         from unittest.mock import patch
 
-        with patch("utils.feed_action._finalize_atom_feed") as mock_finalize:
+        with patch("core.cache._finalize_atom_feed") as mock_finalize:
             mock_finalize.side_effect = Exception("Finalization error")
 
             # This should not raise an exception due to try-catch
@@ -251,7 +251,7 @@ class FeedActionAtomTests(TestCase):
         # Mock _build_atom_feed to raise an exception
         from unittest.mock import patch
 
-        with patch("utils.feed_action._build_atom_feed") as mock_build:
+        with patch("core.cache._build_atom_feed") as mock_build:
             mock_build.side_effect = Exception("Building error")
 
             # This should not raise an exception due to try-catch

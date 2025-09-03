@@ -297,7 +297,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
             log="Test log content",
         )
 
-    @patch("utils.task_manager.task_manager.submit_task")
+    @patch("core.tasks.task_manager.task_manager.submit_task")
     def test_submit_feed_update_task(self, mock_submit_task):
         """Test _submit_feed_update_task method (lines 190-193)."""
         mock_submit_task.return_value = "task-123"
@@ -692,7 +692,7 @@ class FeedAdminErrorHandlingTest(TestCase):
         # Verify that task submission was not attempted
         mock_on_commit.assert_not_called()
 
-    @patch("utils.task_manager.task_manager.submit_task")
+    @patch("core.tasks.task_manager.task_manager.submit_task")
     def test_submit_feed_update_task_error_handling(self, mock_submit_task):
         """Test _submit_feed_update_task handles task submission errors."""
         # Mock task submission error

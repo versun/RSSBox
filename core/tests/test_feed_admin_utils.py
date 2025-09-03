@@ -3,7 +3,8 @@ from django.test import SimpleTestCase, TestCase
 from django.utils.safestring import SafeString
 
 from utils.modelAdmin_utils import status_icon
-from utils.feed_action import convert_struct_time_to_datetime, generate_atom_feed
+from core.cache import generate_atom_feed
+from core.tasks.fetch_feeds import convert_struct_time_to_datetime
 from core.models import Feed
 
 

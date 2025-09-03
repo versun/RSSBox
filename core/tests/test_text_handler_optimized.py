@@ -13,7 +13,7 @@ from utils.text_handler import (
     unwrap_tags,
     set_translation_display,
 )
-from utils.task_manager import TaskManager
+from core.tasks.task_manager import TaskManager
 
 
 class TextHandlerBasicTests(SimpleTestCase):

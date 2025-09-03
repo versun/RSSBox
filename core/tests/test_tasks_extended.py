@@ -6,23 +6,16 @@ Extended test file for core.tasks module to improve coverage.
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock
-import time
 
-from ..models import Feed, Entry
-from ..models.agent import OpenAIAgent, TestAgent
-from ..tasks import (
-    handle_single_feed_fetch,
-    handle_feeds_fetch,
-    handle_feeds_translation,
-    handle_feeds_summary,
-    _translate_title,
-    _translate_content,
-    translate_feed,
-    _auto_retry,
-    _fetch_article_content,
-    _save_progress,
-    summarize_feed,
-)
+from core.models import Feed, Entry
+from core.models.agent import OpenAIAgent, TestAgent
+
+from core.tasks.utils import auto_retry
+from core.tasks.fetch_feeds import handle_single_feed_fetch
+from core.tasks.translate_feeds import (
+    translate_feed, _fetch_article_content)
+from core.tasks.summarize_feeds import (summarize_feed, _save_progress)
+
 
 
 class TasksExtendedTestCase(TestCase):
@@ -55,8 +48,8 @@ class TasksExtendedTestCase(TestCase):
 
     # ==================== Extended Feed Fetch Tests ====================
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_batch_processing(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -108,8 +101,8 @@ class TasksExtendedTestCase(TestCase):
         # 验证批量创建是否成功，但受max_posts限制
         self.assertEqual(Entry.objects.count(), 10)  # feed.max_posts = 10
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_invalid_guid(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -176,8 +169,8 @@ class TasksExtendedTestCase(TestCase):
         # 只有第一个条目被创建，第二个被跳过
         self.assertEqual(Entry.objects.count(), 1)
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_existing_entries_skip(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -235,8 +228,8 @@ class TasksExtendedTestCase(TestCase):
 
     # ==================== Extended Translation Tests ====================
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_content_translation(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_content_translation(self, mockauto_retry):
         """测试内容翻译流程 - 覆盖第269-284行"""
         self.feed.translator = self.agent
         self.feed.translate_title = False
@@ -245,7 +238,7 @@ class TasksExtendedTestCase(TestCase):
 
         entry = self._create_test_entry(content="<p>Test content</p>")
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "<p>Translated content</p>",
             "tokens": 20,
             "characters": 25,
@@ -256,8 +249,8 @@ class TasksExtendedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.translated_content, "<p>Translated content</p>")
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_with_fetch_article(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_with_fetch_article(self, mockauto_retry):
         """测试文章内容获取功能 - 覆盖第291-303行"""
         self.feed.translator = self.agent
         self.feed.translate_title = False
@@ -267,9 +260,9 @@ class TasksExtendedTestCase(TestCase):
 
         entry = self._create_test_entry(content="<p>Original content</p>")
 
-        with patch("core.tasks._fetch_article_content") as mock_fetch:
+        with patch("core.tasks.translate_feeds._fetch_article_content") as mock_fetch:
             mock_fetch.return_value = "<p>Fetched article content</p>"
-            mock_auto_retry.return_value = {
+            mockauto_retry.return_value = {
                 "text": "<p>Translated fetched content</p>",
                 "tokens": 25,
                 "characters": 30,
@@ -283,8 +276,8 @@ class TasksExtendedTestCase(TestCase):
                 entry.translated_content, "<p>Translated fetched content</p>"
             )
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_batch_processing(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_batch_processing(self, mockauto_retry):
         """测试翻译的批量处理 - 覆盖第378行"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -298,7 +291,7 @@ class TasksExtendedTestCase(TestCase):
             entries.append(entry)
 
         # 确保mock返回正确的值
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "Translated Title",
             "tokens": 10,
             "characters": 15,
@@ -307,7 +300,7 @@ class TasksExtendedTestCase(TestCase):
         translate_feed(self.feed, target_field="title")
 
         # 验证mock被调用
-        self.assertTrue(mock_auto_retry.called)
+        self.assertTrue(mockauto_retry.called)
 
         # 验证前max_posts个条目都被翻译（feed.max_posts = 10）
         for i in range(10):  # 只检查前10个条目
@@ -321,8 +314,8 @@ class TasksExtendedTestCase(TestCase):
             entry.refresh_from_db()
             self.assertIsNone(entry.translated_title)
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_entry_error_handling(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_entry_error_handling(self, mockauto_retry):
         """测试条目翻译错误处理 - 覆盖第386行"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -331,7 +324,7 @@ class TasksExtendedTestCase(TestCase):
         entry = self._create_test_entry()
 
         # 模拟翻译失败
-        mock_auto_retry.side_effect = Exception("Translation failed")
+        mockauto_retry.side_effect = Exception("Translation failed")
 
         translate_feed(self.feed, target_field="title")
 
@@ -367,8 +360,8 @@ class TasksExtendedTestCase(TestCase):
 
     # ==================== Extended Summary Tests ====================
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_with_chunking(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_with_chunking(self, mockauto_retry):
         """测试内容分块摘要 - 覆盖第528-597行"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -377,7 +370,7 @@ class TasksExtendedTestCase(TestCase):
         long_content = "<p>" + "Long content. " * 200 + "</p>"
         entry = self._create_test_entry(content=long_content)
 
-        mock_auto_retry.return_value = {"text": "Chunk summary", "tokens": 20}
+        mockauto_retry.return_value = {"text": "Chunk summary", "tokens": 20}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -385,8 +378,8 @@ class TasksExtendedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertIsNotNone(entry.ai_summary)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_with_context_management(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_with_context_management(self, mockauto_retry):
         """测试上下文管理的摘要 - 覆盖第606行"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -395,7 +388,7 @@ class TasksExtendedTestCase(TestCase):
         medium_content = "<p>" + "Medium content. " * 50 + "</p>"
         entry = self._create_test_entry(content=medium_content)
 
-        mock_auto_retry.return_value = {"text": "Context-aware summary", "tokens": 15}
+        mockauto_retry.return_value = {"text": "Context-aware summary", "tokens": 15}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -403,8 +396,8 @@ class TasksExtendedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertIsNotNone(entry.ai_summary)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_batch_saving(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_batch_saving(self, mockauto_retry):
         """测试摘要的批量保存 - 覆盖第609-611行"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -415,7 +408,7 @@ class TasksExtendedTestCase(TestCase):
             entry = self._create_test_entry(title=f"Title {i}")
             entries.append(entry)
 
-        mock_auto_retry.return_value = {"text": "Batch summary", "tokens": 10}
+        mockauto_retry.return_value = {"text": "Batch summary", "tokens": 10}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -443,28 +436,28 @@ class TasksExtendedTestCase(TestCase):
 
     # ==================== Extended Utility Function Tests ====================
 
-    def test_auto_retry_all_failures(self):
+    def testauto_retry_all_failures(self):
         """测试所有重试都失败的情况 - 覆盖第193行"""
 
         def always_fail(**kwargs):
             raise Exception("Always fails")
 
-        result = _auto_retry(always_fail, max_retries=3, text="test")
+        result = auto_retry(always_fail, max_retries=3, text="test")
 
         self.assertEqual(result, {})  # 应该返回空字典
 
-    def test_auto_retry_memory_cleanup(self):
+    def testauto_retry_memory_cleanup(self):
         """测试重试函数的内存清理 - 覆盖第201行"""
         large_text = "x" * 2000  # 超过1000字符的文本
 
         def simple_function(**kwargs):
             return {"text": "Success"}
 
-        result = _auto_retry(simple_function, text=large_text)
+        result = auto_retry(simple_function, text=large_text)
 
         self.assertEqual(result["text"], "Success")
 
-    @patch("core.tasks.newspaper.Article")
+    @patch("core.tasks.translate_feeds.newspaper.Article")
     def test_fetch_article_content_success(self, mock_article):
         """测试文章内容获取成功 - 覆盖第152行"""
         mock_article_instance = MagicMock()
@@ -477,7 +470,7 @@ class TasksExtendedTestCase(TestCase):
         mock_article_instance.download.assert_called_once()
         mock_article_instance.parse.assert_called_once()
 
-    @patch("core.tasks.newspaper.Article")
+    @patch("core.tasks.translate_feeds.newspaper.Article")
     def test_fetch_article_content_failure(self, mock_article):
         """测试文章内容获取失败 - 覆盖第167-170行"""
         mock_article.side_effect = Exception("Download failed")
@@ -545,8 +538,8 @@ class TasksExtendedTestCase(TestCase):
         short_content = "<p>Short content.</p>"
         entry = self._create_test_entry(content=short_content)
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {
                 "text": "Single chunk summary",
                 "tokens": 10,
             }
@@ -567,8 +560,8 @@ class TasksExtendedTestCase(TestCase):
         for i in range(5):
             self._create_test_entry(title=f"Title {i}")
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {"text": "Limited summary", "tokens": 10}
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {"text": "Limited summary", "tokens": 10}
 
             result = summarize_feed(self.feed)
             self.assertTrue(result)
@@ -590,8 +583,8 @@ class TasksExtendedTestCase(TestCase):
         # 创建一个没有摘要的条目
         entry_without_summary = self._create_test_entry(title="New Entry")
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {"text": "New summary", "tokens": 10}
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {"text": "New summary", "tokens": 10}
 
             result = summarize_feed(self.feed)
             self.assertTrue(result)

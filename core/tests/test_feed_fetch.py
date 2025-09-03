@@ -1,8 +1,7 @@
 from django.test import SimpleTestCase
 from unittest import mock
 
-from utils.feed_action import fetch_feed
-
+from core.tasks.fetch_feeds import fetch_feed
 
 class DummyFeed:
     """Minimal object mimicking feedparser result."""
@@ -17,10 +16,10 @@ class DummyFeed:
 
 
 class FetchFeedTests(SimpleTestCase):
-    """Unit tests for utils.feed_action.fetch_feed with mock feedparser."""
+    """Unit tests for core.tasks.fetch_feeds.fetch_feed with mock feedparser."""
 
-    @mock.patch("utils.feed_action.manual_fetch_feed")
-    @mock.patch("utils.feed_action.feedparser.parse")
+    @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
+    @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
     def test_fetch_scenarios(self, mock_parse, mock_manual):
         """Test different fetch scenarios including 304, bozo feeds, and normal success."""
         # Test 304 not modified
@@ -49,8 +48,8 @@ class FetchFeedTests(SimpleTestCase):
         self.assertIsNone(result["error"])
         mock_manual.assert_not_called()
 
-    @mock.patch("utils.feed_action.manual_fetch_feed")
-    @mock.patch("utils.feed_action.feedparser.parse")
+    @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
+    @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
     def test_fetch_feed_exception_handling(self, mock_parse, mock_manual):
         """Test fetch_feed exception handling."""
         # Test exception during feedparser.parse
@@ -68,8 +67,8 @@ class FetchFeedTests(SimpleTestCase):
         self.assertIsNone(result["feed"])
         self.assertEqual(result["error"], "Invalid URL")
 
-    @mock.patch("utils.feed_action.manual_fetch_feed")
-    @mock.patch("utils.feed_action.feedparser.parse")
+    @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
+    @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
     def test_fetch_feed_with_bozo_exception(self, mock_parse, mock_manual):
         """Test fetch_feed with bozo feed that has exception."""
         # Test bozo feed with exception

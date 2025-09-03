@@ -12,7 +12,7 @@ from utils.text_handler import get_token_count, adaptive_chunking
 import deepl
 import json
 from urllib import request, parse
-from utils.task_manager import task_manager
+from core.tasks.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ class OpenAIAgent(Agent):
                 client = self._init()
                 # 应用速率限制
                 self._wait_for_rate_limit()
-                
+
                 res = client.with_options(max_retries=3).chat.completions.create(
                     extra_headers=self.EXTRA_HEADERS,
                     model=self.model,

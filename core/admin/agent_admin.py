@@ -7,7 +7,7 @@ from django.shortcuts import redirect
 from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 from utils.modelAdmin_utils import status_icon
 from core.admin import core_admin_site
-from utils.task_manager import task_manager
+from core.tasks.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
 

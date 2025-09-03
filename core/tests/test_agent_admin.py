@@ -16,7 +16,7 @@ class AgentAdminTest(TestCase):
         )
         self.admin = OpenAIAgentAdmin(self.openai_agent, self.site)
 
-    @patch("utils.task_manager.task_manager.submit_task")
+    @patch("core.tasks.task_manager.task_manager.submit_task")
     def test_save_model_behavior(self, mock_submit_task):
         """Test save_model success and exception handling."""
         request = self.factory.get("/admin/core/openaiahent/add/")

@@ -10,7 +10,7 @@ import time
 import threading
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from utils.task_manager import TaskManager, TaskStatus
+from core.tasks.task_manager import TaskManager, TaskStatus
 
 
 def test_function(name, duration=0.02, **kwargs):

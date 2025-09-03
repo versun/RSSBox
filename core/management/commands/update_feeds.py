@@ -7,13 +7,11 @@ from concurrent.futures import wait
 
 from django.core.management.base import BaseCommand
 from core.models import Feed, Tag
-from core.tasks import (
-    handle_single_feed_fetch,
-    handle_feeds_translation,
-    handle_feeds_summary,
-)
+from core.tasks.fetch_feeds import handle_single_feed_fetch
+from core.tasks.translate_feeds import handle_feeds_translation
+from core.tasks.summarize_feeds import handle_feeds_summary
 from django.db import close_old_connections
-from utils.task_manager import task_manager
+from core.tasks.task_manager import task_manager
 from core.cache import cache_rss, cache_tag
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))

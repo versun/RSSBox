@@ -1,24 +1,13 @@
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock, call
-import time
 
-from ..models import Feed, Entry
-from ..models.agent import OpenAIAgent, TestAgent
-from ..tasks import (
-    handle_single_feed_fetch,
-    handle_feeds_fetch,
-    handle_feeds_translation,
-    handle_feeds_summary,
-    _translate_title,
-    _translate_content,
-    translate_feed,
-    _auto_retry,
-    _fetch_article_content,
-    _save_progress,
-    summarize_feed,
-)
-
+from core.models import Feed, Entry
+from core.models.agent import OpenAIAgent, TestAgent
+from core.tasks.utils import auto_retry
+from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
+from core.tasks.translate_feeds import handle_feeds_translation, _translate_title, _translate_content, translate_feed, _fetch_article_content
+from core.tasks.summarize_feeds import handle_feeds_summary, summarize_feed, _save_progress
 
 class TasksConsolidatedTestCase(TestCase):
     """整合的tasks测试类 - 消除重复，专注核心功能"""
@@ -89,8 +78,8 @@ class TasksConsolidatedTestCase(TestCase):
 
     # ==================== Feed Fetch Tests ====================
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_success(self, mock_fetch_feed, mock_convert_time):
         """测试成功的feed获取 - 核心功能验证"""
         mock_convert_time.return_value = timezone.now()
@@ -111,7 +100,7 @@ class TasksConsolidatedTestCase(TestCase):
         self.assertEqual(Entry.objects.count(), 1)
         self.assertEqual(Entry.objects.first().original_title, "Title0")
 
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_error(self, mock_fetch_feed):
         """测试feed获取错误处理 - 边界情况处理"""
         mock_fetch_feed.return_value = {
@@ -126,7 +115,7 @@ class TasksConsolidatedTestCase(TestCase):
         self.assertFalse(self.feed.fetch_status)
         self.assertIn("Network Error", self.feed.log)
 
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_no_update(self, mock_fetch_feed):
         """测试feed无需更新的情况 - 正常流程验证"""
         mock_fetch_feed.return_value = {
@@ -141,8 +130,8 @@ class TasksConsolidatedTestCase(TestCase):
         self.assertTrue(self.feed.fetch_status)
         self.assertIn("Feed is up to date, Skip", self.feed.log)
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_content_fallback(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -163,8 +152,8 @@ class TasksConsolidatedTestCase(TestCase):
         entry = Entry.objects.first()
         self.assertEqual(entry.original_content, "Summary0")
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_batch_processing(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -187,8 +176,8 @@ class TasksConsolidatedTestCase(TestCase):
         # 验证批量创建是否成功 - 由于max_posts限制，只能创建10个条目
         self.assertEqual(Entry.objects.count(), 10)
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_invalid_guid(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -221,8 +210,8 @@ class TasksConsolidatedTestCase(TestCase):
         # 只有第一个条目被创建，第二个被跳过
         self.assertEqual(Entry.objects.count(), 1)
 
-    @patch("core.tasks.convert_struct_time_to_datetime")
-    @patch("core.tasks.fetch_feed")
+    @patch("core.tasks.fetch_feeds.convert_struct_time_to_datetime")
+    @patch("core.tasks.fetch_feeds.fetch_feed")
     def test_handle_single_feed_fetch_existing_entries_skip(
         self, mock_fetch_feed, mock_convert_time
     ):
@@ -251,7 +240,7 @@ class TasksConsolidatedTestCase(TestCase):
         existing_entry.refresh_from_db()
         self.assertEqual(existing_entry.original_title, "Existing Title")
 
-    @patch("core.tasks.handle_single_feed_fetch")
+    @patch("core.tasks.fetch_feeds.handle_single_feed_fetch")
     def test_handle_feeds_fetch_multiple(self, mock_handle_single):
         """测试批量feed处理 - 批量操作验证"""
         feed2 = Feed.objects.create(
@@ -296,10 +285,10 @@ class TasksConsolidatedTestCase(TestCase):
         self.assertEqual(first_metrics["tokens"], 15)
         self.assertEqual(second_metrics["tokens"], 0)  # 应该跳过
 
-    @patch("core.tasks.text_handler")
-    @patch("core.tasks._auto_retry")
+    @patch("core.tasks.translate_feeds.text_handler")
+    @patch("core.tasks.translate_feeds.auto_retry")
     def test_translate_content_with_skip_elements(
-        self, mock_auto_retry, mock_text_handler
+        self, mockauto_retry, mock_text_handler
     ):
         """测试内容翻译中的元素跳过逻辑 - 特殊处理验证"""
         mock_text_handler.should_skip.side_effect = lambda x: "skip" in str(x)
@@ -308,17 +297,17 @@ class TasksConsolidatedTestCase(TestCase):
             content="<p>Normal content</p><p>skip this content</p>"
         )
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "<p>Translated content</p>",
             "tokens": 10,
         }
 
         result = _translate_content(entry, "en", self.agent)
         self.assertEqual(result["tokens"], 10)
-        mock_auto_retry.assert_called_once()
+        mockauto_retry.assert_called_once()
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_basic(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_basic(self, mockauto_retry):
         """测试feed翻译的基本流程 - 核心翻译流程"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -327,7 +316,7 @@ class TasksConsolidatedTestCase(TestCase):
 
         entry = self._create_test_entry()
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "Translated Title",
             "tokens": 10,
             "characters": 15,
@@ -338,8 +327,8 @@ class TasksConsolidatedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.translated_title, "Translated Title")
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_content_translation(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_content_translation(self, mockauto_retry):
         """测试内容翻译流程 - 内容翻译验证"""
         self.feed.translator = self.agent
         self.feed.translate_title = False
@@ -348,7 +337,7 @@ class TasksConsolidatedTestCase(TestCase):
 
         entry = self._create_test_entry(content="<p>Test content</p>")
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "<p>Translated content</p>",
             "tokens": 20,
             "characters": 25,
@@ -359,8 +348,8 @@ class TasksConsolidatedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.translated_content, "<p>Translated content</p>")
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_with_fetch_article(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_with_fetch_article(self, mockauto_retry):
         """测试文章内容获取功能 - 特殊功能验证"""
         self.feed.translator = self.agent
         self.feed.translate_title = False
@@ -370,9 +359,9 @@ class TasksConsolidatedTestCase(TestCase):
 
         entry = self._create_test_entry(content="<p>Original content</p>")
 
-        with patch("core.tasks._fetch_article_content") as mock_fetch:
+        with patch("core.tasks.translate_feeds._fetch_article_content") as mock_fetch:
             mock_fetch.return_value = "<p>Fetched article content</p>"
-            mock_auto_retry.return_value = {
+            mockauto_retry.return_value = {
                 "text": "<p>Translated fetched content</p>",
                 "tokens": 25,
                 "characters": 30,
@@ -386,8 +375,8 @@ class TasksConsolidatedTestCase(TestCase):
                 entry.translated_content, "<p>Translated fetched content</p>"
             )
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_batch_processing(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_batch_processing(self, mockauto_retry):
         """测试翻译的批量处理 - 批量操作验证"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -400,7 +389,7 @@ class TasksConsolidatedTestCase(TestCase):
             entry = self._create_test_entry(title=f"Title {i}")
             entries.append(entry)
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": f"Translated Title",
             "tokens": 10,
             "characters": 15,
@@ -417,8 +406,8 @@ class TasksConsolidatedTestCase(TestCase):
             # 我们主要测试批量处理逻辑是否正常工作
             pass
 
-    @patch("core.tasks._auto_retry")
-    def test_translate_feed_entry_error_handling(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_translate_feed_entry_error_handling(self, mockauto_retry):
         """测试条目翻译错误处理 - 错误处理验证"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -427,7 +416,7 @@ class TasksConsolidatedTestCase(TestCase):
         entry = self._create_test_entry()
 
         # 模拟翻译失败
-        mock_auto_retry.side_effect = Exception("Translation failed")
+        mockauto_retry.side_effect = Exception("Translation failed")
 
         translate_feed(self.feed, target_field="title")
 
@@ -463,14 +452,14 @@ class TasksConsolidatedTestCase(TestCase):
 
     # ==================== Summary Tests ====================
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_basic(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_basic(self, mockauto_retry):
         """测试feed摘要的基本功能 - 核心摘要流程"""
         self.feed.summarizer = self.agent
         self.feed.save()
 
         entry = self._create_test_entry()
-        mock_auto_retry.return_value = {"text": "Summarized content", "tokens": 10}
+        mockauto_retry.return_value = {"text": "Summarized content", "tokens": 10}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -478,14 +467,14 @@ class TasksConsolidatedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.ai_summary, "Summarized content")
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_no_summarizer(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_no_summarizer(self, mockauto_retry):
         """测试无摘要引擎的情况 - 错误处理验证"""
         result = summarize_feed(self.feed)
         self.assertFalse(result)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_no_entries(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_no_entries(self, mockauto_retry):
         """测试无条目的情况 - 边界条件处理"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -497,7 +486,7 @@ class TasksConsolidatedTestCase(TestCase):
         """测试摘要过程中的严重错误处理 - 异常情况验证"""
         entry = self._create_test_entry()
 
-        with patch("core.tasks.text_handler.clean_content") as mock_clean:
+        with patch("core.tasks.summarize_feeds.text_handler.clean_content") as mock_clean:
             mock_clean.side_effect = Exception("Critical error")
 
             result = summarize_feed(self.feed)
@@ -506,8 +495,8 @@ class TasksConsolidatedTestCase(TestCase):
             entry.refresh_from_db()
             self.assertIn("Summary failed", entry.ai_summary)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_with_chunking(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_with_chunking(self, mockauto_retry):
         """测试内容分块摘要 - 复杂内容处理验证"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -516,7 +505,7 @@ class TasksConsolidatedTestCase(TestCase):
         long_content = "<p>" + "Long content. " * 200 + "</p>"
         entry = self._create_test_entry(content=long_content)
 
-        mock_auto_retry.return_value = {"text": "Chunk summary", "tokens": 20}
+        mockauto_retry.return_value = {"text": "Chunk summary", "tokens": 20}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -524,8 +513,8 @@ class TasksConsolidatedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertIsNotNone(entry.ai_summary)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_with_context_management(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_with_context_management(self, mockauto_retry):
         """测试上下文管理的摘要 - 高级功能验证"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -534,7 +523,7 @@ class TasksConsolidatedTestCase(TestCase):
         medium_content = "<p>" + "Medium content. " * 50 + "</p>"
         entry = self._create_test_entry(content=medium_content)
 
-        mock_auto_retry.return_value = {"text": "Context-aware summary", "tokens": 15}
+        mockauto_retry.return_value = {"text": "Context-aware summary", "tokens": 15}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -542,8 +531,8 @@ class TasksConsolidatedTestCase(TestCase):
         entry.refresh_from_db()
         self.assertIsNotNone(entry.ai_summary)
 
-    @patch("core.tasks._auto_retry")
-    def test_summarize_feed_batch_saving(self, mock_auto_retry):
+    @patch("core.tasks.summarize_feeds.auto_retry")
+    def test_summarize_feed_batch_saving(self, mockauto_retry):
         """测试摘要的批量保存 - 批量操作验证"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -554,7 +543,7 @@ class TasksConsolidatedTestCase(TestCase):
             entry = self._create_test_entry(title=f"Title {i}")
             entries.append(entry)
 
-        mock_auto_retry.return_value = {"text": "Batch summary", "tokens": 10}
+        mockauto_retry.return_value = {"text": "Batch summary", "tokens": 10}
 
         result = summarize_feed(self.feed)
         self.assertTrue(result)
@@ -566,7 +555,7 @@ class TasksConsolidatedTestCase(TestCase):
 
     # ==================== Utility Function Tests ====================
 
-    def test_auto_retry_succeeds_after_failures(self):
+    def testauto_retry_succeeds_after_failures(self):
         """测试自动重试的成功逻辑 - 重试机制验证"""
         calls = {"count": 0}
 
@@ -576,33 +565,33 @@ class TasksConsolidatedTestCase(TestCase):
                 raise Exception("Temporary failure")
             return {"text": "Success", "tokens": 10}
 
-        result = _auto_retry(flaky_function, max_retries=5, text="test")
+        result = auto_retry(flaky_function, max_retries=5, text="test")
 
         self.assertEqual(result["text"], "Success")
         self.assertEqual(calls["count"], 3)
 
-    def test_auto_retry_all_failures(self):
+    def testauto_retry_all_failures(self):
         """测试所有重试都失败的情况 - 边界条件验证"""
 
         def always_fail(**kwargs):
             raise Exception("Always fails")
 
-        result = _auto_retry(always_fail, max_retries=3, text="test")
+        result = auto_retry(always_fail, max_retries=3, text="test")
 
         self.assertEqual(result, {})  # 应该返回空字典
 
-    def test_auto_retry_memory_cleanup(self):
+    def testauto_retry_memory_cleanup(self):
         """测试重试函数的内存清理 - 内存管理验证"""
         large_text = "x" * 2000  # 超过1000字符的文本
 
         def simple_function(**kwargs):
             return {"text": "Success"}
 
-        result = _auto_retry(simple_function, text=large_text)
+        result = auto_retry(simple_function, text=large_text)
 
         self.assertEqual(result["text"], "Success")
 
-    @patch("core.tasks.newspaper.Article")
+    @patch("core.tasks.translate_feeds.newspaper.Article")
     def test_fetch_article_content_success(self, mock_article):
         """测试文章内容获取成功 - 核心功能验证"""
         mock_article_instance = MagicMock()
@@ -615,7 +604,7 @@ class TasksConsolidatedTestCase(TestCase):
         mock_article_instance.download.assert_called_once()
         mock_article_instance.parse.assert_called_once()
 
-    @patch("core.tasks.newspaper.Article")
+    @patch("core.tasks.translate_feeds.newspaper.Article")
     def test_fetch_article_content_failure(self, mock_article):
         """测试文章内容获取失败 - 错误处理验证"""
         mock_article.side_effect = Exception("Download failed")
@@ -661,8 +650,8 @@ class TasksConsolidatedTestCase(TestCase):
 
     # ==================== Integration Tests ====================
 
-    @patch("core.tasks._auto_retry")
-    def test_handle_feeds_translation_integration(self, mock_auto_retry):
+    @patch("core.tasks.translate_feeds.auto_retry")
+    def test_handle_feeds_translation_integration(self, mockauto_retry):
         """测试feed翻译的集成流程 - 端到端验证"""
         self.feed.translator = self.agent
         self.feed.translate_title = True
@@ -670,7 +659,7 @@ class TasksConsolidatedTestCase(TestCase):
 
         entry = self._create_test_entry()
 
-        mock_auto_retry.return_value = {
+        mockauto_retry.return_value = {
             "text": "Translated Title",
             "tokens": 10,
             "characters": 15,
@@ -684,7 +673,7 @@ class TasksConsolidatedTestCase(TestCase):
         self.feed.refresh_from_db()
         self.assertIsNotNone(self.feed.last_translate)
 
-    @patch("core.tasks.handle_single_feed_fetch")
+    @patch("core.tasks.fetch_feeds.handle_single_feed_fetch")
     def test_handle_feeds_summary(self, mock_handle_single):
         """测试批量摘要处理 - 批量操作验证"""
         # 确保所有feed都有summarizer
@@ -755,8 +744,8 @@ class TasksConsolidatedTestCase(TestCase):
         long_content = "<p>" + "Long content. " * 100 + "</p>"
         entry = self._create_test_entry(content=long_content)
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {"text": "Chunked summary", "tokens": 50}
+        with patch("core.tasks.utils.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {"text": "Chunked summary", "tokens": 50}
 
             result = summarize_feed(self.feed)
             self.assertTrue(result)
@@ -799,8 +788,8 @@ class TasksConsolidatedTestCase(TestCase):
         short_content = "<p>Short content.</p>"
         entry = self._create_test_entry(content=short_content)
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {
                 "text": "Single chunk summary",
                 "tokens": 10,
             }
@@ -821,8 +810,8 @@ class TasksConsolidatedTestCase(TestCase):
         for i in range(5):
             self._create_test_entry(title=f"Title {i}")
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {"text": "Limited summary", "tokens": 10}
+        with patch("core.tasks.utils.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {"text": "Limited summary", "tokens": 10}
 
             result = summarize_feed(self.feed)
             self.assertTrue(result)
@@ -844,8 +833,8 @@ class TasksConsolidatedTestCase(TestCase):
         # 创建一个没有摘要的条目
         entry_without_summary = self._create_test_entry(title="New Entry")
 
-        with patch("core.tasks._auto_retry") as mock_auto_retry:
-            mock_auto_retry.return_value = {"text": "New summary", "tokens": 10}
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
+            mockauto_retry.return_value = {"text": "New summary", "tokens": 10}
 
             result = summarize_feed(self.feed)
             self.assertTrue(result)

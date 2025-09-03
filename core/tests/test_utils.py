@@ -6,7 +6,7 @@ from utils.text_handler import (
     chunk_on_delimiter,
     adaptive_chunking,
 )
-from utils.task_manager import TaskManager
+from core.tasks.task_manager import TaskManager
 
 
 class TextHandlerTests(SimpleTestCase):
@@ -50,7 +50,7 @@ class TextHandlerTests(SimpleTestCase):
 
 
 class TaskManagerTests(SimpleTestCase):
-    """Tests for utils.task_manager.TaskManager."""
+    """Tests for core.tasks.task_manager.TaskManager."""
 
     def test_submit_and_status(self):
         def add(a, b):

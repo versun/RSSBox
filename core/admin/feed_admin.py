@@ -15,7 +15,7 @@ from core.actions import (
     clean_ai_summary,
 )
 from utils.modelAdmin_utils import status_icon
-from utils.task_manager import task_manager
+from core.tasks.task_manager import task_manager
 from core.views import import_opml
 from core.management.commands.update_feeds import update_single_feed
 from core.admin import core_admin_site

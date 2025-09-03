@@ -5,14 +5,15 @@ from unittest import mock
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from utils.feed_action import (
-    convert_struct_time_to_datetime,
-    manual_fetch_feed,
+from core.cache import (
     _build_atom_feed,
     _add_atom_entry,
     _finalize_atom_feed,
 )
-
+from core.tasks.fetch_feeds import (
+    convert_struct_time_to_datetime,
+    manual_fetch_feed,
+)
 
 class ConvertStructTimeTests(SimpleTestCase):
     """Unit tests for convert_struct_time_to_datetime helper."""
@@ -29,13 +30,13 @@ class ConvertStructTimeTests(SimpleTestCase):
 
 
 class ManualFetchFeedTests(SimpleTestCase):
-    """Isolated tests for utils.feed_action.manual_fetch_feed."""
+    """Isolated tests for core.tasks.fetch_feeds.manual_fetch_feed."""
 
     def setUp(self):
         self.mock_patches = [
-            mock.patch("utils.feed_action.UserAgent"),
+            mock.patch("core.tasks.fetch_feeds.UserAgent"),
             mock.patch("httpx.Client"),
-            mock.patch("utils.feed_action.feedparser.parse"),
+            mock.patch("core.tasks.fetch_feeds.feedparser.parse"),
         ]
         self.mock_useragent, self.mock_client_cls, self.mock_parse = [
             p.start() for p in self.mock_patches
@@ -183,7 +184,7 @@ class AtomFeedTests(SimpleTestCase):
     """Tests for atom feed building, entry addition and finalization."""
 
     @mock.patch(
-        "utils.feed_action.set_translation_display", lambda o, t, *_args, **_kw: f"{t}"
+        "core.cache.set_translation_display", lambda o, t, *_args, **_kw: f"{t}"
     )
     def test_atom_feed_operations(self):
         """Test building atom feed with entry and finalization."""

@@ -4,7 +4,6 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse
 from core.models import Tag
-from utils.task_manager import task_manager
 from core.admin import core_admin_site
 from core.actions import tag_force_update
 
