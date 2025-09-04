@@ -4,7 +4,7 @@
     <xsl:template match="/">
         <html xmlns="http://www.w3.org/1999/xhtml" lang="en" dir="ltr">
             <head>
-                <title><xsl:value-of select="/rss/channel/title"/> RSS Feed</title>
+                <title><xsl:value-of select="/atom:feed/atom:title"/> RSS Feed</title>
                 <meta charset="UTF-8" />
                 <meta http-equiv="x-ua-compatible" content="IE=edge,chrome=1" />
                 <meta http-equiv="content-language" content="en_US" />
@@ -23,6 +23,25 @@
                     }
                     .item {
                         max-width: 768px;
+                        width: 100%;
+                        overflow: hidden;
+                    }
+                    details {
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                    }
+                    details img {
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    details table {
+                        max-width: 100%;
+                        table-layout: fixed;
+                    }
+                    details pre {
+                        max-width: 100%;
+                        overflow-x: auto;
+                        white-space: pre-wrap;
                     }
                     a {
                         color: #4166f5;
@@ -55,42 +74,46 @@
                             website.
                         </p>
                             <p>
-                                <xsl:value-of select="/feed/description"/>
+                                <xsl:value-of select="/atom:feed/atom:subtitle"/>
                             </p>
                         </header>
                         <main>
-                        <ul>
                             <xsl:for-each select="atom:feed/atom:entry">
-                            <li>
-                                <time>
-                                    <xsl:choose>
-                                        <xsl:when test="atom:updated">
-                                            <xsl:value-of select="substring(atom:updated, 0, 17)" />
-                                        </xsl:when>
-                                        <xsl:otherwise>
-                                            <xsl:value-of select="substring(atom:published, 0, 17)" />
-                                        </xsl:otherwise>
-                                    </xsl:choose>
-                                </time> - 
-                                <a hreflang="en" target="_blank">
-                                    <xsl:attribute name="href">
-                                        <xsl:value-of select="atom:link[@rel='alternate']/@href | atom:link[not(@rel)]/@href"/>
-                                    </xsl:attribute>
-                                    <xsl:value-of select="atom:title"/>
-                                </a>
-                                <!-- <p>
-                                    <xsl:choose>
-                                        <xsl:when test="atom:content">
-                                            <xsl:value-of select="substring(atom:content, 1, 200)" />...
-                                        </xsl:when>
-                                        <xsl:otherwise>
-                                            <xsl:value-of select="substring(atom:summary, 1, 200)" />...
-                                        </xsl:otherwise>
-                                    </xsl:choose>
-                                </p> -->
-                            </li>
+                            <details>
+                                <summary>
+                                    <time>
+                                        <xsl:choose>
+                                            <xsl:when test="atom:updated">
+                                                <xsl:value-of select="substring(atom:updated, 0, 17)" />
+                                            </xsl:when>
+                                            <xsl:otherwise>
+                                                <xsl:value-of select="substring(atom:published, 0, 17)" />
+                                            </xsl:otherwise>
+                                        </xsl:choose>
+                                    </time> - 
+                                    <a hreflang="en" target="_blank">
+                                        <xsl:attribute name="href">
+                                            <xsl:value-of select="atom:link[@rel='alternate']/@href | atom:link[not(@rel)]/@href"/>
+                                        </xsl:attribute>
+                                        <xsl:value-of select="atom:title"/>
+                                    </a>
+                                </summary>
+                                
+                                <xsl:if test="atom:summary and atom:summary != ''">
+                                    <h4>Summary</h4>
+                                    <div>
+                                        <xsl:value-of select="atom:summary" disable-output-escaping="yes"/>
+                                    </div>
+                                </xsl:if>
+                                
+                                <xsl:if test="atom:content and atom:content != ''">
+                                    <h4>Content</h4>
+                                    <div>
+                                        <xsl:value-of select="atom:content" disable-output-escaping="yes"/>
+                                    </div>
+                                </xsl:if>
+                            </details>
                             </xsl:for-each>
-                            </ul>
                         </main>
                     </div>
                 </div>
