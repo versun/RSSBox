@@ -21,3 +21,11 @@ def auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
             del kwargs[key]
 
     return result
+
+def extract_content_from_entry(entry_data):
+    """Extract content from entry (feedparser)"""
+    if "content" in entry_data and entry_data.content:
+        for content_item in entry_data.content:
+            if content_item.value:
+                return content_item.value
+    return entry_data.get("summary", "")
