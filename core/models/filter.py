@@ -1,8 +1,6 @@
 import logging
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from tagulous.models import TagField
 from utils import text_handler
 import json
@@ -39,16 +37,16 @@ class Filter(models.Model):
         help_text=_("Keywords to filter entries. "),
     )
 
-    agent_content_type = models.ForeignKey(
-        ContentType,
+    agent = models.ForeignKey(
+        "OpenAIAgent",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         default=None,
-        related_name="filter_agent",
+        related_name="filters",
+        verbose_name=_("AI Agent"),
+        help_text=_("Select a valid OpenAI agent for filtering"),
     )
-    agent_object_id = models.PositiveIntegerField(null=True, blank=True, default=None)
-    agent = GenericForeignKey("agent_content_type", "agent_object_id")
     filter_prompt = models.TextField(
         _("Filter Prompt"),
         blank=True,
@@ -219,8 +217,7 @@ class Filter(models.Model):
         if not is_new and original is not None:
             # 检查关键字段是否变化
             ai_fields = [
-                "agent_content_type_id",
-                "agent_object_id",
+                "agent_id",
                 "filter_prompt",
                 "filter_method",
                 "filter_original_title",

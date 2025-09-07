@@ -1,8 +1,8 @@
 from django import forms
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
-from core.models import Feed
-from utils.modelAdmin_utils import get_all_agent_choices, get_ai_agent_choices
+from core.models import Feed, OpenAIAgent
+from utils.modelAdmin_utils import get_all_agent_choices
 
 
 class FeedForm(forms.ModelForm):
@@ -12,12 +12,6 @@ class FeedForm(forms.ModelForm):
         required=False,
         help_text=_("Select a valid agent for translation"),
         label=_("Translator"),
-    )
-    summary_engine_option = forms.ChoiceField(
-        choices=(),
-        required=False,
-        help_text=_("Select a valid agent for summarization"),
-        label=_("Summarizer"),
     )
     simple_update_frequency = forms.ChoiceField(
         choices=(
@@ -35,28 +29,36 @@ class FeedForm(forms.ModelForm):
         label=_("Update Frequency"),
         initial=60,
     )
-    translation_options = forms.MultipleChoiceField(
-        choices=(
-            ("title", _("Title")),
-            ("content", _("Content")),
-            ("summary", _("Summary")),
-        ),
+    # 直接使用三个独立的布尔字段，简单清晰
+    translate_title = forms.BooleanField(
         required=False,
-        label=_("Translation Options"),
-        widget=forms.CheckboxSelectMultiple,
-        initial=[],
+        label=_("Translate Title"),
+    )
+    translate_content = forms.BooleanField(
+        required=False,
+        label=_("Translate Content"),
+    )
+    summary = forms.BooleanField(
+        required=False,
+        label=_("Generate Summary"),
     )
 
     class Meta:
         model = Feed
-        exclude = ["fetch_status", "translation_status", "translator", "summary_engine"]
+        exclude = ["fetch_status", "translation_status", "translator"]
 
     def __init__(self, *args, **kwargs):
         super(FeedForm, self).__init__(*args, **kwargs)
 
-        # 获取翻译器和摘要引擎的选择项
-        self.fields["translator_option"].choices = get_all_agent_choices()
-        self.fields["summary_engine_option"].choices = get_ai_agent_choices()
+        # 获取翻译器的选择项，并在开头添加空选项
+        agent_choices = get_all_agent_choices()
+        self.fields["translator_option"].choices = [("", _("Select a valid agent..."))] + agent_choices
+        
+        # 限制 summarizer 字段的选择项，只显示有效的 OpenAI agents
+        if 'summarizer' in self.fields:
+            self.fields['summarizer'].queryset = OpenAIAgent.objects.filter(valid=True)
+            self.fields['summarizer'].empty_label = _("Select a valid OpenAI agent...")
+
 
         self.fields["name"].widget.attrs.update(
             {
@@ -82,24 +84,13 @@ class FeedForm(forms.ModelForm):
             ].initial = (
                 f"{instance.translator_content_type.id}:{instance.translator_object_id}"
             )
-        if instance.summarizer_content_type and instance.summarizer_object_id:
-            self.fields[
-                "summary_engine_option"
-            ].initial = (
-                f"{instance.summarizer_content_type.id}:{instance.summarizer_object_id}"
-            )
         if instance.update_frequency:
             self.fields["simple_update_frequency"].initial = instance.update_frequency
 
-        # 修改后的翻译选项初始化逻辑
-        initial_options = []
-        if instance.translate_title:
-            initial_options.append("title")
-        if instance.translate_content:
-            initial_options.append("content")
-        if instance.summary:
-            initial_options.append("summary")
-        self.fields["translation_options"].initial = initial_options
+        # 直接设置布尔字段的初始值，无需转换
+        self.fields["translate_title"].initial = instance.translate_title
+        self.fields["translate_content"].initial = instance.translate_content
+        self.fields["summary"].initial = instance.summary
 
     def _process_translator(self, instance):
         if self.cleaned_data["translator_option"]:
@@ -112,16 +103,6 @@ class FeedForm(forms.ModelForm):
             instance.translator_content_type_id = None
             instance.translator_object_id = None
 
-    def _process_summary_engine(self, instance):
-        if self.cleaned_data["summary_engine_option"]:
-            summarizer_content_type_id, summarizer_object_id = map(
-                int, self.cleaned_data["summary_engine_option"].split(":")
-            )
-            instance.summarizer_content_type_id = summarizer_content_type_id
-            instance.summarizer_object_id = summarizer_object_id
-        else:
-            instance.summarizer_content_type_id = None
-            instance.summarizer_object_id = None
 
     def _process_update_frequency(self, instance):
         if self.cleaned_data["simple_update_frequency"]:
@@ -131,14 +112,6 @@ class FeedForm(forms.ModelForm):
         else:
             instance.update_frequency = 60
 
-    def _process_translation_options(self, instance):
-        # 确保获取翻译选项数据，默认为空列表
-        translation_options = self.cleaned_data.get("translation_options", [])
-
-        # 明确设置每个选项的状态：勾选则为True，否则为False
-        instance.translate_title = "title" in translation_options
-        instance.translate_content = "content" in translation_options
-        instance.summary = "summary" in translation_options
 
     # 重写save方法，以处理自定义字段的数据
     @transaction.atomic
@@ -146,9 +119,8 @@ class FeedForm(forms.ModelForm):
         instance = super(FeedForm, self).save(commit=False)
 
         self._process_translator(instance)
-        self._process_summary_engine(instance)
         self._process_update_frequency(instance)
-        self._process_translation_options(instance)
+        # 布尔字段直接由 ModelForm 处理，无需额外处理
 
         if commit:
             instance.save()

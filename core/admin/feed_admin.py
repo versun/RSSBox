@@ -17,7 +17,7 @@ from core.actions import (
 from utils.modelAdmin_utils import status_icon
 from core.tasks.task_manager import task_manager
 from core.views import import_opml
-from core.management.commands.update_feeds import update_single_feed
+from core.management.commands.feed_updater import update_single_feed
 from core.admin import core_admin_site
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class FeedAdmin(admin.ModelAdmin):
         "name",
         "fetch_feed",
         "generate_feed",
-        "translator",
+        # "translator",
         "target_language",
         "translation_options",
         "show_filters",
@@ -82,9 +82,11 @@ class FeedAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "target_language",
-                    "translation_options",
+                    "translate_title",
+                    "translate_content",
+                    "summary",
                     "translator_option",
-                    "summary_engine_option",
+                    "summarizer",
                     "summary_detail",
                     "additional_prompt",
                 ),
@@ -125,6 +127,16 @@ class FeedAdmin(admin.ModelAdmin):
     ]
     list_per_page = 20
 
+    def get_queryset(self, request):
+        """
+        过滤掉系统生成的 Digest Feed，只显示用户添加的普通 Feed。
+        Digest Feed 的 feed_url 包含 '/core/digest/rss/' 路径。
+        """
+        from config import settings
+        queryset = super().get_queryset(request)
+        # 过滤掉 Digest Feed
+        return queryset.exclude(name__startswith="Digest:", name__endswith="@Digest@hide")
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -151,9 +163,11 @@ class FeedAdmin(admin.ModelAdmin):
             for field in [
                 "feed_url",  # 需要重新抓取
                 "target_language",  # 需要重新翻译
-                "translation_options",  # 需要重新翻译标题
+                "translate_title",  # 需要重新翻译标题
+                "translate_content",  # 需要重新翻译内容
+                "summary",  # 需要重新生成摘要
                 "translator_option",  # 需要用新翻译器重新翻译
-                "summary_engine_option",  # 需要用新引擎重新生成摘要
+                "summarizer",  # 需要用新引擎重新生成摘要
                 "additional_prompt",
             ]
         )
@@ -188,7 +202,7 @@ class FeedAdmin(admin.ModelAdmin):
 
     def _submit_feed_update_task(self, feed):
         task_id = task_manager.submit_task(
-            f"Update Feed: {feed.name}", update_single_feed, feed
+            f"update_feed_{feed.slug}", update_single_feed, feed
         )
         logger.info(f"Submitted feed update task after commit: {task_id}")
 
@@ -211,7 +225,7 @@ class FeedAdmin(admin.ModelAdmin):
     def translator(self, obj):
         return obj.translator
 
-    @admin.display(description=_("Generate feed"))
+    @admin.display(description=_("Generate"))
     def generate_feed(self, obj):  # 显示3个元素：translated_status、feed_url、json_url
         if not obj.translate_title and not obj.translate_content and not obj.summary:
             translation_status_icon = "-"
@@ -226,7 +240,7 @@ class FeedAdmin(admin.ModelAdmin):
             "json",  # 4
         )
 
-    @admin.display(description=_("Fetch Feed"))
+    @admin.display(description=_("Fetch"))
     def fetch_feed(self, obj):  # 显示3个元素：fetch状态、原url、代理feed
         if obj.pk:
             status = status_icon(obj.fetch_status)
@@ -241,24 +255,16 @@ class FeedAdmin(admin.ModelAdmin):
             "proxy",  # 4
         )
 
-    @admin.display(description=_("Options"))
+    @admin.display(description=_("Tasks"))
     def translation_options(self, obj):
-        translate_title = "🟢" if obj.translate_title else "⚪"
-        translate_content = "🟢" if obj.translate_content else "⚪"
-        summary_check = "🟢" if obj.summary else "⚪"
-        title = _("Title")
-        content = _("Content")
-        summary = _("Summary")
-
-        return format_html(
-            "<span>{0}{1}</span><br><span>{2}{3}</span><br><span>{4}{5}</span>",
-            translate_title,
-            title,
-            translate_content,
-            content,
-            summary_check,
-            summary,
-        )
+        html_content = ""
+        if obj.translate_title:
+            html_content += f"✔️{_('Title')}<br>"
+        if obj.translate_content:
+            html_content += f"✔️{_('Content')}<br>"
+        if obj.summary:
+            html_content += f"✔️{_('Summary')}<br>"
+        return format_html(html_content)
 
     @admin.display(description=_("Log"))
     def show_log(self, obj):

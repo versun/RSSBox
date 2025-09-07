@@ -112,18 +112,16 @@ class Feed(models.Model):
     )
     translator = GenericForeignKey("translator_content_type", "translator_object_id")
 
-    summarizer_content_type = models.ForeignKey(
-        ContentType,
+    summarizer = models.ForeignKey(
+        "OpenAIAgent",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         default=None,
-        related_name="summarizer",
+        related_name="feeds_as_summarizer",
+        verbose_name=_("Summarizer"),
+        help_text=_("Select a valid OpenAI agent for summarization"),
     )
-    summarizer_object_id = models.PositiveIntegerField(
-        null=True, blank=True, default=None
-    )
-    summarizer = GenericForeignKey("summarizer_content_type", "summarizer_object_id")
 
     summary_detail = models.FloatField(
         _("Summary Detail"),
@@ -223,9 +221,8 @@ class Feed(models.Model):
         if not self.translator_content_type_id:
             self.translator_content_type_id = None
             self.translator_object_id = None
-        if not self.summarizer_content_type_id:
-            self.summarizer_content_type_id = None
-            self.summarizer_object_id = None
+        if not self.summarizer_id:
+            self.summarizer_id = None
 
         super(Feed, self).save(*args, **kwargs)
 

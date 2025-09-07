@@ -11,11 +11,11 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from lxml import etree
-from utils.modelAdmin_utils import get_all_agent_choices, get_ai_agent_choices
+from utils.modelAdmin_utils import get_all_agent_choices
 from core.admin import core_admin_site
-from core.models import Filter, Tag
+from core.models import Filter, Tag, OpenAIAgent
 from core.tasks.task_manager import task_manager
-from .management.commands.update_feeds import update_multiple_feeds
+from .management.commands.feed_updater import update_multiple_feeds
 from core.cache import cache_tag
 
 logger = logging.getLogger(__name__)
@@ -106,14 +106,18 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
 
                 # 获取feed URL
                 feed_url = get_feed_url_func(feed)
+                
+                # 确保所有字段都是字符串，防止None值导致lxml错误
+                feed_name = feed.name or "Untitled Feed"
+                feed_url = feed_url or ""
 
                 # 添加feed条目
                 etree.SubElement(
                     tag_outline,
                     "outline",
                     {
-                        "title": feed.name,
-                        "text": feed.name,
+                        "title": feed_name,
+                        "text": feed_name,
                         "type": "rss",
                         "xmlUrl": feed_url,
                         "htmlUrl": feed_url,
@@ -260,13 +264,8 @@ def feed_batch_modify(modeladmin, request, queryset):
                         queryset.update(translator_content_type_id=content_type_id)
                         queryset.update(translator_object_id=object_id)
                     case "summarizer":
-                        content_type_summary_id, object_id_summary = map(
-                            int, value.split(":")
-                        )
-                        queryset.update(
-                            summarizer_content_type_id=content_type_summary_id
-                        )
-                        queryset.update(summarizer_object_id=object_id_summary)
+                        # 直接使用 ForeignKey ID 进行更新
+                        queryset.update(summarizer_id=int(value))
                     case "tags":
                         tag_values = post_data.getlist(
                             "tags_value"
@@ -289,7 +288,8 @@ def feed_batch_modify(modeladmin, request, queryset):
         return redirect(request.get_full_path())
 
     translator_choices = get_all_agent_choices()
-    summary_engine_choices = get_ai_agent_choices()
+    # 为 summarizer 提供直接的选择项，格式为 (id, name)
+    summary_engine_choices = [(str(agent.id), agent.name) for agent in OpenAIAgent.objects.filter(valid=True)]
     filter_choices = [(f"{filter.id}", filter.name) for filter in Filter.objects.all()]
     tags_choices = [(f"{tag.id}", tag.name) for tag in Tag.objects.all()]
     return render(
