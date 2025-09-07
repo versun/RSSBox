@@ -99,18 +99,8 @@
                                     </a>
                                 </summary>
                                 
-                                <xsl:if test="atom:summary and atom:summary != ''">
-                                    <h4>Summary</h4>
-                                    <div>
-                                        <xsl:value-of select="atom:summary" disable-output-escaping="yes"/>
-                                    </div>
-                                </xsl:if>
-                                
                                 <xsl:if test="atom:content and atom:content != ''">
-                                    <h4>Content</h4>
-                                    <div>
                                         <xsl:value-of select="atom:content" disable-output-escaping="yes"/>
-                                    </div>
                                 </xsl:if>
                             </details>
                             </xsl:for-each>
