@@ -86,7 +86,7 @@ class OpenAIAgent(Agent):
             "Advanced OpenAI chat params as JSON."
         ),
     )
-    max_tokens = models.IntegerField(default=0)
+    max_tokens = models.IntegerField(default=0, help_text="0 means detect automatically")
     rate_limit_rpm = models.IntegerField(
         _("Rate Limit (RPM)"),
         default=0,
@@ -202,7 +202,7 @@ class OpenAIAgent(Agent):
                     return low
 
         # 直接使用二分搜索
-        final_limit = binary_search_limit(1024, 1000000)
+        final_limit = binary_search_limit(4096, 1000000)
         self.max_tokens = final_limit
         self.save()
         return final_limit
@@ -308,12 +308,10 @@ class OpenAIAgent(Agent):
             # 计算合理的输出token限制
             input_tokens = get_token_count(system_prompt) + get_token_count(text)
             # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
-            output_token_limit = min(
-                4096,  # 大多数场景下4096个输出token足够
-                max(
-                    512, self.max_tokens - input_tokens - 200
-                ),  # 至少512，最多为剩余空间-200缓冲
-            )
+            output_token_limit = int(max(
+                4096,
+                (self.max_tokens - input_tokens) * 0.8
+            ))
 
             # 正常流程
             adv_params = self.advanced_params or {}
@@ -346,8 +344,19 @@ class OpenAIAgent(Agent):
             ):
                 result_text = res.choices[0].message.content
                 logger.debug(f"[{self.name}]: {result_text[:50]}...")
+            else:
+                # 安全获取 finish_reason，避免在 choices 为空时抛出异常
+                finish_reason = None
+                if res.choices:
+                    try:
+                        finish_reason = res.choices[0].finish_reason
+                    except Exception:
+                        finish_reason = None
+                logger.warning(
+                    f"[{self.name}]: Failed to complete request:[{finish_reason or 'unknown'}]"
+                )
 
-            tokens = res.usage.total_tokens if res.usage else 0
+            tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
             logger.error(f"{self.name}: {e}")
@@ -386,15 +395,14 @@ class OpenAIAgent(Agent):
     def digester(
         self,
         text: str,
-        target_language: str,
         system_prompt: str,
+        digest_name: str,
+        date: str,
         **kwargs,
     ) -> dict:
-        logger.info(f">>> Start Digesting [{target_language}]: {text[:50]}...")
-        prompt = system_prompt.replace(
-                "{target_language}", target_language
-            )
-        return self.completions(text, system_prompt=prompt, **kwargs)
+        logger.info(f">>> Start Digesting [{digest_name}]-{date}")
+        #prompt = system_prompt + settings.output_format_for_digest_prompt
+        return self.completions(text, system_prompt=system_prompt, **kwargs)
 
     def filter(self, text: str, system_prompt: str, **kwargs) -> dict:
         logger.info(f">>> Start Filter: {text[:50]}...")
