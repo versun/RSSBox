@@ -27,15 +27,16 @@ class FeedFormTest(TestCase):
             summary=True,
             translator_content_type=self.ct,
             translator_object_id=self.agent.id,
-            summarizer_content_type=self.ct,
-            summarizer_object_id=self.agent.id,
+            summarizer=self.agent,
         )
 
         form = FeedForm(instance=feed)
         assert form.fields["translator_option"].initial == self.agent_value
-        assert form.fields["summary_engine_option"].initial == self.agent_value
+        # summary_engine_option 字段不存在，已删除
         assert form.fields["simple_update_frequency"].initial == 15
-        assert set(form.fields["translation_options"].initial) == {"title", "summary"}
+        assert form.fields["translate_title"].initial == True
+        assert form.fields["translate_content"].initial == False
+        assert form.fields["summary"].initial == True
 
         # Test save processes custom fields
         form_data = {
@@ -46,10 +47,13 @@ class FeedFormTest(TestCase):
             "total_characters": 0,
             "feed_url": "https://another.com/rss.xml",
             "simple_update_frequency": 60,
-            "translation_options": ["title", "content"],
+            "translate_title": True,
+            "translate_content": True,
+            "summary": False,
             "translator_option": self.agent_value,
-            "summary_engine_option": self.agent_value,
+            # summary_engine_option 字段不存在，已删除
             "target_language": "English",
+            "summarizer": self.agent.id,
         }
 
         form = FeedForm(data=form_data)
@@ -62,5 +66,4 @@ class FeedFormTest(TestCase):
         assert saved_feed.summary is False
         assert saved_feed.translator_content_type_id == self.ct.id
         assert saved_feed.translator_object_id == self.agent.id
-        assert saved_feed.summarizer_content_type_id == self.ct.id
-        assert saved_feed.summarizer_object_id == self.agent.id
+        assert saved_feed.summarizer_id == self.agent.id

@@ -6,7 +6,7 @@ from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
-from core.tasks.translate_feeds import handle_feeds_translation, _translate_title, _translate_content, translate_feed, _fetch_article_content
+from core.tasks.translate_feeds import handle_feeds_translation, _translate_entry_title, _translate_entry_content, translate_feed, _fetch_article_content
 from core.tasks.summarize_feeds import handle_feeds_summary, summarize_feed, _save_progress
 
 class TasksConsolidatedTestCase(TestCase):
@@ -22,7 +22,7 @@ class TasksConsolidatedTestCase(TestCase):
             summary_detail=0.5,  # 设置summary_detail避免断言失败
         )
         self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key")
-        self.test_agent = TestAgent.objects.create(name="Test Agent 2")
+        self.test_agent = OpenAIAgent.objects.create(name="Test Agent 2")
 
     def _create_mock_feed_data(
         self, title="Test Feed", entries_count=1, has_content=True
@@ -262,7 +262,7 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "你好世界", "tokens": 15, "characters": 8}
 
         agent = MockAgent()
-        metrics = _translate_title(entry, target_language="Chinese", engine=agent)
+        metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
 
         self.assertEqual(entry.translated_title, "你好世界")
         self.assertEqual(metrics["tokens"], 15)
@@ -277,8 +277,8 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "你好世界", "tokens": 15, "characters": 8}
 
         agent = MockAgent()
-        first_metrics = _translate_title(entry, target_language="Chinese", engine=agent)
-        second_metrics = _translate_title(
+        first_metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
+        second_metrics = _translate_entry_title(
             entry, target_language="Chinese", engine=agent
         )
 
@@ -302,7 +302,7 @@ class TasksConsolidatedTestCase(TestCase):
             "tokens": 10,
         }
 
-        result = _translate_content(entry, "en", self.agent)
+        result = _translate_entry_content(entry, "en", self.agent)
         self.assertEqual(result["tokens"], 10)
         mockauto_retry.assert_called_once()
 
@@ -714,7 +714,7 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "", "tokens": 0, "characters": 0}
 
         agent = MockAgent()
-        metrics = _translate_title(entry, target_language="Chinese", engine=agent)
+        metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
 
         self.assertIsNone(entry.translated_title)  # 空字符串变为None
         self.assertEqual(metrics["tokens"], 0)
@@ -729,7 +729,7 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "你好世界"}  # 缺少tokens和characters
 
         agent = MockAgent()
-        metrics = _translate_title(entry, target_language="Chinese", engine=agent)
+        metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
 
         self.assertEqual(entry.translated_title, "你好世界")
         self.assertIn("tokens", metrics)

@@ -115,7 +115,7 @@ class FeedAdminSaveModelTest(TestCase):
         """Test save_model for other fields that trigger reprocessing."""
         reprocessing_fields = [
             "translator_option",
-            "summary_engine_option",
+            "summarizer",
             "additional_prompt",
         ]
         for field in reprocessing_fields:
@@ -181,15 +181,15 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_translation_options_changed(
+    def test_save_model_translation_fields_changed(
         self, mock_submit_task, mock_on_commit
     ):
-        """Test save_model when translation_options field is changed."""
+        """Test save_model when translation fields are changed."""
         request = self.factory.post("/")
         request.user = self.user
 
         form = MagicMock()
-        form.changed_data = ["translation_options"]
+        form.changed_data = ["translate_title"]
 
         self.admin.save_model(request, self.feed, form, True)
 
@@ -204,15 +204,15 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_summary_engine_option_changed(
+    def test_save_model_summarizer_changed(
         self, mock_submit_task, mock_on_commit
     ):
-        """Test save_model when summary_engine_option field is changed."""
+        """Test save_model when summarizer field is changed."""
         request = self.factory.post("/")
         request.user = self.user
 
         form = MagicMock()
-        form.changed_data = ["summary_engine_option"]
+        form.changed_data = ["summarizer"]
 
         self.admin.save_model(request, self.feed, form, True)
 
@@ -306,7 +306,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
 
         mock_submit_task.assert_called_once()
         args = mock_submit_task.call_args
-        self.assertEqual(args[0][0], f"Update Feed: {self.feed.name}")
+        self.assertEqual(args[0][0], f"update_feed_{self.feed.slug}")
 
     def test_simple_update_frequency_cases(self):
         """Test simple_update_frequency for different time intervals."""
@@ -450,37 +450,6 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.assertEqual(mock_status_icon.call_count, 1)
         self.assertIn("⏳", result)
 
-    def test_translation_options_display(self):
-        """Test translation_options display method (lines 246-253)."""
-        result = self.admin.translation_options(self.feed)
-
-        # Should show green circles for enabled options
-        self.assertIn("🟢", result)  # translate_title is True
-        self.assertIn("⚪", result)  # summary is False
-
-    def test_translation_options_all_enabled(self):
-        """Test translation_options when all options are enabled."""
-        self.feed.translate_title = True
-        self.feed.translate_content = True
-        self.feed.summary = True
-
-        result = self.admin.translation_options(self.feed)
-
-        # Should show green circles for all options
-        self.assertIn("🟢", result)
-        self.assertNotIn("⚪", result)
-
-    def test_translation_options_all_disabled(self):
-        """Test translation_options when all options are disabled."""
-        self.feed.translate_title = False
-        self.feed.translate_content = False
-        self.feed.summary = False
-
-        result = self.admin.translation_options(self.feed)
-
-        # Should show white circles for all options
-        self.assertIn("⚪", result)
-        self.assertNotIn("🟢", result)
 
     def test_show_log_method(self):
         """Test show_log method (line 265)."""
@@ -718,7 +687,6 @@ class FeedAdminIntegrationTest(TestCase):
             "name",
             "fetch_feed",
             "generate_feed",
-            "translator",
             "target_language",
             "translation_options",
             "show_filters",
@@ -796,9 +764,11 @@ class FeedAdminIntegrationTest(TestCase):
                 {
                     "fields": (
                         "target_language",
-                        "translation_options",
+                        "translate_title",
+                        "translate_content",
+                        "summary",
                         "translator_option",
-                        "summary_engine_option",
+                        "summarizer",
                         "summary_detail",
                         "additional_prompt",
                     )

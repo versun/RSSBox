@@ -3,7 +3,8 @@ from argparse import ArgumentParser
 
 from django.test import SimpleTestCase
 
-from core.management.commands import update_feeds as cmd
+from core.management.commands import feed_updater as cmd
+
 
 
 class UpdateFeedsHandleTests(SimpleTestCase):
@@ -43,9 +44,9 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                 self.command.handle(frequency=None)
             self.assertEqual(ctx.exception.code, 1)
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
-    @patch("core.management.commands.update_feeds.os.path.exists", return_value=True)
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.path.exists", return_value=True)
     def test_handle_lock_file_exists(self, mock_exists, mock_open_file, mock_remove):
         """When lock file present, command should exit with code 0 and not proceed."""
         with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
@@ -55,13 +56,13 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         mock_open_file.assert_not_called()
         mock_remove.assert_not_called()
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
     @patch(
-        "core.management.commands.update_feeds.os.path.exists",
+        "core.management.commands.feed_updater.os.path.exists",
         side_effect=[False, True],
     )
-    @patch("core.management.commands.update_feeds.update_feeds_for_frequency")
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_happy_path(
         self, mock_update, mock_exists, mock_open_file, mock_remove
     ):
@@ -80,16 +81,16 @@ class UpdateFeedsHandleTests(SimpleTestCase):
             with self.subTest(frequency=frequency):
                 with (
                     patch(
-                        "core.management.commands.update_feeds.os.path.exists",
+                        "core.management.commands.feed_updater.os.path.exists",
                         return_value=False,
                     ),
                     patch(
-                        "core.management.commands.update_feeds.open",
+                        "core.management.commands.feed_updater.open",
                         new_callable=mock_open,
                     ),
-                    patch("core.management.commands.update_feeds.os.remove"),
+                    patch("core.management.commands.feed_updater.os.remove"),
                     patch(
-                        "core.management.commands.update_feeds.update_feeds_for_frequency"
+                        "core.management.commands.feed_updater.update_feeds_for_frequency"
                     ) as mock_update,
                 ):
                     # Mock stdout and stderr for the command instance
@@ -102,13 +103,13 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                         simple_update_frequency=frequency
                     )
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
     @patch(
-        "core.management.commands.update_feeds.os.path.exists",
+        "core.management.commands.feed_updater.os.path.exists",
         side_effect=[False, True],
     )
-    @patch("core.management.commands.update_feeds.update_feeds_for_frequency")
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_exception_during_update(
         self, mock_update, mock_exists, mock_open_file, mock_remove
     ):
@@ -123,14 +124,14 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         self.assertEqual(ctx.exception.code, 1)
         mock_remove.assert_called()
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
     @patch(
-        "core.management.commands.update_feeds.os.path.exists",
+        "core.management.commands.feed_updater.os.path.exists",
         side_effect=[False, True],
     )
-    @patch("core.management.commands.update_feeds.update_feeds_for_frequency")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    @patch("core.management.commands.feed_updater.logger")
     def test_handle_exception_logging(
         self, mock_logger, mock_update, mock_exists, mock_open_file, mock_remove
     ):
@@ -146,10 +147,10 @@ class UpdateFeedsHandleTests(SimpleTestCase):
             "Command update_feeds_for_frequency failed: Update failed"
         )
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
-    @patch("core.management.commands.update_feeds.os.path.exists", return_value=False)
-    @patch("core.management.commands.update_feeds.update_feeds_for_frequency")
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.path.exists", return_value=False)
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_lock_file_creation_and_content(
         self, mock_update, mock_exists, mock_open_file, mock_remove
     ):
@@ -157,7 +158,7 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         # Mock stdout and stderr for the command instance
         with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
             with patch(
-                "core.management.commands.update_feeds.os.getpid", return_value=12345
+                "core.management.commands.feed_updater.os.getpid", return_value=12345
             ):
                 self.command.handle(frequency="hourly")
 
@@ -167,13 +168,13 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         handle = mock_open_file.return_value.__enter__.return_value
         handle.write.assert_called_once_with("12345")
 
-    @patch("core.management.commands.update_feeds.os.remove")
-    @patch("core.management.commands.update_feeds.open", new_callable=mock_open)
+    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
     @patch(
-        "core.management.commands.update_feeds.os.path.exists",
+        "core.management.commands.feed_updater.os.path.exists",
         side_effect=[False, False],
     )
-    @patch("core.management.commands.update_feeds.update_feeds_for_frequency")
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_lock_file_cleanup_when_not_exists(
         self, mock_update, mock_exists, mock_open_file, mock_remove
     ):
@@ -188,7 +189,7 @@ class UpdateFeedsHandleTests(SimpleTestCase):
         for frequency, expected_lock_path in self.frequency_to_lock.items():
             with self.subTest(frequency=frequency):
                 with patch(
-                    "core.management.commands.update_feeds.os.path.exists",
+                    "core.management.commands.feed_updater.os.path.exists",
                     return_value=True,
                 ) as mock_exists:
                     with (
@@ -214,17 +215,17 @@ class UpdateSingleFeedTests(SimpleTestCase):
     def _patch_common_mocks(self):
         """Helper method to patch common mocks."""
         patches = [
-            patch("core.management.commands.update_feeds.close_old_connections"),
-            patch("core.management.commands.update_feeds.handle_single_feed_fetch"),
-            patch("core.management.commands.update_feeds.logger"),
+            patch("core.management.commands.feed_updater.close_old_connections"),
+            patch("core.management.commands.feed_updater.handle_single_feed_fetch"),
+            patch("core.management.commands.feed_updater.logger"),
         ]
         return [p.start() for p in patches]
 
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    @patch("core.management.commands.update_feeds.handle_feeds_translation")
-    @patch("core.management.commands.update_feeds.handle_feeds_summary")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.handle_feeds_translation")
+    @patch("core.management.commands.feed_updater.handle_feeds_summary")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_single_feed_success_with_all_options(
         self, mock_logger, mock_summary, mock_translation, mock_fetch, mock_close_conn
     ):
@@ -251,9 +252,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
             f"Completed feed update: {self.mock_feed.name}"
         )
 
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_single_feed_success_minimal_options(
         self, mock_logger, mock_fetch, mock_close_conn
     ):
@@ -310,7 +311,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         self.mock_feed2.slug = "feed-2"
         self.mock_feed2.tags.values_list.return_value = [2, 3]
 
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_empty_list(self, mock_logger):
         """Test update_multiple_feeds with empty feed list."""
         cmd.update_multiple_feeds([])
@@ -331,12 +332,12 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         mock_tag2 = Mock(slug="tag-2")
         return [mock_tag1, mock_tag2]
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.cache_rss")
-    @patch("core.management.commands.update_feeds.cache_tag")
-    @patch("core.management.commands.update_feeds.Tag")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    @patch("core.management.commands.feed_updater.cache_tag")
+    @patch("core.management.commands.feed_updater.Tag")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_success(
         self,
         mock_logger,
@@ -391,9 +392,9 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
 
         mock_cache_tag.assert_has_calls(expected_tag_calls, any_order=True)
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_timeout(
         self, mock_logger, mock_wait, mock_task_manager
     ):
@@ -410,10 +411,10 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
             "Feed update task timed out. 1 tasks did not complete."
         )
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.cache_rss")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_task_exception(
         self, mock_logger, mock_cache_rss, mock_wait, mock_task_manager
     ):
@@ -429,10 +430,10 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
             "A feed update task resulted in an exception: Task failed"
         )
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.cache_rss")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_cache_exception(
         self, mock_logger, mock_cache_rss, mock_wait, mock_task_manager
     ):
@@ -445,7 +446,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         mock_cache_rss.side_effect = [None, Exception("Cache failed"), None, None]
 
         with patch(
-            "core.management.commands.update_feeds.time.time", return_value=1234567890
+            "core.management.commands.feed_updater.time.time", return_value=1234567890
         ):
             cmd.update_multiple_feeds([self.mock_feed1])
 
@@ -453,8 +454,8 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
             f"1234567890: Failed to cache RSS for {self.mock_feed1.slug}: Cache failed"
         )
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_general_exception(
         self, mock_logger, mock_task_manager
     ):
@@ -467,12 +468,12 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
             "Command update_multiple_feeds failed: %s", "General error"
         )
 
-    @patch("core.management.commands.update_feeds.task_manager")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.cache_rss")
-    @patch("core.management.commands.update_feeds.cache_tag")
-    @patch("core.management.commands.update_feeds.Tag")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    @patch("core.management.commands.feed_updater.cache_tag")
+    @patch("core.management.commands.feed_updater.Tag")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_multiple_feeds_cache_tag_exception(
         self,
         mock_logger,
@@ -523,9 +524,9 @@ class UpdateFeedsForFrequencyTests(SimpleTestCase):
             "weekly": 10080,
         }
 
-    @patch("core.management.commands.update_feeds.Feed")
-    @patch("core.management.commands.update_feeds.update_multiple_feeds")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.Feed")
+    @patch("core.management.commands.feed_updater.update_multiple_feeds")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_feeds_for_frequency_success(
         self, mock_logger, mock_update_multiple, mock_feed_model
     ):
@@ -538,7 +539,7 @@ class UpdateFeedsForFrequencyTests(SimpleTestCase):
         )
 
         with patch(
-            "core.management.commands.update_feeds.current_time", "2024-01-01 12:00:00"
+            "core.management.commands.feed_updater.current_time", "2024-01-01 12:00:00"
         ):
             cmd.update_feeds_for_frequency("hourly")
 
@@ -550,15 +551,15 @@ class UpdateFeedsForFrequencyTests(SimpleTestCase):
         args = mock_update_multiple.call_args[0][0]
         self.assertEqual(len(args), 2)
 
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_feeds_for_frequency_invalid_frequency(self, mock_logger):
         """Test update_feeds_for_frequency with invalid frequency."""
         cmd.update_feeds_for_frequency("invalid")
         mock_logger.error.assert_called_once_with("Invalid frequency: invalid")
 
-    @patch("core.management.commands.update_feeds.Feed")
-    @patch("core.management.commands.update_feeds.update_multiple_feeds")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.Feed")
+    @patch("core.management.commands.feed_updater.update_multiple_feeds")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_feeds_for_frequency_exception(
         self, mock_logger, mock_update_multiple, mock_feed_model
     ):
@@ -566,7 +567,7 @@ class UpdateFeedsForFrequencyTests(SimpleTestCase):
         mock_feed_model.objects.filter.side_effect = Exception("Database error")
 
         with patch(
-            "core.management.commands.update_feeds.current_time", "2024-01-01 12:00:00"
+            "core.management.commands.feed_updater.current_time", "2024-01-01 12:00:00"
         ):
             cmd.update_feeds_for_frequency("daily")
 
@@ -574,9 +575,9 @@ class UpdateFeedsForFrequencyTests(SimpleTestCase):
             "2024-01-01 12:00:00: Command update_feeds_for_frequency daily: Database error"
         )
 
-    @patch("core.management.commands.update_feeds.Feed")
-    @patch("core.management.commands.update_feeds.update_multiple_feeds")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.Feed")
+    @patch("core.management.commands.feed_updater.update_multiple_feeds")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_feeds_for_frequency_all_frequencies(
         self, mock_logger, mock_update_multiple, mock_feed_model
     ):

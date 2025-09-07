@@ -219,6 +219,6 @@ class FilterAdminTestCase(TestCase):
         # 验证第三个fieldset
         third_fieldset = self.admin.fieldsets[2]
         self.assertEqual(third_fieldset[0], "AI")
-        self.assertIn("agent_option", third_fieldset[1]["fields"])
+        self.assertIn("agent", third_fieldset[1]["fields"])
         self.assertIn("filter_prompt", third_fieldset[1]["fields"])
         self.assertIn("tokens_info", third_fieldset[1]["fields"])

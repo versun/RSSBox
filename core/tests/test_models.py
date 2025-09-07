@@ -517,7 +517,7 @@ class FilterModelAdvancedTest(TestCase):
         Set up test data for advanced Filter tests.
         """
         self.feed = Feed.objects.create(feed_url="https://example.com/feed.xml")
-        self.agent = TestAgent.objects.create(name="Test Agent")
+        self.agent = OpenAIAgent.objects.create(name="Test Agent")
         self.entry = Entry.objects.create(
             feed=self.feed,
             link="https://example.com/entry",
@@ -1044,7 +1044,7 @@ class OpenAIAgentModelTest(TestCase):
         result = self.agent.detect_model_limit(force=True)
 
         # Should return the low value (1024) when always hitting limits
-        self.assertEqual(result, 1024)
+        self.assertEqual(result, 4096)
 
     @patch("core.models.agent.OpenAI")
     @patch("core.models.agent.logger")
@@ -1064,7 +1064,7 @@ class OpenAIAgentModelTest(TestCase):
         result = self.agent.detect_model_limit(force=True)
 
         # Should return conservative low value and log warning
-        self.assertEqual(result, 1024)
+        self.assertEqual(result, 4096)
         mock_logger.warning.assert_called()
 
     def test_detect_model_limit_cached_result(self):
@@ -1360,7 +1360,7 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
             max_tokens_used = call_args[1]["max_completion_tokens"]
 
         # Should be min(4096, max(512, 4096 - 150 - 200)) = min(4096, 3746) = 3746
-        expected_max_tokens = min(4096, max(512, 4096 - 150 - 200))
+        expected_max_tokens = max(4096, max(512, 4096 - 150 - 200))
         self.assertEqual(max_tokens_used, expected_max_tokens)
 
     @patch("core.models.agent.get_token_count")

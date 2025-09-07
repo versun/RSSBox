@@ -13,8 +13,6 @@ class FilterFormTest(TestCase):
         self.agent = OpenAIAgent.objects.create(
             name="Test Agent", api_key="key", valid=True
         )
-        self.ct = ContentType.objects.get_for_model(OpenAIAgent)
-        self.agent_value = f"{self.ct.id}:{self.agent.id}"
 
     def test_form_functionality(self):
         """Test form initial values and save processing."""
@@ -22,14 +20,15 @@ class FilterFormTest(TestCase):
         flt = Filter.objects.create(
             name="F1",
             filter_original_title=True,
+            filter_original_content=False,  # Explicitly set to False
             filter_translated_content=True,
-            agent_content_type=self.ct,
-            agent_object_id=self.agent.id,
+            agent=self.agent,
         )
 
         form = FilterForm(instance=flt)
-        assert form.fields["agent_option"].initial == self.agent_value
-        expected_targets = {"original_title", "original_content", "translated_content"}
+        # Check that the form instance has the correct agent
+        assert form.instance.agent == self.agent
+        expected_targets = {"original_title", "translated_content"}
         assert set(form.fields["target_field"].initial) == expected_targets
 
         # Test save processes custom fields
@@ -39,7 +38,7 @@ class FilterFormTest(TestCase):
             "operation": Filter.EXCLUDE,
             "filter_method": Filter.KEYWORD_ONLY,
             "target_field": ["original_content", "translated_title"],
-            "agent_option": self.agent_value,
+            "agent": self.agent.id,
             "keywords": "python, django",
         }
 
@@ -53,8 +52,7 @@ class FilterFormTest(TestCase):
         assert saved_filter.filter_original_content is True
         assert saved_filter.filter_translated_title is True
         assert saved_filter.filter_translated_content is False
-        assert saved_filter.agent_content_type_id == self.ct.id
-        assert saved_filter.agent_object_id == self.agent.id
+        assert saved_filter.agent == self.agent
 
         tags = sorted([tag.name.lower() for tag in saved_filter.keywords.all()])
         assert tags == ["django", "python"]

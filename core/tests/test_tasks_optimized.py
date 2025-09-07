@@ -9,7 +9,7 @@ from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
 from core.tasks.translate_feeds import (
-    handle_feeds_translation, _translate_title, _translate_content, translate_feed, _fetch_article_content)
+    handle_feeds_translation, _translate_entry_title, _translate_entry_content, translate_feed, _fetch_article_content)
 from core.tasks.summarize_feeds import (handle_feeds_summary, summarize_feed, _save_progress)
 
 
@@ -30,7 +30,7 @@ class TasksOptimizedTestCase(TestCase):
             fetch_article=True,
         )
         self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key")
-        self.test_agent = TestAgent.objects.create(name="Test Agent 2")
+        self.test_agent = OpenAIAgent.objects.create(name="Test Agent 2")
 
         # 设置feed的翻译器和摘要器
         self.feed.translator = self.agent
@@ -230,7 +230,7 @@ class TasksOptimizedTestCase(TestCase):
     # ==================== 覆盖第291-303行 - 内容获取和翻译 ====================
 
     @patch("core.tasks.translate_feeds._fetch_article_content")
-    @patch("core.tasks.translate_feeds._translate_content")
+    @patch("core.tasks.translate_feeds._translate_entry_content")
     def test_translate_feed_with_article_fetch(
         self, mock_translate_content, mock_fetch_article
     ):
@@ -386,7 +386,7 @@ class TasksOptimizedTestCase(TestCase):
         entry.translated_title = "Already translated"
         entry.save()
 
-        result = _translate_title(entry, "Chinese Simplified", self.agent)
+        result = _translate_entry_title(entry, "Chinese Simplified", self.agent)
 
         self.assertEqual(result["tokens"], 0)
         self.assertEqual(result["characters"], 0)
@@ -399,7 +399,7 @@ class TasksOptimizedTestCase(TestCase):
         entry.translated_content = "Already translated"
         entry.save()
 
-        result = _translate_content(entry, "Chinese Simplified", self.agent)
+        result = _translate_entry_content(entry, "Chinese Simplified", self.agent)
 
         self.assertEqual(result["tokens"], 0)
         self.assertEqual(result["characters"], 0)
@@ -497,7 +497,7 @@ class TasksOptimizedTestCase(TestCase):
             "characters": 50,
         }
 
-        result = _translate_content(entry, "Chinese Simplified", self.agent)
+        result = _translate_entry_content(entry, "Chinese Simplified", self.agent)
 
         self.assertEqual(result["tokens"], 10)
         self.assertEqual(result["characters"], 50)
@@ -684,7 +684,7 @@ class TasksOptimizedTestCase(TestCase):
                 "characters": 50,
             }
 
-            result = _translate_content(entry, "Chinese Simplified", self.agent)
+            result = _translate_entry_content(entry, "Chinese Simplified", self.agent)
 
             self.assertEqual(result["tokens"], 10)
             self.assertEqual(result["characters"], 50)

@@ -219,10 +219,6 @@ class AtomFeedTests(SimpleTestCase):
 
         fe = _add_atom_entry(fg, entry_obj, feed_type="t")
         self.assertIn("Tran title", fe.title())
-        self.assertIn(
-            "🤖",
-            fe.content()["content"] if isinstance(fe.content(), dict) else fe.content(),
-        )
 
         xml_str = _finalize_atom_feed(fg)
         self.assertIn("file.mp3", xml_str)

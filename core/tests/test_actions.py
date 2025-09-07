@@ -147,8 +147,7 @@ class ActionsTestCase(TestCase):
         self.assertFalse(self.feed.summary)
 
     @patch("core.actions.get_all_agent_choices", return_value=[])
-    @patch("core.actions.get_ai_agent_choices", return_value=[])
-    def test_feed_batch_modify_other_fields(self, mock_ai_agents, mock_all_agents):
+    def test_feed_batch_modify_other_fields(self, mock_all_agents):
         """Test batch modify for non-boolean fields."""
         tag = Tag.objects.create(name="New Tag")
         post_data = {
@@ -283,13 +282,20 @@ class ActionsTestCase(TestCase):
         self.assertTrue(self.feed.translate_content)
         self.assertFalse(self.feed.summary)
 
-        # Test translator/summarizer fields
+        # Test translator/summarizer fields - 需要先创建OpenAIAgent
+        from core.models import OpenAIAgent
+        agent = OpenAIAgent.objects.create(
+            name="Test Agent",
+            api_key="test_key",
+            valid=True
+        )
+        
         post_data = {
             "apply": "Apply",
             "translator": "Change",
             "translator_value": "1:5",
             "summarizer": "Change",
-            "summarizer_value": "2:7",
+            "summarizer_value": str(agent.id),
         }
         request = self._get_request_with_messages("POST", post_data)
 
@@ -299,8 +305,7 @@ class ActionsTestCase(TestCase):
         self.feed.refresh_from_db()
         self.assertEqual(self.feed.translator_content_type_id, 1)
         self.assertEqual(self.feed.translator_object_id, 5)
-        self.assertEqual(self.feed.summarizer_content_type_id, 2)
-        self.assertEqual(self.feed.summarizer_object_id, 7)
+        self.assertEqual(self.feed.summarizer_id, agent.id)
 
         # Test filter assignment
         filter1 = Filter.objects.create(name="Filter 1")
@@ -321,10 +326,9 @@ class ActionsTestCase(TestCase):
         self.assertIn(filter2, feed_filters)
 
     @patch("core.actions.get_all_agent_choices", return_value=[])
-    @patch("core.actions.get_ai_agent_choices", return_value=[])
     @patch("core.actions.core_admin_site.each_context", return_value={})
     def test_feed_batch_modify_form_render(
-        self, mock_context, mock_ai_agents, mock_all_agents
+        self, mock_context, mock_all_agents
     ):
         """Test batch modify form rendering."""
         Tag.objects.create(name="Test Tag")
@@ -337,7 +341,6 @@ class ActionsTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_all_agents.assert_called_once()
-        mock_ai_agents.assert_called_once()
 
     def test_feed_batch_modify_keep_fields(self):
         """Test batch modify when fields are set to 'Keep' (no change)."""

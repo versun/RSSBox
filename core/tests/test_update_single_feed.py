@@ -3,7 +3,8 @@ from unittest.mock import patch, Mock
 
 from django.test import TestCase
 
-from core.management.commands import update_feeds as cmd
+from core.management.commands import feed_updater as cmd
+
 from core.models import Feed
 
 
@@ -34,10 +35,10 @@ class UpdateSingleFeedTests(TestCase):
         feed.save()
         return feed
 
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_feeds_summary")
-    @patch("core.management.commands.update_feeds.handle_feeds_translation")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_feeds_summary")
+    @patch("core.management.commands.feed_updater.handle_feeds_translation")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
     def test_update_single_feed_success(
         self, mock_fetch, mock_translate, mock_summary, mock_close_conn
     ):
@@ -54,9 +55,9 @@ class UpdateSingleFeedTests(TestCase):
         # close_old_connections should be called twice (entering & finally)
         self.assertGreaterEqual(mock_close_conn.call_count, 2)
 
-    @patch("core.management.commands.update_feeds.logger")
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.logger")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
     def test_update_single_feed_exception(
         self, mock_fetch, mock_close_conn, mock_logger
     ):
@@ -72,9 +73,9 @@ class UpdateSingleFeedTests(TestCase):
         # Ensure finally block executed
         self.assertGreaterEqual(mock_close_conn.call_count, 2)
 
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_single_feed_feed_not_exist(
         self, mock_logger, mock_fetch, mock_close_conn
     ):
@@ -89,9 +90,9 @@ class UpdateSingleFeedTests(TestCase):
         )
         mock_close_conn.assert_called()
 
-    @patch("core.management.commands.update_feeds.close_old_connections")
-    @patch("core.management.commands.update_feeds.handle_single_feed_fetch")
-    @patch("core.management.commands.update_feeds.logger")
+    @patch("core.management.commands.feed_updater.close_old_connections")
+    @patch("core.management.commands.feed_updater.handle_single_feed_fetch")
+    @patch("core.management.commands.feed_updater.logger")
     def test_update_single_feed_no_translation_or_summary(
         self, mock_logger, mock_fetch, mock_close_conn
     ):

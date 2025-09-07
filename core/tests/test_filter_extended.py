@@ -4,7 +4,7 @@ from unittest.mock import patch, Mock
 import json
 
 from ..models import Feed, Entry, Filter, FilterResult
-from ..models.agent import TestAgent, OpenAIAgent
+from ..models.agent import OpenAIAgent
 
 
 class FilterExtendedTestCase(TestCase):
@@ -12,7 +12,7 @@ class FilterExtendedTestCase(TestCase):
         self.feed = Feed.objects.create(
             name="Test Feed", feed_url="https://example.com/feed.xml"
         )
-        self.agent = TestAgent.objects.create(name="Test Agent")
+        self.agent = OpenAIAgent.objects.create(name="Test Agent")
 
         # Create test entries
         self.entry1 = Entry.objects.create(

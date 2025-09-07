@@ -229,7 +229,7 @@ class FilterModelTest(TestCase):
         self.assertIn(entry, filtered)
 
         # Test AI_ONLY method with TestAgent
-        agent = TestAgent.objects.create(name="Test Agent")
+        agent = OpenAIAgent.objects.create(name="Test Agent")
         ai_filter = Filter.objects.create(
             name="AI Filter",
             agent=agent,

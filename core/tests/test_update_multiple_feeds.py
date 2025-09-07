@@ -2,7 +2,8 @@ from django.test import TestCase
 from unittest.mock import patch, Mock
 from concurrent.futures import Future
 
-from core.management.commands import update_feeds as cmd
+from core.management.commands import feed_updater as cmd
+
 from core.models import Feed, Tag
 
 
@@ -23,10 +24,10 @@ class UpdateMultipleFeedsTests(TestCase):
         future.result.return_value = result
         return future
 
-    @patch("core.management.commands.update_feeds.cache_tag")
-    @patch("core.management.commands.update_feeds.cache_rss")
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.task_manager")
+    @patch("core.management.commands.feed_updater.cache_tag")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.task_manager")
     def test_update_multiple_feeds_basic(
         self, mock_tm, mock_wait, mock_cache_rss, mock_cache_tag
     ):
@@ -48,8 +49,8 @@ class UpdateMultipleFeedsTests(TestCase):
         # cache_tag should be called three times (o/xml, t/xml, t/json) for feed1 only
         self.assertEqual(mock_cache_tag.call_count, 3)
 
-    @patch("core.management.commands.update_feeds.wait")
-    @patch("core.management.commands.update_feeds.task_manager")
+    @patch("core.management.commands.feed_updater.wait")
+    @patch("core.management.commands.feed_updater.task_manager")
     def test_update_multiple_feeds_timeout(self, mock_tm, mock_wait):
         """If wait returns not_done set, should still proceed without raising."""
         mock_future = self._create_mock_future()
