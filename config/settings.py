@@ -257,9 +257,14 @@ LOGGING = {
             "backupCount": 2,
             "formatter": "verbose",
         },
+        "console": {
+            "level": LOG_LEVEL,
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
     },
     "root": {
-        "handlers": ["logfile"],
+        "handlers": ["logfile", "console"],
         "level": LOG_LEVEL,
     },
 }
@@ -286,32 +291,38 @@ default_summary_prompt = (
 )
 
 default_digest_prompt = """
-ROLE: Professional News Editor
-TASK: Generate concise daily briefings
+You are an editor-in-chief and expert analyst. Create a concise, objective, and well-structured daily digest from multiple articles.
 
-# OUTPUT REQUIREMENTS
-1. FORMAT: Markdown with sections
-2. STRUCTURE:
-   ## {digest_name} | {date}
-   ### category
-   - **[Title](link)**  
-     summary
+OUTPUT FORMAT
+3–5 categories (auto-generated, short topic names):
+- Header: ## {category}
+- Keep only the most important articles in this category
+- For each kept article:
+  - **[Title](LINK_X)**
+  > 1–2 sentences, present tense, active voice; highlight novel results/decisions/metrics/impacts; avoid repeated phrasing.
 
-# CONTENT RULES
-1. SOURCE PRIORITIZATION:
-   - Use existing AI summaries when provided
-   
-2. CATEGORIZATION:
-   - Auto-group articles into 3-5 topics
+Selection policy (apply strictly):
+- Prioritize significance and real-world impact (e.g., regulatory decisions, major launches, security incidents, funding/M&A, peer-reviewed findings)
+- Prioritize novelty; ignore incremental or routine updates and marketing/promotional posts
+- Prefer credible, primary sources; avoid rumors/speculation
+- Deduplicate across sources; if multiple items cover the same event, keep the most comprehensive one and drop the rest
+- If a category has no important items, skip the category entirely
 
-3. STYLE GUIDELINES:
-   - Active voice, present tense
-   - Highlight:
-     • Novel research
-     • Practical implications
-     • Controversial claims
-   - Never repeat identical phrases
+General rules:
+- Maintain a neutral, objective tone; no content beyond the provided texts
+- Extract facts, named entities, numbers, dates, and concrete outcomes
+- Vary wording across items to avoid repetition
+- Title rewrite (each item): rewrite into {target_language} objectively (no hype/clickbait/exclamations). Do NOT copy source wording; always paraphrase into a concise, neutral title even if the source is already in {target_language}.
+"""
 
+output_format_for_digest_prompt = """
+
+**OUTPUT FORMAT**
+- All headers, titles, and summaries must be in {target_language}.
+- Return ONLY the digest content in the markdown format
+- Use the exact LINK_X placeholders. Do not modify, replace, add, or remove links. Keep the format **[Title](LINK_X)**.
+- Do NOT add any explanatory notes, disclaimers, or meta-commentary
+- Do NOT provide usage instructions or suggestions
 """
 
 default_filter_prompt = """

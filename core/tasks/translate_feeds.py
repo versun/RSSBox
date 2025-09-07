@@ -76,7 +76,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
             # Process title translation
             if target_field == "title" and feed.translate_title:
-                metrics = _translate_title(
+                metrics = _translate_entry_title(
                     entry=entry,
                     target_language=feed.target_language,
                     engine=feed.translator,
@@ -99,7 +99,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                         # Clean up article content after use
                         del article_content
 
-                metrics = _translate_content(
+                metrics = _translate_entry_content(
                     entry=entry,
                     target_language=feed.target_language,
                     engine=feed.translator,
@@ -158,7 +158,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     del entries, total_tokens, total_characters
 
 
-def _translate_title(
+def _translate_entry_title(
     entry: Entry,
     target_language: str,
     engine: Agent,
@@ -189,7 +189,7 @@ def _translate_title(
     return {"tokens": total_tokens, "characters": total_characters}
 
 
-def _translate_content(
+def _translate_entry_content(
     entry: Entry,
     target_language: str,
     engine: Agent,

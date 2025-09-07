@@ -7,7 +7,6 @@ import mistune
 from feedgen.feed import FeedGenerator
 from core.models import Feed, Entry, Tag
 from utils.text_handler import set_translation_display
-from core.tasks.generate_digests import get_or_create_digest_feed
 
 from .models import Feed
 
@@ -58,7 +57,7 @@ def cache_digest(slug: str, format: str = "xml"):
     from .models import Digest
 
     digest = Digest.objects.get(slug=slug)
-    digest_feed = get_or_create_digest_feed(digest)
+    digest_feed = digest.get_digest_feed()
 
     atom_feed = generate_atom_feed(digest_feed, "t")
     if not atom_feed:
@@ -68,38 +67,6 @@ def cache_digest(slug: str, format: str = "xml"):
     cache.set(cache_key, atom_feed, ttl)
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
-
-
-def cache_digest_json(slug: str):
-    logger.debug(f"Start cache_digest_json for {slug}")
-    cache_key = f"cache_digest_json_{slug}"
-
-    from .models import Digest
-
-    digest = Digest.objects.get(slug=slug)
-    digest_feed = get_or_create_digest_feed(digest)
-
-    latest = digest_feed.entries.order_by("-pubdate", "-id").first()
-    if not latest or not latest.ai_summary:
-        return None
-
-    data = {
-        "name": digest.name,
-        "slug": digest.slug,
-        "description": digest.description,
-        "tags": [tag.name for tag in digest.tags.all()],
-        "last_generated": digest.last_generated.isoformat() if digest.last_generated else None,
-        "days_range": digest.days_range,
-        "max_articles": digest.max_articles,
-        "content": latest.ai_summary,
-        "status": "success" if digest.status else "failed" if digest.status is False else "unknown",
-    }
-
-    ttl = digest_feed.update_frequency or 86400
-    cache.set(cache_key, data, ttl)
-    logger.debug(f"Cached successfully with key {cache_key}")
-    return data
-
 
 
 def _build_atom_feed(
@@ -129,7 +96,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
 
     # 处理标题和内容
     title = entry.original_title
-    content = entry.original_content
+    content = entry.original_content or ""
 
     if feed_type == "t":
         if entry.translated_title:
@@ -149,7 +116,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
 
         if entry.ai_summary:
             html_summary = (
-                f"<br />🤖:{mistune.html(entry.ai_summary)}<br />---------------<br />"
+                f"{mistune.html(entry.ai_summary)}<br />---------------<br />"
             )
             content = html_summary + content
         

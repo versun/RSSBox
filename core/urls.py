@@ -48,6 +48,13 @@ urlpatterns = [
         "json/<str:feed_slug>/", views.rss, kwargs={"feed_type": "t", "format": "json"}
     ),
     path("import_opml/", views.import_opml, name="import_opml"),
+    # Digest URLs
+    path("digest/view/<str:slug>", views.digest_view, name="digest_view"),
+    path("digest/view/<str:slug>/", views.digest_view, name="digest_view"),
+    path("digest/json/<str:slug>", views.digest, kwargs={"format": "json"}, name="digest_json"),
+    path("digest/json/<str:slug>/", views.digest, kwargs={"format": "json"}, name="digest_json"),
+    path("digest/<str:slug>", views.digest, kwargs={"format": "xml"}, name="digest_rss"),
+    path("digest/<str:slug>/", views.digest, kwargs={"format": "xml"}, name="digest_rss"),
     path("<str:feed_slug>", views.rss, kwargs={"feed_type": "t", "format": "xml"}),
     path("<str:feed_slug>/", views.rss, kwargs={"feed_type": "t", "format": "xml"}),
 ]

@@ -1,11 +1,8 @@
 import logging
-from datetime import datetime, timedelta
-from concurrent.futures import TimeoutError
 from django.utils import timezone
 
 from core.models.digest import Digest
 from core.models.entry import Entry
-from core.models.feed import Feed
 from utils.text_handler import clean_content, get_token_count
 from config import settings
 
@@ -20,11 +17,10 @@ class DigestGenerator:
     daily/weekly briefings using OpenAI agents.
     """
     
-    def __init__(self, digest: Digest, task_manager=None, task_name=None):
+    def __init__(self, digest: Digest):
         self.digest = digest
         self.articles = []
-        self.task_manager = task_manager
-        self.task_name = task_name
+        #self.temp_translations = temp_translations or {}
         
     def prepare_articles(self):
         """
@@ -33,68 +29,26 @@ class DigestGenerator:
         Returns:
             list: Processed article data
         """
+        logger.info(f"Preparing articles for digest '{self.digest.name}'")
         # Get articles based on digest configuration
         articles = self.digest.get_articles_for_digest()
         
         processed_articles = []
         for entry in articles:
-            # Now we can be more confident that ai_summary exists
-            # because _ensure_entries_have_summaries was called before at digest_generation in tasks.py
-            content = (
-                entry.ai_summary or 
-                entry.original_summary or 
-                clean_content(entry.original_content or "")[:300]
-            )
+            summary = entry.ai_summary or ""
+            
+            # Use temporary translation if available, otherwise fallback to Entry translation
+            title = entry.original_title or entry.translated_title or "No title"
             
             processed_articles.append({
-                "title": entry.original_title or entry.translated_title or "No title",
+                "title": title,
                 "link": entry.link,
-                "content": content,
+                "summary": summary,
                 "published": entry.pubdate,
                 "author": entry.author or "Unknown",
             })
         
-        # 根据token限制预处理文章数量，避免分块问题
-        if self.digest.summarizer and hasattr(self.digest.summarizer, 'max_tokens'):
-            max_tokens = self.digest.summarizer.max_tokens
-            if max_tokens > 0:
-                # 动态计算每篇文章的实际token消耗
-                if processed_articles:
-                    # 计算前几篇文章的平均token消耗作为样本
-                    sample_size = min(3, len(processed_articles))
-                    sample_tokens = 0
-                    for article in processed_articles[:sample_size]:
-                        article_text = f"**{article['title']}** {article['content']}"
-                        sample_tokens += get_token_count(article_text)
-                    
-                    avg_tokens_per_article = max(100, sample_tokens // sample_size)  # 至少100 token
-                else:
-                    avg_tokens_per_article = 150  # 默认估计
-                
-                # 系统提示和模板的token消耗（更精确估算）
-                template_text = self.digest.prompt or ""
-                system_tokens = get_token_count(template_text) + get_token_count(settings.output_format_for_filter_prompt)
-                
-                # 计算最大可处理文章数量（保留25%缓冲，比之前的30%更激进）
-                safe_tokens = max_tokens * 0.75
-                available_tokens = safe_tokens - system_tokens - 1000  # 预留1000给输出
-                
-                max_articles = max(1, int(available_tokens / avg_tokens_per_article))
-                
-                if len(processed_articles) > max_articles:
-                    logger.info(
-                        f"Token optimization: {len(processed_articles)} articles → {max_articles} articles "
-                        f"(avg: {avg_tokens_per_article} tokens/article, available: {available_tokens} tokens)"
-                    )
-                    # 优先保留最新的文章
-                    processed_articles.sort(key=lambda x: x['published'] or timezone.now(), reverse=True)
-                    processed_articles = processed_articles[:max_articles]
-        
         self.articles = processed_articles
-        
-        # 报告进度
-        if self.task_manager and self.task_name:
-            self.task_manager.update_progress(self.task_name, 25)
         
         return processed_articles
     
@@ -103,198 +57,328 @@ class DigestGenerator:
         Build AI prompt with article data.
         
         Returns:
-            tuple: (articles_text, system_prompt) - 分离的文章内容和系统提示
+            tuple: (articles_list, system_prompt, url_mapping) - 分离的文章内容、系统提示和URL映射
         """
-        # Prepare articles text
-        articles_text = ""
+        logger.info(f"Building prompt for digest '{self.digest.name}'")
+        # Prepare articles text with URL optimization
+        articles_list = []
+        url_mapping = {}  # 存储占位符到真实URL的映射
+        
         for i, article in enumerate(self.articles, 1):
-            articles_text += f"""
-{i}. **{article['title']}**
-URL: {article['link']}
-Published: {article['published']}
-Content: {article['content']}
+            # 使用markdown格式的占位符，让AI更容易保留
+            url_placeholder = f"LINK_{i}"
+            url_mapping[url_placeholder] = article['link']
 
-"""
-        
-        # Use template from digest or default
-        template_str = self.digest.prompt
-        
-        # Replace placeholders in system prompt using Python string formatting
-        system_prompt = template_str.format(
-            digest_name=self.digest.name,
-            date=timezone.now().strftime("%Y-%m-%d"),
-            target_language=self.digest.target_language,
-        )
-        logger.info(f"!!!!!!!!!! System prompt: {system_prompt}")
-        return articles_text, system_prompt
+            articles_list.append(f"""
+Original Title: {article['title']}
+Link: {url_placeholder}
+Published: {article['published']}
+Summary: {article['summary']}
+""")
+
+        # Replace placeholders in system prompt using simple string replacement
+        output_format_for_digest_prompt = settings.output_format_for_digest_prompt.replace('{digest_name}', self.digest.name).replace('{date}', timezone.now().strftime("%Y-%m-%d")).replace('{target_language}', self.digest.target_language)
+        system_prompt = self.digest.prompt + output_format_for_digest_prompt
+
+        # 计算token消耗，如果超出限制，则进行分块
+        safe_tokens = self.digest.summarizer.max_tokens * 0.65
+        available_tokens = safe_tokens - get_token_count(system_prompt)  # 预留给输出
+
+        articles: list[str] = self._chunk_articles_by_token_limit(articles_list, available_tokens)
+        return articles, system_prompt, url_mapping
     
-    def generate(self):
+    def generate(self, force: bool = False):
         """
         Generate digest content using AI.
         
         Returns:
             dict: Generation result with success status and content
         """
+        logger.info(f"Generating digest '{self.digest.name}'")
         try:
-            # Prepare articles
+            # Pre-steps previously handled in generate_digest()
+            # 1) Create temporary translations for digest-specific language
+            #    to ensure consistent language in digest output without
+            #    polluting Entry translations
+            #self.temp_translations = _ensure_entries_have_translated_titles(self.digest) or {}
+
+            # 2) Ensure all entries have AI summaries before generating digest
+            _ensure_entries_have_summaries(self.digest)
+
+
             self.prepare_articles()
             
             if not self.articles:
+                logger.warning(f"No articles found for digest '{self.digest.name}'")
                 return {
                     'success': False,
                     'error': 'No articles found for digest generation'
                 }
             
-            # 报告进度
-            if self.task_manager and self.task_name:
-                self.task_manager.update_progress(self.task_name, 50)
-            
-            # Build prompt - 分离文章内容和系统提示
-            articles_text, system_prompt = self.build_prompt()
-            
-            # 报告进度
-            if self.task_manager and self.task_name:
-                self.task_manager.update_progress(self.task_name, 75)
+            # Build prompt - 分离文章内容、系统提示和URL映射
+            articles_list, system_prompt, url_mapping = self.build_prompt()
             
             # Call AI agent
-            # 正确分离text（文章内容）和system_prompt（处理指令）
-            result = self.digest.summarizer.digester(
-                text=articles_text,  # 纯文章内容
-                target_language=self.digest.target_language,  # 使用 Digest 的目标语言
-                system_prompt=system_prompt  # 处理指令
-            )
-            
-            if result.get('text'):
-                # 将生成内容保存为一个 Entry，写入 ai_summary
-                now = timezone.now()
-                self.digest.last_generated = now
-                self.digest.status = True  # Set status to success
-                self.digest.save()
-
-                # 获取/创建 Digest 专用 Feed
-                digest_feed = get_or_create_digest_feed(self.digest)
-
-                # 创建一条新的摘要 Entry
-                Entry.objects.create(
-                    feed=digest_feed,
-                    link=f"{settings.SITE_URL.rstrip('/')}/core/digest/{self.digest.slug}",
-                    author=self.digest.name or "Digest",
-                    pubdate=now,
-                    updated=now,
-                    guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
-                    original_title=f"{self.digest.name} | {now.strftime('%Y-%m-%d %H:%M')}",
-                    translated_title=None,
-                    original_content=None,
-                    translated_content=None,
-                    original_summary=None,
-                    ai_summary=result['text'],
+            logger.info(f"Calling AI agent for digest '{self.digest.name}'")
+            logger.info(f"Total articles to digest: {len(articles_list)}")
+            now = timezone.now()
+            digests_list = []
+            final_digest = ""
+            for articles_text in articles_list:
+                logger.info(f"Digesting article")
+                result = self.digest.summarizer.digester(
+                    text=articles_text,  # 合并后的多篇文章内容
+                    system_prompt=system_prompt,  # 处理指令
+                    digest_name=self.digest.name,
+                    date=now.strftime("%Y-%m-%d"),
                 )
                 
-                # 报告完成进度
-                if self.task_manager and self.task_name:
-                    self.task_manager.update_progress(self.task_name, 100)
-                
-                return {
-                    'success': True,
-                    'content': result['text'],
-                    'articles_processed': len(self.articles)
-                }
+                if result.get('text'):
+                    logger.info(f"Digested article")
+                    # 补充URL：将占位符替换回真实URL
+                    final_content = result['text']
+                    #final_digest += "\n" + final_content
+                    digests_list.append(final_content)
+                else:
+                    logger.warning(f"Failed to digest article")
+                self.digest.total_tokens += result.get("tokens", 0)
+            
+            # Only for test
+            digests_list += digests_list
+            if len(digests_list) > 1:
+                logger.info(f"Final digest has {len(digests_list)} digests, need to merge to one digest")
+                # TODO: 是否还需要再次调用summarizer来合并总结 或者 直接合并digests_list
+                result = self.digest.summarizer.digester(
+                    text="\n".join(digests_list),
+                    system_prompt=system_prompt,
+                    digest_name=self.digest.name,
+                    date=now.strftime("%Y-%m-%d"), 
+                )
+                if result.get('text'):
+                    logger.info(f"Merged digest")
+                    final_digest = result['text']
+                else:
+                    logger.warning(f"Failed to merge digest")
             else:
-                # Mark status as failed
-                self.digest.status = False
-                self.digest.save()
-                
-                return {
-                    'success': False,
-                    'error': 'AI generation failed - no content returned'
-                }
+                final_digest = digests_list[0]
+            
+
+            for placeholder, real_url in url_mapping.items():
+                placeholder = f"({placeholder})"
+                real_url = f"({real_url})"
+                if placeholder in final_digest:
+                    final_digest = final_digest.replace(placeholder, real_url)
+                    logger.info(f"Replaced placeholder {placeholder} with URL")
+            
+            # 将生成内容保存为一个 Entry，写入 ai_summary
+            self.digest.last_generated = now
+            
+            # 获取/创建 Digest 专用 Feed
+            digest_feed = self.digest.get_digest_feed()
+
+            # 创建一条新的摘要 Entry
+            entry = Entry.objects.create(
+                feed=digest_feed,
+                link=f"{settings.SITE_URL.rstrip('/')}/core/digest/{self.digest.slug}",
+                author=self.digest.name or "Digest",
+                pubdate=now,
+                updated=now,
+                guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
+                original_title=f"{self.digest.name} | {now.strftime('%Y-%m-%d %H:%M')}",
+                translated_title=None,
+                original_content=None,
+                translated_content=None,
+                original_summary=None,
+                ai_summary=final_digest,
+            )
+
+            self.digest.status = True  # Set status to success
+
+            return {
+                'success': True,
+                'entry_id': entry.id,
+            }
                 
         except Exception as e:
             logger.error(f"Digest generation failed for {self.digest.name}: {e}")
-            
+            self.digest.log += f"Digest generation failed for {self.digest.name}: {e}\n"
             # Mark status as failed
-            self.digest.status = False
-            self.digest.save()
-            
+            self.digest.status = False            
             return {
                 'success': False,
                 'error': str(e)
             }
+        finally:
+            self.digest.save()
 
+    def _chunk_articles_by_token_limit(self, articles_list:list[str], max_tokens)->list[str]:
+        """
+        Split articles text into chunks.
+        Returns [articles_text, articles_text, ...] where each articles_text is <= max_tokens
+        """
+        logger.info(f"Chunking articles for digest '{self.digest.name}'")
+        # 都是 AI summary，通常不会很长；按 token 限制合并为若干块
+        chunks: list[str] = []
+        current_chunk: str = ""
+        current_tokens: int = 0
+        max_tokens = int(max_tokens) if max_tokens else 0
+        logger.info(f"Total articles to chunk: {len(articles_list)}; token limit per chunk: {max_tokens}")
+        for articles_text in articles_list:
+            article_tokens = get_token_count(articles_text)
+            if current_chunk and current_tokens + article_tokens > max_tokens and max_tokens > 0:
+                # 关闭当前块，开启新块
+                chunks.append(current_chunk)
+                current_chunk = articles_text
+                current_tokens = article_tokens
+                logger.debug("Started a new chunk due to token limit")
+            else:
+                # 追加到当前块
+                if current_chunk:
+                    current_chunk += "\n" + articles_text
+                    current_tokens += article_tokens
+                else:
+                    current_chunk = articles_text
+                    current_tokens = article_tokens
+        # 收尾，把最后的块加入
+        if current_chunk:
+            chunks.append(current_chunk)
+        logger.info(f"Total chunks produced: {len(chunks)}")
+        return chunks
 
-def generate_digest(digest_id: int, force: bool = False, task_manager=None, task_name=None):
+def _ensure_entries_have_translated_titles(digest: Digest):
     """
-    Generate digest content for given digest ID.
+    Generate temporary translations for digest entries without caching to Entry model.
+    
+    This ensures consistent language in digest output by creating temporary translations
+    to the digest's target language. Translations are NOT saved to Entry.translated_title
+    to avoid polluting Feed-specific translations.
+    
+    Only processes articles within the digest's days_range to avoid unnecessary work.
     
     Args:
-        digest_id: Digest model ID
-        force: Force generation even if already generated today
-        task_manager: Optional task manager instance for progress reporting
-        task_name: Optional task name for progress reporting
+        digest: The Digest instance
         
     Returns:
-        dict: Generation result
+        dict: Mapping of entry_id to translated_title for digest use
     """
-    try:
-        digest = Digest.objects.get(id=digest_id)
-        
-        # Check if generation needed
-        if not force and not digest.should_generate_today():
-            return {
-                'success': False,
-                'error': 'Digest already generated today or is inactive'
-            }
-        
-        # CRITICAL: Ensure all entries have AI summaries before generating digest
-        # This is the key dependency - digest quality depends on AI summaries
-        _ensure_entries_have_summaries(digest, task_manager, task_name)
-        
-        # Generate content with progress reporting
-        generator = DigestGenerator(digest, task_manager, task_name)
-        return generator.generate()
-        
-    except Digest.DoesNotExist:
-        return {
-            'success': False,
-            'error': f'Digest with ID {digest_id} not found'
-        }
-
-
-def get_or_create_digest_feed(digest: Digest) -> Feed:
-    """
-    为指定 Digest 获取或创建一个专用的 Feed，用于承载摘要 Entry。
-    """
-    from config import settings as project_settings
-
-    feed_url = f"{project_settings.SITE_URL.rstrip('/')}/core/digest/rss/{digest.slug}"
-    defaults = {
-        "name": digest.name,
-        "subtitle": f"AI Digest for {digest.name}",
-        "link": f"{project_settings.SITE_URL.rstrip('/')}/core/digest/{digest.slug}",
-        "author": digest.name or "Digest",
-        "language": digest.target_language,
-        # 以分钟为单位，默认 1 天
-        "update_frequency": 1440,
-        # 不进行原文抓取
-        "fetch_article": False,
-        # 不进行翻译
-        "translate_title": False,
-        "translate_content": False,
-        # 允许摘要信息加入 RSS
-        "summary": True,
-        "target_language": project_settings.DEFAULT_TARGET_LANGUAGE,
-    }
-
-    feed, _ = Feed.objects.get_or_create(
-        feed_url=feed_url,
-        target_language=defaults["target_language"],
-        defaults=defaults,
+    from core.models.feed import Feed
+    from core.tasks.utils import auto_retry
+    
+    # Get articles for digest within the specified days_range
+    all_articles = list(digest.get_articles_for_digest())
+    
+    if not all_articles:
+        logger.info(f"No articles found for digest '{digest.name}'")
+        return {}
+    
+    logger.info(
+        f"Processing {len(all_articles)} entries for temporary title translation to {digest.target_language}..."
     )
+    
+    # Create temporary translation cache for this digest
+    temp_translations = {}
+    
+    # Group entries by feed to process efficiently
+    feed_ids = set(entry.feed_id for entry in all_articles)
+    candidate_feeds = Feed.objects.filter(id__in=feed_ids)
+    
+    if not candidate_feeds.exists():
+        logger.warning(
+            f"Found {len(all_articles)} entries but their feeds don't exist"
+        )
+        return
+    
+    # Process temporary translation for each entry
+    digest_tokens = 0  # Tokens for digest-specific translations
+    total_tokens = 0    # Tokens for feed translations
+    total_characters = 0
+    translated_count = 0
+    feeds_to_update = {}  # Track feed token usage
+    use_digest_summarizer = False
 
-    return feed
+    for entry in all_articles:
+        try:
+            # Find the feed for this entry
+            feed = next((f for f in candidate_feeds if f.id == entry.feed_id), None)
+            if not feed:
+                continue
+            
+            # First priority: use existing translated_title if available
+            if entry.translated_title and entry.translated_title.strip():
+                temp_translations[entry.id] = entry.translated_title
+                continue
+            
+            # No existing translation - determine translator
+            if not feed.translator:
+                use_digest_summarizer = True
+                translator = digest.summarizer
+            else:
+                translator = feed.translator
 
+            # Determine what title to use based on language match
+            if feed.target_language == digest.target_language:
+                # Same language - trigger Feed translation to get translated_title
+                from core.tasks.translate_feeds import _translate_entry_title
 
-def _ensure_entries_have_summaries(digest: Digest, task_manager, task_name):
+                metrics = _translate_entry_title(
+                    entry=entry,
+                    target_language=feed.target_language,
+                    engine=translator,
+                )
+                
+                total_tokens += metrics["tokens"]
+                total_characters += metrics["characters"]
+                
+                # Save the translation to Entry for future use
+                if metrics["tokens"] > 0:
+                    entry.save(update_fields=['translated_title'])
+                    translated_count += 1
+                
+                temp_translations[entry.id] = entry.translated_title or entry.original_title
+                
+            else:                    
+                if not entry.original_title:
+                    # Fallback to original title if no translator or no content
+                    # temp_translations[entry.id] = entry.original_title
+                    continue
+                
+                # Perform temporary translation (not saved to Entry)
+                logger.debug(f"[Digest Temp Translation] Translating title for entry {entry.id}")
+                result = auto_retry(
+                    translator.translate,
+                    max_retries=3,
+                    text=entry.original_title,
+                    target_language=digest.target_language,
+                    text_type="title",
+                )
+                
+                if result and result.get("text"):
+                    temp_translations[entry.id] = result.get("text")
+                    digest_tokens += result.get("tokens", 0)
+                    total_characters += result.get("characters", 0)
+                    translated_count += 1
+                else:
+                    # Fallback to original title
+                    temp_translations[entry.id] = entry.original_title
+                # Update digest token counts if we used digest's summarizer
+            if use_digest_summarizer:
+                digest.total_tokens += total_tokens
+                digest.save()
+            else:
+                feed.total_tokens += total_tokens
+                feed.total_characters += total_characters
+                feed.save()
+        
+        except Exception as e:
+            logger.error(f"Error creating temporary translation for entry {entry.id}: {e}")
+            digest.log += f"Error creating temporary translation for entry {entry.id}: {e}\n"
+            digest.status = False
+            digest.save()
+            # Fallback to original title
+            temp_translations[entry.id] = entry.original_title or "No title"
+    return temp_translations
+
+def _ensure_entries_have_summaries(digest: Digest):
     """
     Ensure all entries that will be included in the digest have AI summaries.
     
@@ -302,122 +386,121 @@ def _ensure_entries_have_summaries(digest: Digest, task_manager, task_name):
     for all entries. Without this, the digest would use fallback content which is
     much lower quality.
     
+    Only processes articles within the digest's days_range to avoid unnecessary work.
+    
     Args:
         digest: The Digest instance
-        task_manager: Task manager for progress updates
-        task_name: Current task name for progress tracking
     """
-    from core.models.feed import Feed
-    from core.tasks import handle_feeds_summary
-    from core.tasks.task_manager import task_manager as global_task_manager
-    import time
+    from core.tasks.summarize_feeds import _summarize_entry
+    from core.models.entry import Entry
+    import gc
     
-    # Get all articles for digest first
-    all_articles = list(digest.get_articles_for_digest())  # Convert to list to avoid slicing issues
+    # Get articles for digest within the specified days_range
+    all_articles = list(digest.get_articles_for_digest())
     
-    # Filter entries that need summaries
+    if not all_articles:
+        logger.info(f"No articles found for digest '{digest.name}'")
+        return
+    
+    # Filter entries that need summaries - prioritize existing ai_summary
     entries_without_summary = [
         entry for entry in all_articles 
-        if entry.ai_summary is None or entry.ai_summary == ""
+        if not entry.ai_summary or entry.ai_summary.strip() == ""
     ]
     
     if not entries_without_summary:
         logger.info(f"All entries for digest '{digest.name}' already have AI summaries")
         return
     
-    # Group entries by feed to process efficiently
-    feed_ids = set(entry.feed_id for entry in entries_without_summary)
-    
-    # Get all feeds that need summary processing
-    candidate_feeds = Feed.objects.filter(
-        id__in=feed_ids,
-    )
-    
-    if not candidate_feeds.exists():
-        logger.warning(
-            f"Found {len(entries_without_summary)} entries without summaries, "
-            f"but their feeds don't have summary enabled"
-        )
-        return
-    
-    # Prepare feeds for summarization with fallback logic
-    feeds_to_summarize = []
-    feeds_without_summarizer = []
-    
-    for feed in candidate_feeds:
-        # Check if feed has its own summarizer
-        if feed.summarizer:
-            # Feed has its own summarizer
-            feeds_to_summarize.append(feed)
-        else:
-            # Feed doesn't have summarizer, will use digest's summarizer as fallback
-            feeds_without_summarizer.append(feed)
-    
-    # For feeds without summarizer, temporarily assign digest's summarizer
-    if feeds_without_summarizer and digest.summarizer:
-        logger.info(
-            f"Assigning digest summarizer to {len(feeds_without_summarizer)} feeds "
-            f"that don't have their own summarizer configured"
-        )
-        
-        for feed in feeds_without_summarizer:
-            # Temporarily assign digest's summarizer
-            feed.summarizer = digest.summarizer
-            feeds_to_summarize.append(feed)
-    
-    if not feeds_to_summarize:
-        logger.warning(
-            f"Found {len(entries_without_summary)} entries without summaries, "
-            f"but no valid summarizer available (neither feed nor digest has summarizer configured)"
-        )
-        return
-    
     logger.info(
-        f"Found {len(entries_without_summary)} entries without AI summaries "
-        f"across {len(feeds_to_summarize)} feeds. Generating summaries..."
+        f"Found {len(entries_without_summary)} entries without AI summaries. Generating summaries..."
     )
     
-    # Update progress
-    if task_manager and task_name:
-        task_manager.update_progress(task_name, 10)
+    # Process each entry directly - no need to group by feed
+    entries_to_save = []
+    total_tokens = 0
+    BATCH_SIZE = 5  # Memory-efficient batch size
+    use_digest_summarizer = False
     
-    # Submit summary generation task
-    summary_task_name = f"digest_{digest.id}_summaries_{int(time.time())}"
-    
-    try:
-        # Use the global task manager to submit the task
-        tm = task_manager or global_task_manager
-        future = tm.submit_task(
-            summary_task_name,
-            handle_feeds_summary,
-            feeds_to_summarize  # Already a list
-        )
-        
-        # Wait for summaries to complete with timeout
-        # This is synchronous by design - digest quality depends on having summaries
-        logger.info(f"Waiting for summary generation task: {summary_task_name}")
-        
-        timeout = 300  # 5 minutes timeout
+    for idx, entry in enumerate(entries_without_summary):
         try:
-            # Use Future.result() with timeout - much cleaner than polling
-            result = future.result(timeout=timeout)
-            logger.info("Summary generation completed successfully")
+            # Determine which summarizer to use
+            if entry.feed.summarizer:
+                summarizer = entry.feed.summarizer
+                target_language = entry.feed.target_language
+                summary_detail = entry.feed.summary_detail or 0.0
+            elif digest.summarizer:
+                # Use digest's summarizer as fallback
+                summarizer = digest.summarizer
+                target_language = digest.target_language
+                summary_detail = 0.0  # Default detail level for digest fallback
+                use_digest_summarizer = True
+                logger.info(
+                    f"Using digest summarizer for entry '{entry.original_title}' "
+                    f"from feed '{entry.feed.name}' that doesn't have its own summarizer"
+                )
+            else:
+                logger.warning(
+                    f"Entry '{entry.original_title}' from feed '{entry.feed.name}' "
+                    f"has no summarizer and digest has no fallback summarizer"
+                )
+                continue
             
-            # Update progress after completion
-            if task_manager and task_name:
-                task_manager.update_progress(task_name, 20)
+            logger.info(
+                f"[{idx + 1}/{len(entries_without_summary)}] Processing: {entry.original_title}"
+            )
+            
+            # Generate summary for this entry directly
+            summary, entry_tokens = _summarize_entry(
+                entry=entry,
+                summarizer=summarizer,
+                target_language=target_language,
+                min_chunk_size=summarizer.min_size(),
+                max_chunk_size=summarizer.max_size(),
+                summarize_recursively=True,
+                max_context_chunks=4,
+                max_context_tokens=summarizer.max_tokens,
+                chunk_delimiter=".",
+                max_chunks_per_entry=20,
+                summary_detail=summary_detail,
+            )
+            
+            entry.ai_summary = summary
+            total_tokens += entry_tokens
+            entries_to_save.append(entry)
+            
+            logger.info(
+                f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
+            )
+
+            
+            # Periodically save progress with smaller batch size
+            if len(entries_to_save) >= BATCH_SIZE:
+                _save_progress_batch(entries_to_save, digest, total_tokens, use_digest_summarizer)
+                total_tokens = 0
+                entries_to_save = []
                 
-        except TimeoutError:
-            logger.error(f"Summary generation timed out after {timeout} seconds")
-            # Continue anyway - digest will use fallback content
+                # Force garbage collection
+                gc.collect()
+                
         except Exception as e:
-            logger.error(f"Summary generation task failed: {e}")
-            # Continue anyway - digest will use fallback content
-        
-    except Exception as e:
-        logger.error(f"Failed to generate summaries for digest: {e}")
-        # Continue with digest generation - it will use fallback content
-    
-    # Final progress update
-    if task_manager and task_name:
-        task_manager.update_progress(task_name, 20)
+            logger.error(f"Error generating summary for entry '{entry.original_title}': {e}")
+            digest.log += f"Error generating summary for entry '{entry.original_title}': {e}\n"
+            digest.status = False
+            digest.save()
+            entry.ai_summary = f"[Summary failed: {str(e)}]"
+            entries_to_save.append(entry)
+
+    if entries_to_save:
+        _save_progress_batch(entries_to_save, digest, total_tokens, use_digest_summarizer)
+
+def _save_progress_batch(entries_to_save, digest, total_tokens, use_digest_summarizer):
+    """Save progress with memory cleanup."""
+    if entries_to_save:
+        from core.models.entry import Entry
+        Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+        del entries_to_save
+
+    if total_tokens > 0 and use_digest_summarizer:
+        digest.total_tokens += total_tokens
+        digest.save()
