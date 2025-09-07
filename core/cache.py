@@ -119,8 +119,8 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
                 f"{mistune.html(entry.ai_summary)}<br />---------------<br />"
             )
             content = html_summary + content
-        
-        summary = content or "" #确保summary始终是全文内容
+
+        summary = content or ""  # 确保summary始终是全文内容
 
     # 创建条目
     fe = fg.add_entry()

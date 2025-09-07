@@ -12,10 +12,8 @@ from core.models.agent import OpenAIAgent, TestAgent
 
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import handle_single_feed_fetch
-from core.tasks.translate_feeds import (
-    translate_feed, _fetch_article_content)
-from core.tasks.summarize_feeds import (summarize_feed, _save_progress)
-
+from core.tasks.translate_feeds import translate_feed, _fetch_article_content
+from core.tasks.summarize_feeds import summarize_feed, _save_progress
 
 
 class TasksExtendedTestCase(TestCase):

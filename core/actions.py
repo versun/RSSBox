@@ -106,7 +106,7 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
 
                 # 获取feed URL
                 feed_url = get_feed_url_func(feed)
-                
+
                 # 确保所有字段都是字符串，防止None值导致lxml错误
                 feed_name = feed.name or "Untitled Feed"
                 feed_url = feed_url or ""
@@ -289,7 +289,9 @@ def feed_batch_modify(modeladmin, request, queryset):
 
     translator_choices = get_all_agent_choices()
     # 为 summarizer 提供直接的选择项，格式为 (id, name)
-    summary_engine_choices = [(str(agent.id), agent.name) for agent in OpenAIAgent.objects.filter(valid=True)]
+    summary_engine_choices = [
+        (str(agent.id), agent.name) for agent in OpenAIAgent.objects.filter(valid=True)
+    ]
     filter_choices = [(f"{filter.id}", filter.name) for filter in Filter.objects.all()]
     tags_choices = [(f"{tag.id}", tag.name) for tag in Tag.objects.all()]
     return render(

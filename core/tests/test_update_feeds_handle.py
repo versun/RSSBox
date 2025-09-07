@@ -6,7 +6,6 @@ from django.test import SimpleTestCase
 from core.management.commands import feed_updater as cmd
 
 
-
 class UpdateFeedsHandleTests(SimpleTestCase):
     """Tests for `Command.handle` function covering edge cases."""
 

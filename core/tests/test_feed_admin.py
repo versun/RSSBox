@@ -204,9 +204,7 @@ class FeedAdminSaveModelTest(TestCase):
 
     @patch("core.admin.feed_admin.transaction.on_commit")
     @patch("core.admin.feed_admin.FeedAdmin._submit_feed_update_task")
-    def test_save_model_summarizer_changed(
-        self, mock_submit_task, mock_on_commit
-    ):
+    def test_save_model_summarizer_changed(self, mock_submit_task, mock_on_commit):
         """Test save_model when summarizer field is changed."""
         request = self.factory.post("/")
         request.user = self.user
@@ -449,7 +447,6 @@ class FeedAdminDisplayMethodsTest(TestCase):
         result = self.admin.fetch_feed(self.feed)
         self.assertEqual(mock_status_icon.call_count, 1)
         self.assertIn("⏳", result)
-
 
     def test_show_log_method(self):
         """Test show_log method (line 265)."""

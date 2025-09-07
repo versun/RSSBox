@@ -246,7 +246,6 @@ def _translate_entry_content(
     return {"tokens": total_tokens, "characters": total_characters}
 
 
-
 def _fetch_article_content(link: str) -> str:
     """Fetch full article content with explicit cleanup."""
     content = ""

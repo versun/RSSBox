@@ -58,6 +58,7 @@ class Agent(models.Model):
     def __str__(self):
         return self.name
 
+
 def openai_advanced_default():
     return {"temperature": 0.2}
 
@@ -82,11 +83,11 @@ class OpenAIAgent(Agent):
 
     advanced_params = models.JSONField(
         default=openai_advanced_default,
-        help_text=(
-            "Advanced OpenAI chat params as JSON."
-        ),
+        help_text=("Advanced OpenAI chat params as JSON."),
     )
-    max_tokens = models.IntegerField(default=0, help_text="0 means detect automatically")
+    max_tokens = models.IntegerField(
+        default=0, help_text="0 means detect automatically"
+    )
     rate_limit_rpm = models.IntegerField(
         _("Rate Limit (RPM)"),
         default=0,
@@ -308,10 +309,7 @@ class OpenAIAgent(Agent):
             # 计算合理的输出token限制
             input_tokens = get_token_count(system_prompt) + get_token_count(text)
             # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
-            output_token_limit = int(max(
-                4096,
-                (self.max_tokens - input_tokens) * 0.8
-            ))
+            output_token_limit = int(max(4096, (self.max_tokens - input_tokens) * 0.8))
 
             # 正常流程
             adv_params = self.advanced_params or {}
@@ -401,7 +399,7 @@ class OpenAIAgent(Agent):
         **kwargs,
     ) -> dict:
         logger.info(f">>> Start Digesting [{digest_name}]-{date}")
-        #prompt = system_prompt + settings.output_format_for_digest_prompt
+        # prompt = system_prompt + settings.output_format_for_digest_prompt
         return self.completions(text, system_prompt=system_prompt, **kwargs)
 
     def filter(self, text: str, system_prompt: str, **kwargs) -> dict:

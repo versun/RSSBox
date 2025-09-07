@@ -32,7 +32,7 @@ def handle_single_feed_fetch(feed: Feed):
 
         if not getattr(latest_feed, "entries", None):
             return
-        
+
         _process_feed_entries(feed, latest_feed.entries)
 
         feed.fetch_status = True
@@ -155,14 +155,13 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
             "error": str(e),
         }
 
+
 def _update_feed_metadata(feed, latest_feed):
     """Update feed metadata"""
     feed_name_is_the_default = (
         feed.name is None or feed.name == "Loading" or feed.name == "Empty"
     )
-    feed.name = (
-        latest_feed.feed.get("title") if feed_name_is_the_default else feed.name
-    )
+    feed.name = latest_feed.feed.get("title") if feed_name_is_the_default else feed.name
     feed.subtitle = latest_feed.feed.get("subtitle")
     feed.language = latest_feed.feed.get("language")
     feed.author = latest_feed.feed.get("author") or "Unknown"
@@ -176,46 +175,41 @@ def _update_feed_metadata(feed, latest_feed):
     feed.last_fetch = timezone.now()
     feed.etag = latest_feed.get("etag")
 
+
 def _prepare_entry_data(entry_data, feed):
     """Prepare entry data"""
     from core.tasks.utils import extract_content_from_entry
+
     content = extract_content_from_entry(entry_data)
     guid = entry_data.get("id") or entry_data.get("link")
-    
+
     if not guid:
         return None
-        
+
     return {
         "link": entry_data.get("link", ""),
         "author": entry_data.get("author", feed.author),
-        "pubdate": convert_struct_time_to_datetime(
-            entry_data.get("published_parsed")
-        ),
-        "updated": convert_struct_time_to_datetime(
-            entry_data.get("updated_parsed")
-        ),
+        "pubdate": convert_struct_time_to_datetime(entry_data.get("published_parsed")),
+        "updated": convert_struct_time_to_datetime(entry_data.get("updated_parsed")),
         "original_title": entry_data.get("title", "No title"),
         "original_content": content,
         "original_summary": entry_data.get("summary"),
         "enclosures_xml": entry_data.get("enclosures_xml"),
-        "guid": guid
+        "guid": guid,
     }
+
 
 def _process_feed_entries(feed, entries):
     """Process feed entries"""
     BATCH_SIZE = 50
     entries_to_create = []
-    existing_entries = dict(
-        Entry.objects.filter(feed=feed).values_list("guid", "id")
-    )
+    existing_entries = dict(Entry.objects.filter(feed=feed).values_list("guid", "id"))
 
     # Sort entries by publication date (newest first)
     sorted_entries = sorted(
         entries,
         key=lambda x: (
-            x.get("published_parsed")
-            or x.get("updated_parsed")
-            or time.gmtime(0)
+            x.get("published_parsed") or x.get("updated_parsed") or time.gmtime(0)
         ),
         reverse=True,
     )[: feed.max_posts]
@@ -224,11 +218,11 @@ def _process_feed_entries(feed, entries):
         entry_values = _prepare_entry_data(entry_data, feed)
         if not entry_values:
             continue
-            
+
         # Create new entry if needed
         if entry_values["guid"] not in existing_entries:
             entries_to_create.append(Entry(feed=feed, **entry_values))
-            
+
             if len(entries_to_create) >= BATCH_SIZE:
                 Entry.objects.bulk_create(entries_to_create)
                 entries_to_create = []

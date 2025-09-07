@@ -284,12 +284,11 @@ class ActionsTestCase(TestCase):
 
         # Test translator/summarizer fields - 需要先创建OpenAIAgent
         from core.models import OpenAIAgent
+
         agent = OpenAIAgent.objects.create(
-            name="Test Agent",
-            api_key="test_key",
-            valid=True
+            name="Test Agent", api_key="test_key", valid=True
         )
-        
+
         post_data = {
             "apply": "Apply",
             "translator": "Change",
@@ -327,9 +326,7 @@ class ActionsTestCase(TestCase):
 
     @patch("core.actions.get_all_agent_choices", return_value=[])
     @patch("core.actions.core_admin_site.each_context", return_value={})
-    def test_feed_batch_modify_form_render(
-        self, mock_context, mock_all_agents
-    ):
+    def test_feed_batch_modify_form_render(self, mock_context, mock_all_agents):
         """Test batch modify form rendering."""
         Tag.objects.create(name="Test Tag")
         Filter.objects.create(name="Test Filter")

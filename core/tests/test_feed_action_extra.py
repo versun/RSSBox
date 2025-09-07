@@ -15,6 +15,7 @@ from core.tasks.fetch_feeds import (
     manual_fetch_feed,
 )
 
+
 class ConvertStructTimeTests(SimpleTestCase):
     """Unit tests for convert_struct_time_to_datetime helper."""
 

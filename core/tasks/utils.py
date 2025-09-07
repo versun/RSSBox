@@ -1,8 +1,8 @@
-
 import logging
 import time
 
 logger = logging.getLogger(__name__)
+
 
 def auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
     """Retry function with exponential backoff and memory cleanup."""
@@ -21,6 +21,7 @@ def auto_retry(func: callable, max_retries: int = 3, **kwargs) -> dict:
             del kwargs[key]
 
     return result
+
 
 def extract_content_from_entry(entry_data):
     """Extract content from entry (feedparser)"""

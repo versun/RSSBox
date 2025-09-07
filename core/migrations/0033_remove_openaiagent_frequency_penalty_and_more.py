@@ -5,31 +5,33 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0032_alter_tag_name'),
+        ("core", "0032_alter_tag_name"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='openaiagent',
-            name='frequency_penalty',
+            model_name="openaiagent",
+            name="frequency_penalty",
         ),
         migrations.RemoveField(
-            model_name='openaiagent',
-            name='presence_penalty',
+            model_name="openaiagent",
+            name="presence_penalty",
         ),
         migrations.RemoveField(
-            model_name='openaiagent',
-            name='temperature',
+            model_name="openaiagent",
+            name="temperature",
         ),
         migrations.RemoveField(
-            model_name='openaiagent',
-            name='top_p',
+            model_name="openaiagent",
+            name="top_p",
         ),
         migrations.AddField(
-            model_name='openaiagent',
-            name='advanced_params',
-            field=models.JSONField(default=core.models.agent.openai_advanced_default, help_text='Advanced OpenAI chat params as JSON.'),
+            model_name="openaiagent",
+            name="advanced_params",
+            field=models.JSONField(
+                default=core.models.agent.openai_advanced_default,
+                help_text="Advanced OpenAI chat params as JSON.",
+            ),
         ),
     ]

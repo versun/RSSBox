@@ -1107,6 +1107,7 @@ class OpenAIAgentModelTest(TestCase):
         mock_completions.assert_called_once_with(
             "Test text", system_prompt=expected_prompt
         )
+
     @patch.object(OpenAIAgent, "completions")
     def test_filter_method(self, mock_completions):
         """Test that the filter method calls completions and processes the result."""

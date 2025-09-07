@@ -10,10 +10,10 @@ def migrate_agent_data(apps, schema_editor):
     将现有的 GenericForeignKey agent 数据迁移到新的 ForeignKey 字段
     包括 Filter 的 agent 和 Feed 的 summarizer
     """
-    Filter = apps.get_model('core', 'Filter')
-    Feed = apps.get_model('core', 'Feed')
-    OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
-    
+    Filter = apps.get_model("core", "Filter")
+    Feed = apps.get_model("core", "Feed")
+    OpenAIAgent = apps.get_model("core", "OpenAIAgent")
+
     # 获取 OpenAIAgent 的 ContentType ID
     try:
         openai_content_type = ContentType.objects.get_for_model(OpenAIAgent)
@@ -21,11 +21,10 @@ def migrate_agent_data(apps, schema_editor):
     except:
         # 如果 ContentType 不存在，跳过迁移
         return
-    
+
     # 迁移 Filter 的 agent 关联
     for filter_obj in Filter.objects.filter(
-        agent_content_type_id=openai_content_type_id,
-        agent_object_id__isnull=False
+        agent_content_type_id=openai_content_type_id, agent_object_id__isnull=False
     ):
         try:
             # 查找对应的 OpenAIAgent
@@ -36,11 +35,11 @@ def migrate_agent_data(apps, schema_editor):
             # 如果对应的 agent 不存在，保持为 None
             filter_obj.agent = None
             filter_obj.save()
-    
+
     # 迁移 Feed 的 summarizer 关联
     for feed_obj in Feed.objects.filter(
         summarizer_content_type_id=openai_content_type_id,
-        summarizer_object_id__isnull=False
+        summarizer_object_id__isnull=False,
     ):
         try:
             # 查找对应的 OpenAIAgent
@@ -58,22 +57,22 @@ def reverse_migrate_agent_data(apps, schema_editor):
     反向迁移：将 ForeignKey 数据迁移回 GenericForeignKey
     包括 Filter 的 agent 和 Feed 的 summarizer
     """
-    Filter = apps.get_model('core', 'Filter')
-    Feed = apps.get_model('core', 'Feed')
-    OpenAIAgent = apps.get_model('core', 'OpenAIAgent')
-    
+    Filter = apps.get_model("core", "Filter")
+    Feed = apps.get_model("core", "Feed")
+    OpenAIAgent = apps.get_model("core", "OpenAIAgent")
+
     # 获取 OpenAIAgent 的 ContentType
     try:
         openai_content_type = ContentType.objects.get_for_model(OpenAIAgent)
     except:
         return
-    
+
     # 迁移 Filter 数据回 GenericForeignKey
     for filter_obj in Filter.objects.filter(agent__isnull=False):
         filter_obj.agent_content_type_id = openai_content_type.id
         filter_obj.agent_object_id = filter_obj.agent.id
         filter_obj.save()
-    
+
     # 迁移 Feed 数据回 GenericForeignKey
     for feed_obj in Feed.objects.filter(summarizer__isnull=False):
         feed_obj.summarizer_content_type_id = openai_content_type.id
@@ -82,45 +81,60 @@ def reverse_migrate_agent_data(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0033_remove_openaiagent_frequency_penalty_and_more'),
+        ("core", "0033_remove_openaiagent_frequency_penalty_and_more"),
     ]
 
     operations = [
         # 第一步：添加新的字段
         migrations.AddField(
-            model_name='filter',
-            name='agent',
-            field=models.ForeignKey(blank=True, default=None, help_text='Select a valid OpenAI agent for filtering', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='filters', to='core.openaiagent', verbose_name='AI Agent'),
+            model_name="filter",
+            name="agent",
+            field=models.ForeignKey(
+                blank=True,
+                default=None,
+                help_text="Select a valid OpenAI agent for filtering",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="filters",
+                to="core.openaiagent",
+                verbose_name="AI Agent",
+            ),
         ),
         migrations.AddField(
-            model_name='feed',
-            name='summarizer',
-            field=models.ForeignKey(blank=True, default=None, help_text='Select a valid OpenAI agent for summarization', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='feeds_as_summarizer', to='core.openaiagent', verbose_name='Summarizer'),
+            model_name="feed",
+            name="summarizer",
+            field=models.ForeignKey(
+                blank=True,
+                default=None,
+                help_text="Select a valid OpenAI agent for summarization",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="feeds_as_summarizer",
+                to="core.openaiagent",
+                verbose_name="Summarizer",
+            ),
         ),
-        
         # 第二步：迁移数据
         migrations.RunPython(
             migrate_agent_data,
             reverse_migrate_agent_data,
         ),
-        
         # 第三步：删除旧的字段
         migrations.RemoveField(
-            model_name='filter',
-            name='agent_content_type',
+            model_name="filter",
+            name="agent_content_type",
         ),
         migrations.RemoveField(
-            model_name='filter',
-            name='agent_object_id',
+            model_name="filter",
+            name="agent_object_id",
         ),
         migrations.RemoveField(
-            model_name='feed',
-            name='summarizer_content_type',
+            model_name="feed",
+            name="summarizer_content_type",
         ),
         migrations.RemoveField(
-            model_name='feed',
-            name='summarizer_object_id',
+            model_name="feed",
+            name="summarizer_object_id",
         ),
     ]

@@ -20,8 +20,6 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic.base import RedirectView
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
 from core.admin import core_admin_site
 
 favicon_view = RedirectView.as_view(url="/static/favicon.ico", permanent=True)

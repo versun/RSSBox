@@ -7,6 +7,7 @@ from core.tasks.utils import auto_retry
 
 logger = logging.getLogger(__name__)
 
+
 def handle_feeds_summary(feeds: list):
     for feed in feeds:
         try:
@@ -109,7 +110,7 @@ def summarize_feed(
                     max_chunks_per_entry=max_chunks_per_entry,
                     summary_detail=feed.summary_detail,
                 )
-                
+
                 entry.ai_summary = summary
                 total_tokens += entry_tokens
                 entries_to_save.append(entry)
@@ -126,10 +127,13 @@ def summarize_feed(
 
                     # Force garbage collection
                     import gc
+
                     gc.collect()
 
             except Exception as e:
-                logger.error(f"Error summarizing entry {entry.original_title}: {str(e)}")
+                logger.error(
+                    f"Error summarizing entry {entry.original_title}: {str(e)}"
+                )
                 entry.ai_summary = f"[Summary failed: {str(e)}]"
                 entries_to_save.append(entry)
     except Exception as e:
@@ -146,6 +150,7 @@ def summarize_feed(
         del entries, entries_to_save
     return True
 
+
 def _summarize_entry(
     entry: Entry,
     summarizer: Agent,
@@ -161,17 +166,17 @@ def _summarize_entry(
 ) -> tuple[str, int]:
     """
     Summarize a single entry with memory optimizations.
-    
+
     Returns:
         tuple: (summary_text, tokens_used)
     """
     # Clean and prepare content
     content_text = text_handler.clean_content(entry.original_content)
-    
+
     # Skip empty content
     if not content_text.strip():
         return "[No content available]", 0
-    
+
     # Calculate chunking parameters
     token_count = text_handler.get_token_count(content_text)
     min_chunks = 1
@@ -183,7 +188,7 @@ def _summarize_entry(
             int(min_chunks + summary_detail * (max_chunks - min_chunks)),
         ),
     )
-    
+
     # Generate chunks
     text_chunks = text_handler.adaptive_chunking(
         content_text,
@@ -192,12 +197,12 @@ def _summarize_entry(
         max_chunk_size=max_chunk_size,
         initial_delimiter=chunk_delimiter,
     )
-    
+
     # Clean up original content
     del content_text
-    
+
     actual_chunks = len(text_chunks)
-    
+
     # Handle small content directly
     if actual_chunks == 1:
         response = auto_retry(
@@ -210,18 +215,18 @@ def _summarize_entry(
         tokens = response.get("tokens", 0)
         del text_chunks
         return summary, tokens
-    
+
     # Process chunks with context management
     accumulated_summaries = []
     context_token_count = 0
     total_tokens = 0
-    
+
     for chunk_idx, chunk in enumerate(text_chunks):
         # Prepare context
         context_parts = []
         if summarize_recursively and accumulated_summaries:
             context_candidates = accumulated_summaries[-max_context_chunks:]
-            
+
             for summary in reversed(context_candidates):
                 summary_tokens = text_handler.get_token_count(summary)
                 if context_token_count + summary_tokens <= max_context_tokens:
@@ -229,16 +234,14 @@ def _summarize_entry(
                     context_token_count += summary_tokens
                 else:
                     break
-        
+
         # Construct prompt
         prompt = (
-            "\n\n".join(context_parts)
-            + "\n\nCurrent text to summarize:\n\n"
-            + chunk
+            "\n\n".join(context_parts) + "\n\nCurrent text to summarize:\n\n" + chunk
             if context_parts
             else chunk
         )
-        
+
         # Summarize with retry
         response = auto_retry(
             summarizer.summarize,
@@ -247,21 +250,22 @@ def _summarize_entry(
             target_language=target_language,
             max_tokens=max_context_tokens,
         )
-        
+
         chunk_summary = response.get("text", "")
         accumulated_summaries.append(chunk_summary)
         total_tokens += response.get("tokens", 0)
         context_token_count = text_handler.get_token_count(chunk_summary)
-        
+
         # Clean up
         del prompt, response
         del text_chunks[chunk_idx]
-    
+
     # Finalize summary
     final_summary = "\n\n".join(accumulated_summaries)
     del accumulated_summaries
-    
+
     return final_summary, total_tokens
+
 
 def _save_progress(entries_to_save, feed, total_tokens):
     """Save progress with memory cleanup."""

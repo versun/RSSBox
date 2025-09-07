@@ -133,9 +133,12 @@ class FeedAdmin(admin.ModelAdmin):
         Digest Feed 的 feed_url 包含 '/core/digest/rss/' 路径。
         """
         from config import settings
+
         queryset = super().get_queryset(request)
         # 过滤掉 Digest Feed
-        return queryset.exclude(name__startswith="Digest:", name__endswith="@Digest@hide")
+        return queryset.exclude(
+            name__startswith="Digest:", name__endswith="@Digest@hide"
+        )
 
     def get_urls(self):
         urls = super().get_urls()

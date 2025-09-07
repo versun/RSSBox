@@ -52,13 +52,14 @@ class FeedForm(forms.ModelForm):
 
         # 获取翻译器的选择项，并在开头添加空选项
         agent_choices = get_all_agent_choices()
-        self.fields["translator_option"].choices = [("", _("Select a valid agent..."))] + agent_choices
-        
-        # 限制 summarizer 字段的选择项，只显示有效的 OpenAI agents
-        if 'summarizer' in self.fields:
-            self.fields['summarizer'].queryset = OpenAIAgent.objects.filter(valid=True)
-            self.fields['summarizer'].empty_label = _("Select a valid OpenAI agent...")
+        self.fields["translator_option"].choices = [
+            ("", _("Select a valid agent..."))
+        ] + agent_choices
 
+        # 限制 summarizer 字段的选择项，只显示有效的 OpenAI agents
+        if "summarizer" in self.fields:
+            self.fields["summarizer"].queryset = OpenAIAgent.objects.filter(valid=True)
+            self.fields["summarizer"].empty_label = _("Select a valid OpenAI agent...")
 
         self.fields["name"].widget.attrs.update(
             {
@@ -103,7 +104,6 @@ class FeedForm(forms.ModelForm):
             instance.translator_content_type_id = None
             instance.translator_object_id = None
 
-
     def _process_update_frequency(self, instance):
         if self.cleaned_data["simple_update_frequency"]:
             instance.update_frequency = int(
@@ -111,7 +111,6 @@ class FeedForm(forms.ModelForm):
             )
         else:
             instance.update_frequency = 60
-
 
     # 重写save方法，以处理自定义字段的数据
     @transaction.atomic

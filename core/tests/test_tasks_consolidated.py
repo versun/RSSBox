@@ -6,8 +6,19 @@ from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
-from core.tasks.translate_feeds import handle_feeds_translation, _translate_entry_title, _translate_entry_content, translate_feed, _fetch_article_content
-from core.tasks.summarize_feeds import handle_feeds_summary, summarize_feed, _save_progress
+from core.tasks.translate_feeds import (
+    handle_feeds_translation,
+    _translate_entry_title,
+    _translate_entry_content,
+    translate_feed,
+    _fetch_article_content,
+)
+from core.tasks.summarize_feeds import (
+    handle_feeds_summary,
+    summarize_feed,
+    _save_progress,
+)
+
 
 class TasksConsolidatedTestCase(TestCase):
     """整合的tasks测试类 - 消除重复，专注核心功能"""
@@ -277,7 +288,9 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "你好世界", "tokens": 15, "characters": 8}
 
         agent = MockAgent()
-        first_metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
+        first_metrics = _translate_entry_title(
+            entry, target_language="Chinese", engine=agent
+        )
         second_metrics = _translate_entry_title(
             entry, target_language="Chinese", engine=agent
         )
@@ -486,7 +499,9 @@ class TasksConsolidatedTestCase(TestCase):
         """测试摘要过程中的严重错误处理 - 异常情况验证"""
         entry = self._create_test_entry()
 
-        with patch("core.tasks.summarize_feeds.text_handler.clean_content") as mock_clean:
+        with patch(
+            "core.tasks.summarize_feeds.text_handler.clean_content"
+        ) as mock_clean:
             mock_clean.side_effect = Exception("Critical error")
 
             result = summarize_feed(self.feed)

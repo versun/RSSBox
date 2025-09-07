@@ -3,6 +3,7 @@ from unittest import mock
 
 from core.tasks.fetch_feeds import fetch_feed
 
+
 class DummyFeed:
     """Minimal object mimicking feedparser result."""
 

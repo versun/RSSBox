@@ -201,9 +201,9 @@ def digest_view(request, slug):
         )
 
     # Convert markdown to HTML
-    #md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
+    # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
     html_content = mistune.html(latest.ai_summary)
-    
+
     # Create HTML response
     html_response = f"""
     <!DOCTYPE html>
@@ -273,8 +273,8 @@ def digest_view(request, slug):
     <body>
         <div class="container">
             <div class="meta">
-                <strong>Generated:</strong> {digest.last_generated.strftime('%Y-%m-%d %H:%M:%S') if digest.last_generated else 'Never'}<br>
-                <strong>Tags:</strong> {', '.join([tag.name for tag in digest.tags.all()])}<br>
+                <strong>Generated:</strong> {digest.last_generated.strftime("%Y-%m-%d %H:%M:%S") if digest.last_generated else "Never"}<br>
+                <strong>Tags:</strong> {", ".join([tag.name for tag in digest.tags.all()])}<br>
                 <strong>Days Range:</strong> {digest.days_range} days
             </div>
             <div class="content">
@@ -284,7 +284,7 @@ def digest_view(request, slug):
     </body>
     </html>
     """
-    
+
     return HttpResponse(html_response, content_type="text/html; charset=utf-8")
 
 

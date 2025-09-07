@@ -9,9 +9,17 @@ from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
 from core.tasks.translate_feeds import (
-    handle_feeds_translation, _translate_entry_title, _translate_entry_content, translate_feed, _fetch_article_content)
-from core.tasks.summarize_feeds import (handle_feeds_summary, summarize_feed, _save_progress)
-
+    handle_feeds_translation,
+    _translate_entry_title,
+    _translate_entry_content,
+    translate_feed,
+    _fetch_article_content,
+)
+from core.tasks.summarize_feeds import (
+    handle_feeds_summary,
+    summarize_feed,
+    _save_progress,
+)
 
 
 class TasksOptimizedTestCase(TestCase):
@@ -921,7 +929,9 @@ class TasksOptimizedTestCase(TestCase):
         entry = self._create_test_entry()
 
         # 模拟摘要过程中的错误
-        with patch("core.tasks.summarize_feeds.text_handler.clean_content") as mock_clean_content:
+        with patch(
+            "core.tasks.summarize_feeds.text_handler.clean_content"
+        ) as mock_clean_content:
             mock_clean_content.side_effect = Exception("Processing failed")
 
             # 应该捕获异常并继续处理
@@ -945,7 +955,9 @@ class TasksOptimizedTestCase(TestCase):
 
     def test_fetch_article_content_parse_error(self):
         """测试文章解析错误处理"""
-        with patch("core.tasks.translate_feeds.newspaper.Article") as mock_article_class:
+        with patch(
+            "core.tasks.translate_feeds.newspaper.Article"
+        ) as mock_article_class:
             mock_article = Mock()
             mock_article.download.return_value = None
             mock_article.parse.side_effect = Exception("Parse failed")
@@ -957,7 +969,9 @@ class TasksOptimizedTestCase(TestCase):
 
     def test_fetch_article_content_mistune_error(self):
         """测试mistune处理错误"""
-        with patch("core.tasks.translate_feeds.newspaper.Article") as mock_article_class:
+        with patch(
+            "core.tasks.translate_feeds.newspaper.Article"
+        ) as mock_article_class:
             mock_article = Mock()
             mock_article.text = "Article text"
             mock_article_class.return_value = mock_article

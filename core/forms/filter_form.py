@@ -33,11 +33,11 @@ class FilterForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(FilterForm, self).__init__(*args, **kwargs)
-        
+
         # 限制 agent 字段的选择项，只显示有效的 OpenAI agents
-        if 'agent' in self.fields:
-            self.fields['agent'].queryset = OpenAIAgent.objects.filter(valid=True)
-            self.fields['agent'].empty_label = _("Select a valid OpenAI agent...")
+        if "agent" in self.fields:
+            self.fields["agent"].queryset = OpenAIAgent.objects.filter(valid=True)
+            self.fields["agent"].empty_label = _("Select a valid OpenAI agent...")
 
         # 如果是已创建的对象，设置默认值
         instance = getattr(self, "instance", None)
@@ -52,7 +52,6 @@ class FilterForm(forms.ModelForm):
                 self.fields["target_field"].initial.append("translated_title")
             if instance.filter_translated_content:
                 self.fields["target_field"].initial.append("translated_content")
-
 
     def _process_target_field(self, instance):
         # 清空之前的字段状态
