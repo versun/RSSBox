@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch
+import uuid
 
 from ..models import Feed, Entry, Filter, Tag
 from ..models.agent import OpenAIAgent, TestAgent
@@ -179,7 +180,7 @@ class FilterModelTest(TestCase):
     @patch.object(OpenAIAgent, "completions")
     def test_filter_ai_operations(self, mock_completions):
         """Test AI filtering with different agent responses."""
-        agent = OpenAIAgent.objects.create(name="AI Filter Agent", api_key="key")
+        agent = OpenAIAgent.objects.create(name=f"AI Filter Agent {uuid.uuid4()}", api_key="key")
         ai_filter = Filter.objects.create(
             name="AI Filter", agent=agent, filter_prompt="Is this about AI?"
         )
@@ -229,7 +230,7 @@ class FilterModelTest(TestCase):
         self.assertIn(entry, filtered)
 
         # Test AI_ONLY method with TestAgent
-        agent = OpenAIAgent.objects.create(name="Test Agent")
+        agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}")
         ai_filter = Filter.objects.create(
             name="AI Filter",
             agent=agent,

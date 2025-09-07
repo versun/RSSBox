@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, Mock
 import json
+import uuid
 
 from ..models import Feed, Entry, Filter, FilterResult
 from ..models.agent import OpenAIAgent
@@ -12,7 +13,7 @@ class FilterExtendedTestCase(TestCase):
         self.feed = Feed.objects.create(
             name="Test Feed", feed_url="https://example.com/feed.xml"
         )
-        self.agent = OpenAIAgent.objects.create(name="Test Agent")
+        self.agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}")
 
         # Create test entries
         self.entry1 = Entry.objects.create(
@@ -282,7 +283,7 @@ class FilterExtendedTestCase(TestCase):
             mock_clear.assert_called_once()
 
         # Test agent changed (should clear cache)
-        new_agent = OpenAIAgent.objects.create(name="New Agent", api_key="test-key")
+        new_agent = OpenAIAgent.objects.create(name=f"New Agent {uuid.uuid4()}", api_key="test-key")
         filter_agent = Filter.objects.create(
             name="Agent Filter", filter_method=Filter.BOTH, agent=self.agent
         )

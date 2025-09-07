@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import uuid
 from django.contrib.admin.sites import AdminSite
 from django.test import TestCase, RequestFactory
 
@@ -12,7 +13,7 @@ class AgentAdminTest(TestCase):
         self.site = AdminSite()
         self.factory = RequestFactory()
         self.openai_agent = OpenAIAgent.objects.create(
-            name="Test OpenAI Agent", api_key="sk-1234567890"
+            name=f"Test OpenAI Agent {uuid.uuid4()}", api_key="sk-1234567890"
         )
         self.admin = OpenAIAgentAdmin(self.openai_agent, self.site)
 

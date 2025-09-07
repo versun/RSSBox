@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock, call
+import uuid
 import time
 import gc
 
@@ -37,8 +38,8 @@ class TasksOptimizedTestCase(TestCase):
             translate_content=True,
             fetch_article=True,
         )
-        self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key")
-        self.test_agent = OpenAIAgent.objects.create(name="Test Agent 2")
+        self.agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}", api_key="key")
+        self.test_agent = OpenAIAgent.objects.create(name=f"Test Agent 2 {uuid.uuid4()}")
 
         # 设置feed的翻译器和摘要器
         self.feed.translator = self.agent

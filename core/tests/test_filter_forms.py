@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
+import uuid
 
 from core.forms.filter_form import FilterForm
 from core.models import Filter
@@ -11,7 +12,7 @@ class FilterFormTest(TestCase):
 
     def setUp(self):
         self.agent = OpenAIAgent.objects.create(
-            name="Test Agent", api_key="key", valid=True
+            name=f"Test Agent {uuid.uuid4()}", api_key="key", valid=True
         )
 
     def test_form_functionality(self):

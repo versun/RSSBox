@@ -6,6 +6,7 @@ Extended test file for core.tasks module to improve coverage.
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock
+import uuid
 
 from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
@@ -29,7 +30,7 @@ class TasksExtendedTestCase(TestCase):
             summary_detail=0.5,
         )
         # 不在这里设置translator，让每个测试自己决定
-        self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key")
+        self.agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}", api_key="key")
 
     def _create_test_entry(
         self, title="Test Entry", content="<p>Test content</p>", feed=None

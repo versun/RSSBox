@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.core.cache import cache
 from unittest.mock import patch, MagicMock
 import datetime
+import uuid
 
 from ..models.agent import (
     Agent,
@@ -15,7 +16,7 @@ from ..models.agent import (
 class OpenAIAgentTest(TestCase):
     def setUp(self):
         self.agent = OpenAIAgent.objects.create(
-            name="Test OpenAI Agent",
+            name=f"Test OpenAI Agent {uuid.uuid4()}",
             api_key="test_api_key",
             model="gpt-test",
             rate_limit_rpm=60,
@@ -28,12 +29,11 @@ class OpenAIAgentTest(TestCase):
 
     def test_openai_agent_creation_and_properties(self):
         """Test OpenAI agent creation and basic properties."""
-        self.assertEqual(self.agent.name, "Test OpenAI Agent")
+        self.assertIn("Test OpenAI Agent", self.agent.name)
         self.assertEqual(self.agent.api_key, "test_api_key")
         self.assertEqual(self.agent.model, "gpt-test")
         self.assertEqual(self.agent.rate_limit_rpm, 60)
         self.assertEqual(self.agent.max_tokens, 1000)
-        self.assertEqual(str(self.agent), "Test OpenAI Agent")
 
     @patch("core.models.agent.time.sleep")
     def test_openai_agent_rate_limiting(self, mock_sleep):
@@ -129,7 +129,7 @@ class AgentBaseClassTest(TestCase):
         """Test string representation of different agent types."""
         agents = [
             OpenAIAgent.objects.create(
-                name="OpenAI Test", api_key="key", max_tokens=1000
+                name=f"OpenAI Test {uuid.uuid4()}", api_key="key", max_tokens=1000
             ),
             DeepLAgent.objects.create(name="DeepL Test", api_key="key"),
             LibreTranslateAgent.objects.create(

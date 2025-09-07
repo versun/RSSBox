@@ -3,6 +3,7 @@ from django.test.client import RequestFactory
 from django.contrib.admin import ModelAdmin
 from django.contrib.messages.storage.fallback import FallbackStorage
 from lxml import etree
+import uuid
 
 from ..models import Feed, Entry, Tag, Filter
 from ..actions import (
@@ -286,7 +287,7 @@ class ActionsTestCase(TestCase):
         from core.models import OpenAIAgent
 
         agent = OpenAIAgent.objects.create(
-            name="Test Agent", api_key="test_key", valid=True
+            name=f"Test Agent {uuid.uuid4()}", api_key="test_key", valid=True
         )
 
         post_data = {

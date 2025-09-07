@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
+import uuid
 
 from core.forms.feed_form import FeedForm
 from core.models import Feed
@@ -11,7 +12,7 @@ class FeedFormTest(TestCase):
 
     def setUp(self):
         self.agent = OpenAIAgent.objects.create(
-            name="Test Agent", api_key="key", valid=True
+            name=f"Test Agent {uuid.uuid4()}", api_key="key", valid=True
         )
         self.ct = ContentType.objects.get_for_model(OpenAIAgent)
         self.agent_value = f"{self.ct.id}:{self.agent.id}"

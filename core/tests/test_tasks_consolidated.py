@@ -1,6 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock, call
+import uuid
 
 from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
@@ -32,8 +33,8 @@ class TasksConsolidatedTestCase(TestCase):
             max_posts=10,
             summary_detail=0.5,  # 设置summary_detail避免断言失败
         )
-        self.agent = OpenAIAgent.objects.create(name="Test Agent", api_key="key")
-        self.test_agent = OpenAIAgent.objects.create(name="Test Agent 2")
+        self.agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}", api_key="key")
+        self.test_agent = OpenAIAgent.objects.create(name=f"Test Agent 2 {uuid.uuid4()}")
 
     def _create_mock_feed_data(
         self, title="Test Feed", entries_count=1, has_content=True

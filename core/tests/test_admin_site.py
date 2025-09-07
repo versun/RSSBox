@@ -1,4 +1,5 @@
 from django.test import TestCase, RequestFactory, override_settings
+import uuid
 from django.contrib.auth.models import User
 from unittest.mock import patch, MagicMock
 
@@ -94,7 +95,7 @@ class AgentPaginatorTestCase(TestCase):
 
     def test_enqueued_items_structure(self):
         """Test enqueued_items returns properly structured data."""
-        OpenAIAgent.objects.create(name="Test OpenAI", api_key="test-key")
+        OpenAIAgent.objects.create(name=f"Test OpenAI {uuid.uuid4()}", api_key="test-key")
         DeepLAgent.objects.create(name="Test DeepL", api_key="test-key")
 
         items = self.paginator.enqueued_items(10, 0)
