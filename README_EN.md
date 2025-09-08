@@ -1,6 +1,7 @@
 <div align="center">
 <em><img src="https://raw.githubusercontent.com/rssbox/rssbox/main/core/static/favicon.ico" height="90px"></em>
 <h1>RSSBox<br/><sub>Smarter RSS management, more efficient information access</sub></h1>
+<p><em>Formerly RSS Translator</em></p>
 
 ![GitHub top language](https://img.shields.io/github/languages/top/versun/rssbox)
 ![Docker Image Version](https://img.shields.io/docker/v/versun/rssbox)

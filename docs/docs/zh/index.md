@@ -3,6 +3,7 @@
 </div>
 
 # RSSBox
+<p><em>原 RSS Translator</em></p>
 [中文](/) | [English](/en)
 
 **让RSS管理更智能，让信息获取更高效**
