@@ -1,20 +1,20 @@
 <div align="center">
-<em><img src="https://raw.githubusercontent.com/rss-translator/RSS-Translator/main/core/static/favicon.ico" height="90px"></em>
-<h1>RSS Translator<br/><sub>Translate RSS feeds into your language!</sub></h1>
+<em><img src="https://raw.githubusercontent.com/rssbox/rssbox/main/core/static/favicon.ico" height="90px"></em>
+<h1>RSSBox<br/><sub>Smarter RSS management, more efficient information access</sub></h1>
 
-![GitHub top language](https://img.shields.io/github/languages/top/versun/rss-translator)
-![Docker Image Version](https://img.shields.io/docker/v/versun/rsstranslator)
-![Docker Pulls](https://img.shields.io/docker/pulls/versun/rsstranslator)
-![GitHub License](https://img.shields.io/github/license/versun/RSS-Translator)
+![GitHub top language](https://img.shields.io/github/languages/top/versun/rssbox)
+![Docker Image Version](https://img.shields.io/docker/v/versun/rssbox)
+![Docker Pulls](https://img.shields.io/docker/pulls/versun/rssbox)
+![GitHub License](https://img.shields.io/github/license/versun/rssbox)
 
 </div>
 <br/>
 
-| [中文文档](/README.md) | [Demo](https://rsstranslator.com/en/demo/) | [Telegram Group](https://t.me/rsstranslator) | [Development Progress](https://github.com/users/versun/projects/8) | [Financial Sheet](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
+| [中文文档](/README.md) | [Demo](https://rssbox.app/en/demo/) | [Telegram Group](https://t.me/rssboxapp) | [Development Progress](https://github.com/users/versun/projects/8) | [Financial Sheet](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
 
 ---
 
-### Documentation: [rsstranslator.com](https://rsstranslator.com/en)
+### Documentation: [rssbox.app](https://rssbox.app/en)
 ## Features:
 
 1. Translate titles or content
@@ -56,9 +56,9 @@ If you find this project helpful, consider becoming a sponsor: [Afdian](https://
 > Note: Sponsor avatars refresh at 5:30 AM and PM UTC daily.
 
 ## Contributing
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/RSS-Translator)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/rssbox)
 
-We welcome all forms of contribution! To contribute to RSS-Translator, please follow these steps:
+We welcome all forms of contribution! To contribute to rssbox, please follow these steps:
 
 1. **Fork this repository**  
 
@@ -67,8 +67,8 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
 2. **Clone to local**  
 
    ```bash
-   git clone https://github.com/your-username/RSS-Translator.git
-   cd RSS-Translator
+   git clone https://github.com/your-username/rssbox.git
+   cd rssbox
    ```
 
 3. **Create a new branch**
@@ -93,11 +93,11 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
 Make sure your code passes formatting checks and basic tests before submitting.
 It is recommended to describe your changes and motivation in detail in the PR.
 All types of contributions are welcome: documentation, tests, features, or bug fixes.
-If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rsstranslator).
+If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rssboxapp).
 
 Thank you for your participation and support!
 
 
 ## Star History Chart
 
-[![Star History Chart](https://api.star-history.com/svg?repos=rss-translator/RSS-Translator&type=Date)](https://star-history.com/#rss-translator/RSS-Translator&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=rssbox/rssbox&type=Date)](https://star-history.com/#rssbox/rssbox&Date)

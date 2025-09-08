@@ -1,21 +1,21 @@
 <div align="center">
-<em><img src="https://raw.githubusercontent.com/rss-translator/RSS-Translator/main/core/static/favicon.ico" height="90px"></em>
-<h1>RSS翻译器<br/><sub>开源、简洁、可自部署</sub></h1>
+<em><img src="https://raw.githubusercontent.com/rssbox/rssbox/main/core/static/favicon.ico" height="90px"></em>
+<h1>RSSBox<br/><sub>让RSS管理更智能，让信息获取更高效</sub></h1>
 
-![GitHub top language](https://img.shields.io/github/languages/top/versun/rss-translator)
-![Docker Image Version](https://img.shields.io/docker/v/versun/rsstranslator)
-![Docker Pulls](https://img.shields.io/docker/pulls/versun/rsstranslator)
-![GitHub License](https://img.shields.io/github/license/versun/RSS-Translator)
+![GitHub top language](https://img.shields.io/github/languages/top/versun/rssbox)
+![Docker Image Version](https://img.shields.io/docker/v/versun/rssbox)
+![Docker Pulls](https://img.shields.io/docker/pulls/versun/rssbox)
+![GitHub License](https://img.shields.io/github/license/versun/rssbox)
 
 </div>
 
 <br/>
 
-| [English](/README_EN.md) | [Demo](https://rsstranslator.com/demo/) | [Telegram交流群](https://t.me/rsstranslator) | [开发进度](https://github.com/users/versun/projects/8) | [收支表](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
+| [English](/README_EN.md) | [Demo](https://rssbox.app/demo/) | [Telegram交流群](https://t.me/rssboxapp) | [开发进度](https://github.com/users/versun/projects/8) | [收支表](https://versun.notion.site/RSS-10a92896fa998028a162c57bfb0ac3dc)
 
 ---
 
-### 文档：[rsstranslator.com](https://rsstranslator.com)
+### 文档：[rssbox.app](https://rssbox.app)
 ## 功能：
 
 1. 翻译标题或内容或总结
@@ -53,9 +53,9 @@
 如有余力，请考虑成为赞助者：[爱发电](https://afdian.com/a/versun) | [Github Sponsor](https://github.com/sponsors/versun)
 > 说明： 赞助头像每天早上和下午的5:30分刷新(UTC时区)。
 ## 开发贡献
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/RSS-Translator)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/rssbox)
 
-欢迎任何形式的贡献！如果你想为 RSS-Translator 做出贡献，请按照以下步骤操作：
+欢迎任何形式的贡献！如果你想为 rssbox 做出贡献，请按照以下步骤操作：
 
 1. **Fork 本仓库**  
 
@@ -63,8 +63,8 @@
 
 2. **克隆到本地**  
    ```bash
-   git clone https://github.com/versun/RSS-Translator.git
-   cd RSS-Translator
+   git clone https://github.com/versun/rssbox.git
+   cd rssbox
    ```
 
 3. **创建新分支**
@@ -89,13 +89,13 @@
   提交前请确保代码通过 ruff 格式检查和基本测试。
   建议在 PR 中详细说明更改内容和动机。
   欢迎提交文档、测试、功能或 Bug 修复等各类贡献。
-  如有疑问或建议，欢迎在 [Telegram 群组](https://t.me/rsstranslator)中交流。
+  如有疑问或建议，欢迎在 [Telegram 群组](https://t.me/rssboxapp)中交流。
 
   感谢你的参与和支持！
 
 
 ## Star历史图
 
-[![Star History Chart](https://api.star-history.com/svg?repos=rss-translator/RSS-Translator&type=Date)](https://star-history.com/#rss-translator/RSS-Translator&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=rssbox/rssbox&type=Date)](https://star-history.com/#rssbox/rssbox&Date)
 
 

@@ -94,8 +94,8 @@ class OpenAIAgent(Agent):
         help_text=_("Maximum requests per minute (0 = no limit)"),
     )
     EXTRA_HEADERS = {
-        "HTTP-Referer": "https://www.rsstranslator.com",
-        "X-Title": "RSS Translator",
+        "HTTP-Referer": "https://www.rssbox.app",
+        "X-Title": "RSSBox",
     }
 
     class Meta:

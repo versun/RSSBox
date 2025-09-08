@@ -1,6 +1,6 @@
 # 使用指南
 
-欢迎使用RSS翻译器！本指南将帮助您快速掌握所有核心功能，从基础配置到高级特性。
+欢迎使用RSSBox！本指南将帮助您快速掌握所有核心功能，从基础配置到高级特性。
 
 ## 🚀 快速开始
 
@@ -64,7 +64,7 @@
 
 ### AI日报生成
 
-**AI日报是RSS翻译器的亮点功能**，可以智能聚合多个信息源：
+**AI日报是RSSBox的亮点功能**，可以智能聚合多个信息源：
 
 #### 配置步骤
 1. **创建标签并关联RSS源**
@@ -101,10 +101,10 @@
 
 遇到问题时，请先查看 [FAQ页面](/zh/faq/)，如果仍无法解决：
 
-1. **提交Issue**：[GitHub Issues](https://github.com/versun/RSS-Translator/issues)
-2. **社区讨论**：[Telegram群组](https://t.me/rsstranslator)
+1. **提交Issue**：[GitHub Issues](https://github.com/versun/rssbox/issues)
+2. **社区讨论**：[Telegram群组](https://t.me/rssboxapp)
 3. **查看日志**：检查服务器错误日志
 
 ---
 
-🎉 **祝您使用愉快！** 如果RSS翻译器帮助到了您，欢迎给项目点个Star支持我的开发。
+🎉 **祝您使用愉快！** 如果RSSBox帮助到了您，欢迎给项目点个Star支持我的开发。

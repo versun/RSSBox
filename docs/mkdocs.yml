@@ -1,13 +1,13 @@
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
-site_name: RSS Translator
-site_url: https://rsstranslator.com
+site_name: RSSBox
+site_url: https://rssbox.app
 site_author: versun
 site_description: >-
   Translate RSS feeds to your language
 
 # Repository
-repo_name: versun/RSS-Translator
-repo_url: https://github.com/versun/RSS-Translator
+repo_name: versun/rssbox
+repo_url: https://github.com/versun/rssbox
 
 # Copyright
 copyright: Copyright &copy; 2023 - 2025 Versun
@@ -81,11 +81,11 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/versun/RSS-Translator
+      link: https://github.com/versun/rssbox
     - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/versun/rsstranslator
+      link: https://hub.docker.com/r/versun/rssbox
     - icon: fontawesome/brands/telegram
-      link: https://t.me/rsstranslator
+      link: https://t.me/rssboxapp
     - icon: fontawesome/brands/twitter
       link: https://twitter.com/VersunPan
 
@@ -101,7 +101,7 @@ nav:
   - 翻译服务: translator.md
   - 常见问题: faq.md
   - 开发进度: https://github.com/users/versun/projects/8
-  - 赞助: https://rsstranslator.com/#_2
-  - Github: https://github.com/versun/RSS-Translator
-  - Telegram: https://t.me/rsstranslator
-  - Releases: https://github.com/versun/RSS-Translator/releases
+  - 赞助: https://rssbox.app/#_2
+  - Github: https://github.com/versun/rssbox
+  - Telegram: https://t.me/rssboxapp
+  - Releases: https://github.com/versun/rssbox/releases

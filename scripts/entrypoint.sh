@@ -11,7 +11,7 @@ echo "Running initialization script..."
 cron -n &
 
 # 等待Redis服务可用
-REDIS_URL=${REDIS_URL:-redis://rsstranslator_redis:6379/0}
+REDIS_URL=${REDIS_URL:-redis://rssbox_redis:6379/0}
 max_attempts=10
 attempt=0
 

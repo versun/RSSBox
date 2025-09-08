@@ -2,14 +2,14 @@
 <img src="/assets/logo.svg" width="100" height="100">
 </div>
 
-# RSS翻译器
+# RSSBox
 [中文](/) | [English](/en)
 
-**开源、简洁、可自部署的RSS内容翻译平台**
+**让RSS管理更智能，让信息获取更高效**
 
-让语言不再成为获取全球资讯的障碍。RSS翻译器帮助您自动翻译外语RSS内容，支持多引擎翻译、智能过滤和AI日报生成，为跨语言信息获取提供一站式解决方案。
+让语言不再成为获取全球资讯的障碍。RSSBox帮助您自动翻译外语RSS内容，支持多引擎翻译、智能过滤和AI日报生成，为跨语言信息获取提供一站式解决方案。
 
-官方网站：[rsstranslator.com](https://rsstranslator.com)
+官方网站：[rssbox.app](https://rssbox.app)
 
 ## 核心功能
 
@@ -68,9 +68,9 @@
 如有余力，请考虑成为赞助者：[爱发电](https://afdian.com/a/versun) | [Github Sponsor](https://github.com/sponsors/versun)
 > 说明： 赞助头像每天早上和下午的5:30分刷新(UTC时区)。
 ## 开发贡献
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/RSS-Translator)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/rssbox)
 
-欢迎任何形式的贡献！如果你想为 RSS-Translator 做出贡献，请按照以下步骤操作：
+欢迎任何形式的贡献！如果你想为 rssbox 做出贡献，请按照以下步骤操作：
 
 1. **Fork 本仓库**  
 
@@ -78,8 +78,8 @@
 
 2. **克隆到本地**  
    ```bash
-   git clone https://github.com/versun/RSS-Translator.git
-   cd RSS-Translator
+   git clone https://github.com/versun/rssbox.git
+   cd rssbox
    ```
 
 3. **创建新分支**
@@ -104,12 +104,12 @@
   提交前请确保代码通过 ruff 格式检查和基本测试。
   建议在 PR 中详细说明更改内容和动机。
   欢迎提交文档、测试、功能或 Bug 修复等各类贡献。
-  如有疑问或建议，欢迎在 [Telegram 群组](https://t.me/rsstranslator)中交流。
+  如有疑问或建议，欢迎在 [Telegram 群组](https://t.me/rssboxapp)中交流。
 
   感谢你的参与和支持！
 
 
 ## Star历史图
 
-[![Star History Chart](https://api.star-history.com/svg?repos=rss-translator/RSS-Translator&type=Date)](https://star-history.com/#rss-translator/RSS-Translator&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=rssbox/rssbox&type=Date)](https://star-history.com/#rssbox/rssbox&Date)
 

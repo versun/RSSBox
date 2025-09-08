@@ -48,9 +48,9 @@ If deployed using other methods, wait for 5 minutes and if the problem persists,
 
 ## My RSS reader cannot subscribe to the translated address
 
-1. In RSS Translator, check if translation status is complete
+1. In RSSBox, check if translation status is complete
 2. Use browser to access the address to see if it works normally
-3. Your reader may not be able to access RSS Translator, check if your RSS Translator is set to open to the public
+3. Your reader may not be able to access RSSBox, check if your RSSBox is set to open to the public
 
 ### IPv6
 
@@ -60,11 +60,11 @@ If you want to listen to IPv6 addresses instead, just modify the deploy/start.sh
 
 ### Can I set up a proxy server?
 
-RSS Translator itself does not support setting a global proxy, but you can add the following 2 environment variables to set a global proxy:
+RSSBox itself does not support setting a global proxy, but you can add the following 2 environment variables to set a global proxy:
 ```
 HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
 ### Still can't resolve the issue?
-Please [Submit an Issue](https://github.com/versun/RSS-Translator/issues) or provide feedback in the [Telegram Group](https://t.me/rsstranslator)
+Please [Submit an Issue](https://github.com/versun/rssbox/issues) or provide feedback in the [Telegram Group](https://t.me/rssboxapp)

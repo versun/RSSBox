@@ -83,14 +83,14 @@ class ActionsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml")
         self.assertIn(
-            'attachment; filename="test_feeds_from_rsstranslator.opml"',
+            'attachment; filename="test_feeds_from_rssbox.opml"',
             response["Content-Disposition"],
         )
 
         # Parse and validate XML content
         root = etree.fromstring(response.content)
         self.assertEqual(root.tag, "opml")
-        self.assertEqual(root.find("head/title").text, "Test Export | RSS Translator")
+        self.assertEqual(root.find("head/title").text, "Test Export | RSSBox")
         category_outline = root.find('body/outline[@title="Tech"]')
         self.assertIsNotNone(category_outline)
         feed_outline = category_outline.find("outline")
@@ -195,13 +195,13 @@ class ActionsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/xml")
         self.assertIn(
-            "original_feeds_from_rsstranslator.opml", response["Content-Disposition"]
+            "original_feeds_from_rssbox.opml", response["Content-Disposition"]
         )
 
         root = etree.fromstring(response.content)
         self.assertEqual(root.tag, "opml")
         self.assertEqual(
-            root.find("head/title").text, "Original Feeds | RSS Translator"
+            root.find("head/title").text, "Original Feeds | RSSBox"
         )
 
         # Test translated export with settings patch
@@ -211,13 +211,13 @@ class ActionsTestCase(TestCase):
             )
             self.assertEqual(response.status_code, 200)
             self.assertIn(
-                "translated_feeds_from_rsstranslator.opml",
+                "translated_feeds_from_rssbox.opml",
                 response["Content-Disposition"],
             )
 
             root = etree.fromstring(response.content)
             self.assertEqual(
-                root.find("head/title").text, "Translated Feeds | RSS Translator"
+                root.find("head/title").text, "Translated Feeds | RSSBox"
             )
 
     @patch("core.actions.reverse")

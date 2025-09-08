@@ -1,6 +1,6 @@
 # User Guide
 
-Welcome to RSS Translator! This guide will help you quickly master all core features, from basic configuration to advanced functionality.
+Welcome to RSSBox! This guide will help you quickly master all core features, from basic configuration to advanced functionality.
 
 ## 🚀 Quick Start
 
@@ -64,7 +64,7 @@ Through the tag system you can:
 
 ### AI Digest Generation
 
-**AI Digest is a highlight feature of RSS Translator**, intelligently aggregating multiple information sources:
+**AI Digest is a highlight feature of RSSBox**, intelligently aggregating multiple information sources:
 
 #### Configuration Steps
 1. **Create tags and associate RSS sources**
@@ -101,10 +101,10 @@ Through the tag system you can:
 
 When encountering problems, please first check the [FAQ page](/en/faq/). If still unresolved:
 
-1. **Submit Issue**: [GitHub Issues](https://github.com/versun/RSS-Translator/issues)
-2. **Community Discussion**: [Telegram Group](https://t.me/rsstranslator)
+1. **Submit Issue**: [GitHub Issues](https://github.com/versun/rssbox/issues)
+2. **Community Discussion**: [Telegram Group](https://t.me/rssboxapp)
 3. **Check Logs**: Review server error logs
 
 ---
 
-🎉 **Enjoy using RSS Translator!** If RSS Translator has helped you, welcome to give the project a Star to support my development.
+🎉 **Enjoy using RSSBox!** If RSSBox has helped you, welcome to give the project a Star to support my development.

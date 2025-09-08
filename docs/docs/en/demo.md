@@ -5,4 +5,4 @@ Notes:
 3. Demo site can not be translated and summarized (because the translation engine is not added)
 4. In order to control the use of resources, Demo site will clean up the data from time to time.
 
-[I understand, enter Demo site](https://demo.rsstranslator.com).
+[I understand, enter Demo site](https://demo.rssbox.app).

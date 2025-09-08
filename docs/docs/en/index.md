@@ -2,14 +2,14 @@
 <img src="/assets/logo.svg" width="100" height="100">
 </div>
 
-# RSS Translator
+# RSSBox
 [中文](/) | [English](/en)
 
-**Open source, Simple, Self-deployable RSS Content Translation Platform**
+**Smarter RSS management, more efficient information access**
 
-Breaking language barriers for global information access. RSS Translator helps you automatically translate foreign RSS content, supporting multi-engine translation, intelligent filtering, and AI digest generation for a one-stop cross-language information solution.
+Breaking language barriers for global information access. RSSBox helps you automatically translate foreign RSS content, supporting multi-engine translation, intelligent filtering, and AI digest generation for a one-stop cross-language information solution.
 
-Official website: [rsstranslator.com](https://rsstranslator.com)
+Official website: [rssbox.app](https://rssbox.app)
 
 ## Core Features
 
@@ -69,9 +69,9 @@ If you find this project helpful, consider becoming a sponsor: [Afdian](https://
 > Note: Sponsor avatars refresh at 5:30 AM and PM UTC daily.
 
 ## Contributing
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/RSS-Translator)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/versun/rssbox)
 
-We welcome all forms of contribution! To contribute to RSS-Translator, please follow these steps:
+We welcome all forms of contribution! To contribute to rssbox, please follow these steps:
 
 1. **Fork this repository**  
 
@@ -79,8 +79,8 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
 
 2. **Clone to local**  
    ```bash
-   git clone https://github.com/versun/RSS-Translator.git
-   cd RSS-Translator
+   git clone https://github.com/versun/rssbox.git
+   cd rssbox
    ```
 
 3. **Create a new branch**
@@ -105,12 +105,12 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
   Please ensure your code passes ruff formatting checks and basic tests before submitting.
   It is recommended to describe your changes and motivation in detail in the PR.
   All types of contributions are welcome: documentation, tests, features, or bug fixes.
-  If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rsstranslator).
+  If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rssboxapp).
 
   Thank you for your participation and support!
 
 
 ## Star History Chart
 
-[![Star History Chart](https://api.star-history.com/svg?repos=rss-translator/RSS-Translator&type=Date)](https://star-history.com/#rss-translator/RSS-Translator&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=rssbox/rssbox&type=Date)](https://star-history.com/#rssbox/rssbox&Date)
 

@@ -84,7 +84,7 @@ class EntrypointScriptTestCase(TestCase):
             del os.environ["REDIS_URL"]
 
         # 验证默认值
-        default_redis_url = "redis://rsstranslator_redis:6379/0"
+        default_redis_url = "redis://rssbox_redis:6379/0"
         self.assertEqual(
             os.environ.get("REDIS_URL", default_redis_url), default_redis_url
         )
@@ -173,7 +173,7 @@ class EntrypointScriptTestCase(TestCase):
 
     def test_python_redis_connection_command(self):
         """测试Python Redis连接命令的逻辑"""
-        redis_url = "redis://rsstranslator_redis:6379/0"
+        redis_url = "redis://rssbox_redis:6379/0"
 
         # 模拟Python命令
         python_cmd = f"python -c \"import redis; r=redis.Redis.from_url('{redis_url}'); r.ping()\""
@@ -218,7 +218,7 @@ class EntrypointScriptTestCase(TestCase):
 
     def test_redis_url_parsing(self):
         """测试Redis URL解析逻辑"""
-        redis_url = "redis://rsstranslator_redis:6379/0"
+        redis_url = "redis://rssbox_redis:6379/0"
 
         # 验证URL格式
         self.assertTrue(redis_url.startswith("redis://"))

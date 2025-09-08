@@ -76,11 +76,11 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
 
         # 创建头部 <head>
         head = etree.SubElement(root, "head")
-        etree.SubElement(head, "title").text = f"{title_prefix} | RSS Translator"
+        etree.SubElement(head, "title").text = f"{title_prefix} | RSSBox"
         etree.SubElement(head, "dateCreated").text = datetime.now().strftime(
             "%a, %d %b %Y %H:%M:%S %z"
         )
-        etree.SubElement(head, "ownerName").text = "RSS Translator"
+        etree.SubElement(head, "ownerName").text = "RSSBox"
 
         # 创建主体 <body>
         body = etree.SubElement(root, "body")
@@ -132,7 +132,7 @@ def _generate_opml_feed(title_prefix, queryset, get_feed_url_func, filename_pref
         # 创建HTTP响应
         response = HttpResponse(xml_content, content_type="application/xml")
         response["Content-Disposition"] = (
-            f'attachment; filename="{filename_prefix}_feeds_from_rsstranslator.opml"'
+            f'attachment; filename="{filename_prefix}_feeds_from_rssbox.opml"'
         )
         return response
 

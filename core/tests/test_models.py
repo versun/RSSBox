@@ -1419,8 +1419,8 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
             and "extra_headers" in with_options_call_args[1]
         ):
             expected_headers = {
-                "HTTP-Referer": "https://www.rsstranslator.com",
-                "X-Title": "RSS Translator",
+                "HTTP-Referer": "https://www.rssbox.app",
+                "X-Title": "RSSBox",
             }
             self.assertEqual(
                 with_options_call_args[1]["extra_headers"], expected_headers

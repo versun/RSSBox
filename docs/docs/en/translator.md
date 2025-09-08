@@ -1,6 +1,6 @@
 # Translation Engine Configuration Guide
 
-RSS Translator supports multiple translation engines. You can choose the most suitable solution based on your needs, cost, and translation quality requirements.
+RSSBox supports multiple translation engines. You can choose the most suitable solution based on your needs, cost, and translation quality requirements.
 
 ## 🤖 OpenAI API Compatible Models
 
@@ -46,7 +46,7 @@ For the convenience of domestic users, we recommend the following reliable servi
    - Register with your chosen service platform
    - Obtain API Key and related parameters
 
-2. **Configure in RSS Translator**
+2. **Configure in RSSBox**
    ```
    Name: Custom name (e.g., OpenAI-GPT4)
    API Key: Your API key

@@ -1,7 +1,7 @@
 [project]
-name = "rss-translator"
+name = "rssbox"
 version = "2025.9.2"
-description = "A Django-based RSS translation service. Compatible with uv/uvicorn."
+description = "Smarter RSS management, more efficient information access"
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.2.1",

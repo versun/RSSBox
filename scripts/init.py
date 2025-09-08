@@ -38,8 +38,8 @@ def create_superuser():
     User = get_user_model()
 
     if User.objects.count() == 0:
-        User.objects.create_superuser("admin", "admin@example.com", "rsstranslator")
-        print("✅ Successfully created a new superuser: admin, Password: rsstranslator")
+        User.objects.create_superuser("admin", "admin@example.com", "rssbox")
+        print("✅ Successfully created a new superuser: admin, Password: rssbox")
     else:
         print(
             "ℹ️ Superuser already exists, but you can change the password by running 'python manage.py changepassword admin' command."

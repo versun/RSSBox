@@ -1143,7 +1143,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rss-translator"
+name = "rssbox"
 version = "2025.9.2"
 source = { editable = "." }
 dependencies = [

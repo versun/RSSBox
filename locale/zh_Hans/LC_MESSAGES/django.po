@@ -83,12 +83,12 @@ msgid "Please upload a valid OPML file."
 msgstr "请上传有效的OPML文件"
 
 #: core/admin/admin_site.py:17
-msgid "RSS Translator Admin"
-msgstr "RSS翻译器管理后台"
+msgid "RSSBox Admin"
+msgstr "RSSBox管理后台"
 
 #: core/admin/admin_site.py:18
-msgid "RSS Translator"
-msgstr "RSS翻译器"
+msgid "RSSBox"
+msgstr "RSSBox"
 
 #: core/admin/admin_site.py:19
 msgid "Dashboard"

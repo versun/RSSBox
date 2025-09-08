@@ -53,7 +53,7 @@
         updateStatus.textContent = " Checking...";
 
         fetch(
-            "https://api.github.com/repos/versun/RSS-Translator/releases/latest",
+            "https://api.github.com/repos/versun/rssbox/releases/latest",
         )
             .then((response) => {
                 if (!response.ok) {
@@ -80,8 +80,8 @@
 </script>
 {% endblock %} {% block footer %}
 <div id="footer" style="text-align: center">
-    <a href="https://rsstranslator.com" title="RSS Translator"
-        >RSS Translator</a
+    <a href="https://rssbox.app" title="RSSBox"
+        >RSSBox</a
     >
     · <a href="https://afdian.com/a/versun" title="Donate">Donate</a> · Version:
     <span data-version="{{ VERSION }}">{{ VERSION }}</span>

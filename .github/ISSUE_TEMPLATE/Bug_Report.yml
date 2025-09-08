@@ -7,8 +7,8 @@ body:
     attributes:
       value: |
         **感谢您的反馈！| Thanks for taking the time to fill out this bug report!**
-            请先查找是否已有类似的 [问题](https://github.com/rss-translator/RSS-Translator/issues) 
-              Please search [issue](https://github.com/rss-translator/RSS-Translator/issues) before asking
+            请先查找是否已有类似的 [问题](https://github.com/versun/rssbox/issues) 
+              Please search [issue](https://github.com/versun/rssbox/issues) before asking
   - type: input
     id: version
     attributes:

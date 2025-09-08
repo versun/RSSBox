@@ -44,9 +44,9 @@
 3. 检查标签过滤器配置是否正确
 
 ## 我的阅读器无法订阅翻译后的地址
-1. 在RSS翻译器中，检查翻译状态是否完成
+1. 在RSSBox中，检查翻译状态是否完成
 2. 使用浏览器访问该地址是否正常
-3. 可能是你的阅读器无法访问RSS翻译器，检查你的 RSS翻译器 是否设置了对外开放服务
+3. 可能是你的阅读器无法访问RSSBox，检查你的 RSSBox 是否设置了对外开放服务
 
 ### IPv6
 目前无法同时支持IPv4和IPv6；
@@ -54,11 +54,11 @@
 如需改为监听IPv6地址，仅需修改deploy/start.sh文件，将`0.0.0.0`改为`::`, 然后重启服务即可
 
 ### 可以设置代理服务器吗
-RSS翻译器本身并不支持设置全局代理，但你可以添加下面2个环境变量来设置全局代理：
+RSSBox本身并不支持设置全局代理，但你可以添加下面2个环境变量来设置全局代理：
 ```
 HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
 ### 依旧无法解决？
-请 [提交Issue](https://github.com/versun/RSS-Translator/issues) 或者在 [Telegram群组](https://t.me/rsstranslator) 中反馈
+请 [提交Issue](https://github.com/versun/rssbox/issues) 或者在 [Telegram群组](https://t.me/rssboxapp) 中反馈

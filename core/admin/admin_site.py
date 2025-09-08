@@ -14,8 +14,8 @@ from core.models import Feed, Filter, Tag, Digest
 
 
 class CoreAdminSite(AdminSite):
-    site_header = _("RSS Translator Admin")
-    site_title = _("RSS Translator")
+    site_header = _("RSSBox Admin")
+    site_title = _("RSSBox")
     index_title = _("Dashboard")
 
     def get_urls(self):

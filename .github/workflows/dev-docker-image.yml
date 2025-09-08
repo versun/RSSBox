@@ -37,6 +37,6 @@ jobs:
       with:
         platforms: linux/arm64,linux/amd64
         push: true
-        tags: versun/rsstranslator:dev,versun/rsstranslator:${{ steps.latesttag.outputs.tag }}
+        tags: versun/rsstranslator:dev,versun/rsstranslator:${{ steps.latesttag.outputs.tag }},versun/rssbox:dev,versun/rssbox:${{ steps.latesttag.outputs.tag }}
 
 
