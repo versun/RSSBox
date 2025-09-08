@@ -3,8 +3,9 @@ from django.utils import timezone
 
 from core.models.digest import Digest
 from core.models.entry import Entry
-from utils.text_handler import clean_content, get_token_count
+from utils.text_handler import get_token_count
 from config import settings
+from core.cache import cache_digest
 
 logger = logging.getLogger(__name__)
 
@@ -200,12 +201,12 @@ Summary: {article["summary"]}
             )
 
             self.digest.status = True  # Set status to success
-
+            cache_digest(self.digest.slug, "xml")
+            cache_digest(self.digest.slug, "json")
             return {
                 "success": True,
                 "entry_id": entry.id,
             }
-
         except Exception as e:
             logger.error(f"Digest generation failed for {self.digest.name}: {e}")
             self.digest.log += f"Digest generation failed for {self.digest.name}: {e}\n"
