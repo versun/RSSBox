@@ -119,11 +119,7 @@ Summary: {article["summary"]}
             self.prepare_articles()
 
             if not self.articles:
-                logger.warning(f"No articles found for digest '{self.digest.name}'")
-                return {
-                    "success": False,
-                    "error": "No articles found for digest generation",
-                }
+                raise Exception("No articles were found within the specified range.") #在设定的时间范围内没有找到文章
 
             # Build prompt - 分离文章内容、系统提示和URL映射
             articles_list, system_prompt, url_mapping = self.build_prompt()
