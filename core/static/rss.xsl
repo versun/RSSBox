@@ -73,9 +73,6 @@
                             <xsl:value-of select="/atom:feed/atom:title"/></a>
                             website.
                         </p>
-                            <p>
-                                <xsl:value-of select="/atom:feed/atom:subtitle"/>
-                            </p>
                         </header>
                         <main>
                             <xsl:for-each select="atom:feed/atom:entry">

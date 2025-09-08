@@ -255,10 +255,10 @@ class Digest(models.Model):
         feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}"
 
         defaults = {
-            "name": f"Digest:{self.slug} | @Digest@hide",
-            "subtitle": f"AI Digest for {self.name}",
+            "name": f"{self.name}",
+            "subtitle": f"{self.description}",
             "link": f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}",
-            "author": self.name or "Digest",
+            "author": "RSSBox Digest",
             "language": self.target_language,
             "update_frequency": 1440,
             "fetch_article": False,
