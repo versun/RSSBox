@@ -479,8 +479,8 @@ msgstr "天数范围"
 
 #: core/models/digest.py:66
 msgid ""
-"Number of days to look back for articles (1 = today only, 7 = past week)"
-msgstr "文章回溯天数(1 = 仅限今日，7 = 过去一周)"
+"Number of days to look back for articles (1 = yesterday only, 7 = past week)"
+msgstr "文章回溯天数(1 = 仅昨天，7 = 过去一周)"
 
 #: core/models/digest.py:74 templates/admin/feed_batch_modify.html:27
 msgid "Target Language"

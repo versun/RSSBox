@@ -68,7 +68,7 @@ class Digest(models.Model):
         default=1,
         verbose_name=_("Days Range"),
         help_text=_(
-            "Number of days to look back for articles (1 = today only, 7 = past week)"
+            "Number of days to look back for articles (1 = yesterday only, 7 = past week)"
         ),
     )
 
@@ -223,7 +223,7 @@ class Digest(models.Model):
         from datetime import timedelta
 
         end_date = timezone.now()
-        start_date = end_date - timedelta(days=self.days_range)
+        start_date = end_date - timedelta(days=self.days_range+1) #由于是凌晨2点，所以包含今天影响不大
 
         # 正确获取digest tags对应的feeds的entries
         digest_tags = self.tags.all()
