@@ -85,6 +85,7 @@ Summary: {article["summary"]}
             )
             .replace("{date}", timezone.now().strftime("%Y-%m-%d"))
             .replace("{target_language}", self.digest.target_language)
+            .replace("{description}",self.digest.description)
         )
         system_prompt = self.digest.prompt + output_format_for_digest_prompt
 

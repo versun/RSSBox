@@ -84,7 +84,7 @@ class Digest(models.Model):
         default=settings.default_digest_prompt,
         verbose_name=_("Prompt"),
         help_text=_(
-            "AI prompt for generating digest content. Use {digest_name}, {date}, {target_language} as placeholders"
+            "AI prompt for generating digest content. Use {digest_name}, {date}, {description}, {target_language} as placeholders"
         ),
     )
 
