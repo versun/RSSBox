@@ -121,7 +121,6 @@ Summary: {article["summary"]}
             self.prepare_articles()
 
             if not self.articles:
-                self.digest.status = False
                 self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} No articles were found within the specified range.\n"
                 return {"success": False, "error": "No articles were found within the specified range."}
 
