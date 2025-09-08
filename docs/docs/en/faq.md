@@ -1,3 +1,5 @@
+# Frequently Asked Questions
+
 ## How to backup data
 
 All metadata is in the `data/db.sqlite3` database, you can backup that file yourself.
@@ -6,48 +8,63 @@ All metadata is in the `data/db.sqlite3` database, you can backup that file your
 
 If you get a 403 CSRF authentication failure error after logging in, you need to set the environment variable CSRF_TRUSTED_ORIGINS to the domain name or IP address:https://example.com:port,http://example.com:port
 
-## Server 500 reporting errors
+## Server 500 Error
 
-If it is deployed on Railway, wait for 5 minutes and try again.
+If deployed on Railway, wait for 5 minutes and try again.
 
-If you deployed on other way, wait for 5 minutes and still can't solve the problem, then restart the instance or service and try again.
+If deployed using other methods, wait for 5 minutes and if the problem persists, restart the instance or service.
 
-## Fetch Failed
+## Feed Fetch Failed
 
-1. check if your source address is correct and accessible
-2. Check if your server has normal network access.
-3. If you are deploying locally, check your proxy settings, preferably global proxy.
+1. Check if your source address is correct and accessible
+2. Check if your server has normal network access
+3. If deploying locally, check your proxy settings, preferably use global proxy
 
-## Translation Failed
+## Translation Status Error
 
-1. Check if the translation engine is working
-2. Check if your server network has access to the translation engine's server.
+1. Check if the translation engine is valid
+2. Check if your server network can access the translation engine's server
 
 ## Why is some content not translated
 
-1. check if you have set a maximum number of entries, this value limits the number of translations
-2. If you use free translation engines, such as Google Translate and DeepLX, the original content will be displayed as it is easy to fail to translate due to the rate limitation. It is recommended to use paid translation engines for translation
+1. Check if you have set a maximum number of entries, this value limits the number of translations
+2. If using free translation engines like Google Translate and DeepLX, due to rate limitations, translation easily fails, so original content will be displayed. It is recommended to use paid translation engines for translation
 
-## My Reading can't subscribe to the translated address
+## AI Feature Related Issues
 
-1. Check the translation status in the RSS translator to see if it is complete.
-2. Use your browser to access the address if it works
-3. your reader may not be able to access the RSS Translator, check if your RSS Translator is set to open to the public.
+### AI Filter Not Working
+1. Check if AI engine is correctly configured and valid
+2. Check if filter prompts are clear and specific
+
+### AI Digest Generation Failed
+1. Check if RSS sources are correctly created and associated with tags
+2. Confirm that AI engine used for digest generation is working properly
+3. Check if tags have sufficient content (recommend 3-5 active sources)
+
+### Tag System Issues
+1. Check if RSS sources are correctly associated with tags
+2. Confirm that associated sources have new content updates
+3. Check if tag filter configuration is correct
+
+## My RSS reader cannot subscribe to the translated address
+
+1. In RSS Translator, check if translation status is complete
+2. Use browser to access the address to see if it works normally
+3. Your reader may not be able to access RSS Translator, check if your RSS Translator is set to open to the public
 
 ### IPv6
 
-It is currently not possible to support both IPv4 and IPv6;
+Currently cannot support both IPv4 and IPv6 simultaneously;
 
 If you want to listen to IPv6 addresses instead, just modify the deploy/start.sh file, change `0.0.0.0` to `::`, and restart the service.
 
 ### Can I set up a proxy server?
 
-The RSS translator itself doesn't support setting a global proxy, but you can add the following 2 environment variables to set a global proxy: 
-```HTTP_PROXY=http://proxy.example.com:8080
+RSS Translator itself does not support setting a global proxy, but you can add the following 2 environment variables to set a global proxy:
+```
+HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
-
 ```
 
-### Still can't get it to work?
-Please [Submit an Issue](https://github.com/versun/RSS-Translator/issues) or give feedback in [Telegram Group](https://t.me/rsstranslator)!
-```
+### Still can't resolve the issue?
+Please [Submit an Issue](https://github.com/versun/RSS-Translator/issues) or provide feedback in the [Telegram Group](https://t.me/rsstranslator)

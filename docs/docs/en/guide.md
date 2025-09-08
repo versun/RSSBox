@@ -1,41 +1,110 @@
-## Quick Start
+# User Guide
 
-After logging in for the first time, it is recommended to change the default password by clicking Change Password at the top right
+Welcome to RSS Translator! This guide will help you quickly master all core features, from basic configuration to advanced functionality.
 
-It is recommended to add the translation engine first before adding the feed, unless you just want to proxy the source
+## 🚀 Quick Start
 
-After adding the feed for the first time, it will take some time for translation and generation, it may take about 1 minute.
+### First Login
+1. After logging in with the default account, **strongly recommend** clicking the top right to change your password
+2. Recommend configuring translation engines first before adding RSS sources (unless you only need proxy functionality)
+3. After adding sources for the first time, allow 1-2 minutes for processing, please be patient
 
-Status Description:
+### Status Indicators
 
-<table> <tr> <td><img src="/assets/icon-loading.svg" width="20" height="20"></td> <td>Processing</td> </tr> <tr> <td><img src="/assets/icon-yes.svg" width="20" height="20"></td> <td>Completed</td> </tr> <tr> <td><img src="/assets/icon-no.svg" width="20" height="20"></td> <td>Failed</td> </tr> </table>
+<table> <tr> <td><img src="/assets/icon-loading.svg" width="20" height="20"></td> <td>Processing</td> </tr> <tr> <td><img src="/assets/icon-yes.svg" width="20" height="20"></td> <td>Completed/Valid</td> </tr> <tr> <td><img src="/assets/icon-no.svg" width="20" height="20"></td> <td>Failed/Invalid</td> </tr> </table>
 
-The current status is not updated automatically, please refresh the page to get the latest status.
+> 💡 **Tip**: Status does not auto-update, please refresh the page for latest status
 
-## Add Translation Engine
-Select the translation engine provider you want to add on the left side and click the +Add button.
-![add_translator_1](/assets/add_translator_1.png)
-Then enter the relevant information and save
+## ⚙️ Translation Engine Configuration
 
-Check that it is valid, if it is not, you need to check the information you have entered and re-save to validate it.
-![translator_list](/assets/translator_list.png)
+### Adding Translation Engines
+1. Select the desired translation engine type from the left navigation
+2. Click **+Add** button
+3. Fill in the relevant configuration information
+4. Save and verify validity
 
-## Add source
-Click the +Add button on the left source
-![core_feeds](/assets/core_feeds.png)
-Enter the relevant information
-![feed_detail](/assets/feed_detail.png)
-Save and you will be redirected to the list of feeds
-![feed_list](/assets/feeds_list.png)
-After waiting for the translation status to complete, you can copy the RSS URL below and subscribe to it in your favorite reader!
-![translated_feed_status](/assets/feed_status.png)
-The proxy address is a proxy for the original feed, and the content is the same as the original feed.
-The rss address is the translated feed address and the json address is the translated feed address in json format.
+### Verify Engine Status
+- Green checkmark: Configuration valid, ready to use
+- Red X: Configuration invalid, please check API key and other information
 
-## Action
-Check the source you want to operate, click Action, select the corresponding option, and click Go.
-![action](/assets/action.png)
+## 📡 RSS Source Management
 
-## Individually subscribe to sources in a category
+### Adding RSS Sources
+1. Click **+Add** button in the left **Sources** section
+2. Fill in RSS source basic information
+3. Select translation engine and translation strategy
+4. Configure update frequency and filtering rules
 
-`http://127.0.0.1:8000/rss/category/mycategory-1`
+### Subscribe to Translation Results
+After configuration is complete, wait for translation status to complete, then you can get subscription addresses:
+
+- **proxy address**: Proxies the original source, content identical to original
+- **rss address**: Translated RSS subscription address
+- **json address**: Translated JSON format subscription address
+
+## 🔧 Advanced Features
+
+### Content Filtering
+
+#### Keyword Filtering
+- Support include/exclude modes
+- Can filter titles or content
+
+#### AI Smart Filtering
+- Semantic understanding-based intelligent content filtering
+- Can set filtering topics and criteria
+- More accurate and flexible than keyword filtering
+
+### Tag Management
+Through the tag system you can:
+- Organize multiple related RSS sources together
+- Create topic-categorized aggregated sources
+- Apply unified filtering rules
+- Facilitate subsequent AI digest generation
+
+### AI Digest Generation
+
+**AI Digest is a highlight feature of RSS Translator**, intelligently aggregating multiple information sources:
+
+#### Configuration Steps
+1. **Create tags and associate RSS sources**
+   - Create new tags in the admin interface (e.g., "Tech News", "AI Information", etc.)
+   - Associate relevant RSS sources to corresponding tags
+   - Ensure associated sources have regularly updated content
+
+2. **Configure digest settings**
+   - Enter digest management page
+   - Create new digest configuration:
+     - Name: Daily Tech Information
+     - Description: Intelligent analysis of global tech news
+     - Associated tags: Select created tags
+     - AI Engine: Select valid translation engine as summary generator
+     - Publishing days: Can check Monday through Sunday, starts generating around 2 AM
+
+3. **Subscribe to generated digests**
+   - After configuration is complete, the system will automatically generate digests at specified times
+
+## 📋 Practical Tips
+
+### Cost Control Recommendations
+1. **Set reasonable maximum entries**: Avoid excessive translation
+2. **Choose appropriate content type**: Title translation has lowest cost
+3. **Use free engines**: LibreTranslate and other open source solutions
+4. **Regular Token statistics review**: Monitor translation costs
+
+### Performance Optimization
+1. **Appropriate update frequency**: Avoid frequent updates wasting resources
+2. **Use filters**: Reduce unnecessary translations
+3. **Batch operations**: Improve management efficiency
+
+## 🆘 Common Issues
+
+When encountering problems, please first check the [FAQ page](/en/faq/). If still unresolved:
+
+1. **Submit Issue**: [GitHub Issues](https://github.com/versun/RSS-Translator/issues)
+2. **Community Discussion**: [Telegram Group](https://t.me/rsstranslator)
+3. **Check Logs**: Review server error logs
+
+---
+
+🎉 **Enjoy using RSS Translator!** If RSS Translator has helped you, welcome to give the project a Star to support my development.

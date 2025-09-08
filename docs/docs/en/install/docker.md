@@ -2,7 +2,7 @@
 
 Go to the folder where you want to store the data, e.g. `/home/versun/rsstranslator/`
 
-Download the [docker-compose.yml](https://github.com/rss-translator/RSS-Translator/blob/main/deploy/docker-compose.yml) file
+Download the [docker-compose.yml](https://github.com/versun/RSS-Translator/blob/main/deploy/docker-compose.yml) file
 
 `wget "https://raw.githubusercontent.com/versun/RSS-Translator/main/deploy/docker-compose.yml"`
 

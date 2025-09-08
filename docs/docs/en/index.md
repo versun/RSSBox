@@ -5,29 +5,48 @@
 # RSS Translator
 [中文](/) | [English](/en)
 
-Open source, Simple, Self-deployable
+**Open source, Simple, Self-deployable RSS Content Translation Platform**
+
+Breaking language barriers for global information access. RSS Translator helps you automatically translate foreign RSS content, supporting multi-engine translation, intelligent filtering, and AI digest generation for a one-stop cross-language information solution.
 
 Official website: [rsstranslator.com](https://rsstranslator.com)
 
-## Features:
+## Core Features
 
-1. Translate titles or content
-2. Bilingual display
-3. Subscribe to translated RSS/JSON
-4. Supports multiple translation engines, each source can specify an engine
-5. Control update frequency and view translation status
-6. Cache all translated content to minimize translation costs
-7. View token/character usage per source
-8. AI content summarization
-9. Full-text fetching
-10. Keyword Filtering and AI Intelligent Filtering
-11. Combine multiple RSS feeds into one unified feed via tag, and apply filters too!
+### 🌐 Intelligent Translation
+- **Multi-Engine Support** - OpenAI API compatible models, DeepL professional translation service
+- **Flexible Configuration** - Each RSS feed can independently choose translation engine and strategy
+- **Smart Translation** - Support title translation, full-text translation, or intelligent summary generation
+- **Bilingual Display** - Side-by-side display of original and translated content for learning and reading
+
+### 🎯 Content Filtering
+- **Keyword Filtering** - Precisely control wanted or excluded content
+- **AI Smart Filtering** - Semantic understanding-based intelligent content filtering, say goodbye to information overload
+- **Multi-layer Filtering** - Set independent filtering rules for each source
+
+### 📊 AI Digest Generation
+- **Intelligent Aggregation** - Automatically collect content from multiple information sources
+- **Topic Classification** - AI automatically identifies and categorizes news topics
+- **Custom Digests** - Generate structured daily information summaries
+- **Tag Management** - Merge multiple RSS sources into unified topics through tags
+
+### ⚡ Efficient Management
+- **Batch Operations** - Support batch updating, translation, and RSS source management
+- **Real-time Monitoring** - View translation status and processing progress
+- **Cost Control** - Detailed statistics of Token/character consumption per source
+- **Full-text Fetching** - Automatically extract complete article content, no longer limited to summaries
+
+### 🔧 Flexible Deployment
+- **Fully Self-hosted** - Protect data privacy with complete service control
+- **Multi-format Output** - Support RSS and JSON format subscription output
+- **Update Frequency Control** - Customize update intervals for each source
+- **Docker Deployment** - One-click deployment, simplified operations
    
-Supported translation engines:
-- DeepL
-- OpenAI 
+### Supported Translation Engines
 
-More engines coming soon.
+- **OpenAI Ecosystem** - Support all models compatible with OpenAI API interface
+- **DeepL** - Professional-grade translation quality
+- **LibreTranslate** - Open source free translation solution
 
 ## Sponsors
 
@@ -59,9 +78,8 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
    Click the Fork button in the top right to copy the project to your GitHub account.
 
 2. **Clone to local**  
-
    ```bash
-   git clone https://github.com/your-username/RSS-Translator.git
+   git clone https://github.com/versun/RSS-Translator.git
    cd RSS-Translator
    ```
 
@@ -72,24 +90,24 @@ We welcome all forms of contribution! To contribute to RSS-Translator, please fo
     git checkout -b feature/your-feature-name
     ```
 
-4. **Install dependencies and start development**
+4. **Install dependencies and start development server**
+    ```
+    uv run dev # Automatically installs dependencies and completes initialization
+    ```
 
-    Recommended to use the uv tool:
-    ```
-    uv run dev # Automatically installs dependencies and starts the dev server
-    ```
-5. **Submit a Pull Request**
+6. **Submit a Pull Request**
 
     Submit a PR on GitHub, describing your changes and motivation.
 
-**Contribution Tips**
 
-Make sure your code passes formatting checks and basic tests before submitting.
-It is recommended to describe your changes and motivation in detail in the PR.
-All types of contributions are welcome: documentation, tests, features, or bug fixes.
-If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rsstranslator).
+**Contribution Guidelines**
 
-Thank you for your participation and support!
+  Please ensure your code passes ruff formatting checks and basic tests before submitting.
+  It is recommended to describe your changes and motivation in detail in the PR.
+  All types of contributions are welcome: documentation, tests, features, or bug fixes.
+  If you have questions or suggestions, feel free to join the [Telegram group](https://t.me/rsstranslator).
+
+  Thank you for your participation and support!
 
 
 ## Star History Chart
