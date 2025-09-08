@@ -113,5 +113,5 @@ We welcome all forms of contribution! To contribute to rssbox, please follow the
 
 ## Star History Chart
 
-[![Star History Chart](https://api.star-history.com/svg?repos=rssbox/rssbox&type=Date)](https://star-history.com/#rssbox/rssbox&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
 
