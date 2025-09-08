@@ -115,12 +115,15 @@ Summary: {article["summary"]}
             # self.temp_translations = _ensure_entries_have_translated_titles(self.digest) or {}
 
             # 2) Ensure all entries have AI summaries before generating digest
+            now = timezone.now()
             _ensure_entries_have_summaries(self.digest)
 
             self.prepare_articles()
 
             if not self.articles:
-                raise Exception("No articles were found within the specified range.") #在设定的时间范围内没有找到文章
+                self.digest.status = False
+                self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} No articles were found within the specified range.\n"
+                return {"success": False, "error": "No articles were found within the specified range."}
 
             # Build prompt - 分离文章内容、系统提示和URL映射
             articles_list, system_prompt, url_mapping = self.build_prompt()
@@ -128,7 +131,6 @@ Summary: {article["summary"]}
             # Call AI agent
             logger.info(f"Calling AI agent for digest '{self.digest.name}'")
             logger.info(f"Total articles to digest: {len(articles_list)}")
-            now = timezone.now()
             digests_list = []
             final_digest = ""
             for articles_text in articles_list:
@@ -203,13 +205,14 @@ Summary: {article["summary"]}
             self.digest.status = True  # Set status to success
             cache_digest(self.digest.slug, "xml")
             cache_digest(self.digest.slug, "json")
+            self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation successful for {self.digest.name}\n"
             return {
                 "success": True,
                 "entry_id": entry.id,
             }
         except Exception as e:
             logger.error(f"Digest generation failed for {self.digest.name}: {e}")
-            self.digest.log += f"Digest generation failed for {self.digest.name}: {e}\n"
+            self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation failed for {self.digest.name}: {e}\n"
             # Mark status as failed
             self.digest.status = False
             return {"success": False, "error": str(e)}
