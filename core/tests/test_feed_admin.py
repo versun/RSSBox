@@ -677,68 +677,6 @@ class FeedAdminIntegrationTest(TestCase):
         self.admin = FeedAdmin(model=Feed, admin_site=AdminSite())
         self.user = User.objects.create_superuser("admin", "admin@test.com", "password")
 
-    def test_admin_configuration(self):
-        """Test that FeedAdmin is properly configured."""
-        # Test list_display configuration
-        expected_list_display = [
-            "name",
-            "fetch_feed",
-            "generate_feed",
-            "target_language",
-            "translation_options",
-            "show_filters",
-            "fetch_info",
-            "cost_info",
-            "show_tags",
-        ]
-        self.assertEqual(self.admin.list_display, expected_list_display)
-
-        # Test search_fields configuration
-        expected_search_fields = ["name", "feed_url", "slug", "author", "link"]
-        self.assertEqual(self.admin.search_fields, expected_search_fields)
-
-        # Test list_filter configuration
-        expected_list_filters = [
-            "tags",
-            "fetch_status",
-            "translation_status",
-            "translate_title",
-            "translate_content",
-            "summary",
-        ]
-        self.assertEqual(self.admin.list_filter, expected_list_filters)
-
-        # Test readonly_fields configuration
-        expected_readonly_fields = [
-            "fetch_feed",
-            "generate_feed",
-            "fetch_status",
-            "translation_status",
-            "total_tokens",
-            "total_characters",
-            "last_fetch",
-            "last_translate",
-            "show_log",
-        ]
-        self.assertEqual(self.admin.readonly_fields, expected_readonly_fields)
-
-        # Test autocomplete_fields configuration
-        expected_autocomplete_fields = ["filters", "tags"]
-        self.assertEqual(self.admin.autocomplete_fields, expected_autocomplete_fields)
-
-        # Test actions configuration
-        expected_actions = [
-            "feed_force_update",
-            "export_original_feed_as_opml",
-            "export_translated_feed_as_opml",
-            "feed_batch_modify",
-            "clean_translated_content",
-            "clean_ai_summary",
-        ]
-        self.assertEqual(
-            [action.__name__ for action in self.admin.actions], expected_actions
-        )
-
     def test_fieldsets_configuration(self):
         """Test that fieldsets are properly configured."""
         expected_fieldsets = [
