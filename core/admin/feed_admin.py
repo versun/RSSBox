@@ -30,13 +30,13 @@ class FeedAdmin(admin.ModelAdmin):
         "name",
         "fetch_feed",
         "generate_feed",
-        # "translator",
-        "target_language",
+        "translator",
         "translation_options",
         "show_filters",
         "fetch_info",
         "cost_info",
         "show_tags",
+        "target_language",
     ]
     search_fields = ["name", "feed_url", "slug", "author", "link"]
     list_filter = [
@@ -204,6 +204,15 @@ class FeedAdmin(admin.ModelAdmin):
             f"update_feed_{feed.slug}", update_single_feed, feed
         )
         logger.info(f"Submitted feed update task after commit: {task_id}")
+
+    @admin.display(description=_("Name"))
+    def show_name(self, obj):
+         return format_html(
+            "<a href='{0}'>{1}</a><br><sub>->{2}</sub>",
+            reverse("admin:core_feed_change", args=[obj.id]),
+            obj.name,
+            obj.target_language,
+        )
 
     @admin.display(description=_("Update Frequency"), ordering="update_frequency")
     def simple_update_frequency(self, obj):
