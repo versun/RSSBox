@@ -59,6 +59,8 @@ RSSBox本身并不支持设置全局代理，但你可以添加下面2个环境�
 HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
+### Cloudflare的SSL设置
+如果cloudflare开启了dns代理，则需要在cloudflare的SSL/TLS页面，加密模式选择Full
 
 ### 依旧无法解决？
 请 [提交Issue](https://github.com/versun/rssbox/issues) 或者在 [Telegram群组](https://t.me/rssboxapp) 中反馈

@@ -1,1 +1,0 @@
-如果cloudflare开启了dns代理，则需要在cloudflare的SSL/TLS页面，加密模式选择Full

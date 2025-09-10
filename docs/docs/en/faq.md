@@ -66,5 +66,9 @@ HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
+### Cloudflare SSL
+
+If Cloudflare's DNS proxy is enabled, you need to select Full for encryption mode on Cloudflare's SSL/TLS page.
+
 ### Still can't resolve the issue?
 Please [Submit an Issue](https://github.com/versun/rssbox/issues) or provide feedback in the [Telegram Group](https://t.me/rssboxapp)

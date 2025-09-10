@@ -3,7 +3,7 @@ site_name: RSSBox
 site_url: https://rssbox.app
 site_author: versun
 site_description: >-
-  Translate RSS feeds to your language
+  Smarter RSS management, more efficient information access
 
 # Repository
 repo_name: versun/rssbox
@@ -13,46 +13,14 @@ repo_url: https://github.com/versun/rssbox
 copyright: Copyright &copy; 2023 - 2025 Versun
 
 theme:
-  name: terminal # https://github.com/ntno/mkdocs-terminal
-  palette: gruvbox_dark
-  features:
-    - footer.prev_next
-    #- navigation.side.hide
-    - navigation.side.indexes
-    #- navigation.side.toc.hide
-    - navigation.top.hide
-    #- navigation.top.cursor_animation.hide
-    #- navigation.top.search_button.hide
-    - revision.date
-    - revision.history
-    #- style.links.underline.hide
+  name: shadcn # https://github.com/asiffer/mkdocs-shadcn
+  icon: https://rssbox.app/assets/logo.ico
   favicon: assets/logo.ico
   logo: assets/logo.ico
 
-markdown_extensions:
-  # Python Markdown
-  - attr_list
-  - def_list
-  - footnotes
-  - md_in_html
-  - meta
-  - toc:
-      permalink: "#"
-      permalink_title: Anchor link to this section for reference
-
-  # PyMdown Extensions
-  - pymdownx.caret
-  - pymdownx.mark
-  - pymdownx.tilde
-  - pymdownx.snippets:
-      base_path:
-        - docs
-
 plugins:
-  - md-to-html
-  - git-revision-date
-  - macros
   - search
+  - excalidraw
   - i18n:
         docs_structure: folder
         languages:
@@ -68,7 +36,6 @@ plugins:
               安装: Install
               一键部署: One Click
               Docker安装: Docker
-              开启SSL: Enable SSL
               使用说明: Guide
               翻译服务: Translate Services
               常见问题: FAQ
@@ -78,16 +45,16 @@ plugins:
 
 
 # Additional configuration
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/versun/rssbox
-    - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/versun/rssbox
-    - icon: fontawesome/brands/telegram
-      link: https://t.me/rssboxapp
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/VersunPan
+# extra:
+#   social:
+#     - icon: fontawesome/brands/github
+#       link: https://github.com/versun/rssbox
+#     - icon: fontawesome/brands/docker
+#       link: https://hub.docker.com/r/versun/rssbox
+#     - icon: fontawesome/brands/telegram
+#       link: https://t.me/rssboxapp
+#     - icon: fontawesome/brands/twitter
+#       link: https://twitter.com/VersunPan
 
 # Page tree
 nav:
@@ -96,7 +63,6 @@ nav:
   - 安装:
       - Docker安装: install/docker.md
       - 一键部署: install/one-click.md
-  - 开启SSL: ssl.md
   - 使用说明: guide.md
   - 翻译服务: translator.md
   - 常见问题: faq.md

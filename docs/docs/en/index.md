@@ -1,12 +1,14 @@
+---
+title: RSSBox
+summary: Smarter RSS management, more efficient information access
+---
+
 <div align="center">
 <img src="/assets/logo.svg" width="100" height="100">
 </div>
 
-# RSSBox
 <p><em>Formerly RSS Translator</em></p>
 [中文](/) | [English](/en)
-
-**Smarter RSS management, more efficient information access**
 
 Breaking language barriers for global information access. RSSBox helps you automatically translate foreign RSS content, supporting multi-engine translation, intelligent filtering, and AI digest generation for a one-stop cross-language information solution.
 

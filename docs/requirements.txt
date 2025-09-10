@@ -1,5 +1,5 @@
 mkdocs
-mkdocs-terminal
+mkdocs-shadcn
 
 # Python Markdown Extensions
 pygments>=2.14
