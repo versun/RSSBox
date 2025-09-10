@@ -10,8 +10,6 @@ summary: 让RSS管理更智能，让信息获取更高效
 <p><em>原 RSS Translator</em></p>
 [中文](/) | [English](/en)
 
-**让RSS管理更智能，让信息获取更高效**
-
 让语言不再成为获取全球资讯的障碍。RSSBox帮助您自动翻译外语RSS内容，支持多引擎翻译、智能过滤和AI日报生成，为跨语言信息获取提供一站式解决方案。
 
 官方网站：[rssbox.app](https://rssbox.app)
