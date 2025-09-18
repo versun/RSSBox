@@ -60,7 +60,7 @@ class Agent(models.Model):
 
 
 def openai_advanced_default():
-    return {"temperature": 0.2}
+    return {"temperature": 0.2,"reasoning_effort":"minimal"}
 
 
 class OpenAIAgent(Agent):
@@ -323,8 +323,6 @@ class OpenAIAgent(Agent):
                 and "max_tokens" not in call_kwargs
             ):
                 call_kwargs["max_completion_tokens"] = output_token_limit
-            if "reasoning_effort" not in call_kwargs:
-                call_kwargs["reasoning_effort"] = "minimal"  # 关闭深度思考
 
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers=self.EXTRA_HEADERS,
