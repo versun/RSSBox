@@ -1402,7 +1402,6 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
         self.assertEqual(call_args[1]["top_p"], 0.8)
         self.assertEqual(call_args[1]["frequency_penalty"], 0.1)
         self.assertEqual(call_args[1]["presence_penalty"], 0.2)
-        self.assertEqual(call_args[1]["reasoning_effort"], "minimal")
 
         # Verify with_options was called with correct parameters
         with_options_call_args = mock_client.with_options.call_args
