@@ -96,7 +96,7 @@ msgstr "仪表盘"
 
 #: core/admin/admin_site.py:90
 msgid "Agents"
-msgstr "助理"
+msgstr ""
 
 #: core/admin/agent_admin.py:49 core/admin/digest_admin.py:189
 #: core/admin/feed_admin.py:269 core/models/agent.py:25
@@ -176,7 +176,7 @@ msgstr "发布预约"
 
 #: core/admin/digest_admin.py:155
 msgid "Agent Configuration"
-msgstr "助理设置"
+msgstr "Agent 设置"
 
 #: core/admin/digest_admin.py:161 core/admin/digest_admin.py:181
 #: core/admin/feed_admin.py:107
@@ -199,11 +199,11 @@ msgstr "标签"
 
 #: core/admin/digest_admin.py:231 core/models/filter.py:47
 msgid "AI Agent"
-msgstr "AI助理"
+msgstr "AI Agent"
 
 #: core/admin/digest_admin.py:242
 msgid "No agent assigned"
-msgstr "没有分配AI助理"
+msgstr "没有分配AI Agent"
 
 #: core/admin/digest_admin.py:249
 msgid "No days selected"
@@ -316,7 +316,7 @@ msgstr "Tokens信息"
 
 #: core/forms/feed_form.py:13
 msgid "Select a valid agent for translation"
-msgstr "选择一个有效的翻译助理"
+msgstr "选择一个有效的翻译Agent"
 
 #: core/forms/feed_form.py:22
 msgid "hourly"
@@ -350,7 +350,7 @@ msgstr "生成摘要"
 
 #: core/forms/feed_form.py:55
 msgid "Select a valid agent..."
-msgstr "选择一个有效的助理"
+msgstr "选择一个有效的Agent"
 
 #: core/forms/feed_form.py:65
 msgid "Optional, default use the feed title"
@@ -636,7 +636,7 @@ msgstr "摘要器"
 
 #: core/models/feed.py:123
 msgid "Select a valid OpenAI agent for summarization"
-msgstr "选择一个有效的AI助理用于摘要"
+msgstr "选择一个有效的AI Agent用于摘要"
 
 #: core/models/feed.py:127 templates/admin/feed_batch_modify.html:78
 msgid "Summary Detail"
@@ -719,7 +719,7 @@ msgstr "用于过滤的关键词"
 #: core/models/filter.py:48
 
 msgid "Select a valid OpenAI agent for filtering"
-msgstr "选择一个有效的AI助理用于过滤"
+msgstr "选择一个有效的AI Agent用于过滤"
 
 #: core/models/filter.py:51
 msgid "Filter Prompt"
