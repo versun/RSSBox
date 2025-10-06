@@ -1,0 +1,166 @@
+{% extends "frontend/base.html" %}
+
+{% block title %}订阅源管理 - RSSBox{% endblock %}
+{% block page_title %}订阅源管理{% endblock %}
+
+{% block page_actions %}
+<button hx-get="/api/feeds/create/"
+        hx-target="#main-content"
+        hx-swap="innerHTML"
+        class="bg-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-600">
+    + 添加
+</button>
+{% endblock %}
+
+{% block content %}
+<div id="feed-form" class="mb-4">
+    <!-- Form will be loaded here -->
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded border p-3 mb-4">
+    <div class="flex flex-wrap items-center gap-3 text-sm">
+        <div class="flex items-center space-x-2">
+            <span class="text-gray-600">状态:</span>
+            <select id="status-filter" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                <option value="">全部</option>
+                <option value="active">活跃</option>
+                <option value="error">错误</option>
+            </select>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="text-gray-600">标签:</span>
+            <select id="tag-filter" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                <option value="">全部</option>
+                <!-- Tags will be populated via HTMX -->
+            </select>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="text-gray-600">排序:</span>
+            <select id="sort-filter" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                <option value="-last_fetch">最近更新</option>
+                <option value="name">名称</option>
+                <option value="feed_url">URL</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Feeds List -->
+<div id="feeds-list"
+     hx-get="/api/feeds/"
+     hx-trigger="load, change from:#status-filter, change from:#tag-filter, change from:#sort-filter"
+     hx-target="this"
+     class="space-y-2">
+    {% for feed in feeds %}
+    <div class="bg-white border rounded p-4 hover:shadow-md transition-shadow">
+        <div class="flex justify-between items-start">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-3 mb-2">
+                    <div class="flex-1">
+                        <h3 class="text-base font-medium text-gray-900">
+                            {% if feed.name %}
+                                {{ feed.name }}
+                            {% else %}
+                                {{ feed.feed_url }}
+                            {% endif %}
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">{{ feed.feed_url }}</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        {% if feed.fetch_status %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                活跃
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                错误
+                            </span>
+                        {% endif %}
+                        <button hx-get="/api/feeds/{{ feed.id }}/entries/"
+                                hx-target="#main-content"
+                                hx-swap="innerHTML"
+                                class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-xs font-medium hover:bg-blue-200">
+                            查看文章 ({{ feed.entries.count }})
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                {% if feed.tags.all %}
+                <div class="flex flex-wrap gap-1 mb-3">
+                    {% for tag in feed.tags.all %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                            {{ tag.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Feed Info -->
+                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                    <span>更新频率: {{ feed.update_frequency }}分钟</span>
+                    <span>最大文章数: {{ feed.max_posts }}</span>
+                    {% if feed.target_language %}
+                        <span>目标语言: {{ feed.get_target_language_display }}</span>
+                    {% endif %}
+                    {% if feed.last_fetch %}
+                        <span>最后更新: {{ feed.last_fetch|date:"Y-m-d H:i" }}</span>
+                    {% else %}
+                        <span>从未更新</span>
+                    {% endif %}
+                </div>
+
+                <!-- Features -->
+                <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                    {% if feed.translate_title %}
+                        <span class="text-green-600">✓ 翻译标题</span>
+                    {% endif %}
+                    {% if feed.translate_content %}
+                        <span class="text-green-600">✓ 翻译内容</span>
+                    {% endif %}
+                    {% if feed.summary %}
+                        <span class="text-green-600">✓ 生成摘要</span>
+                    {% endif %}
+                    {% if feed.fetch_article %}
+                        <span class="text-green-600">✓ 获取原文</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col space-y-2 ml-4">
+                <button hx-get="/api/feeds/{{ feed.id }}/edit/"
+                        hx-target="#main-content"
+                        hx-swap="innerHTML"
+                        class="text-gray-400 hover:text-gray-600 p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                </button>
+                <button hx-delete="/api/feeds/{{ feed.id }}/"
+                        hx-confirm="确定要删除这个订阅源吗？"
+                        hx-target="closest div"
+                        hx-swap="outerHTML swap:1s"
+                        class="text-gray-400 hover:text-red-600 p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Empty state -->
+{% if not feeds %}
+<div class="text-center py-12">
+    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <h3 class="mt-2 text-sm font-medium text-gray-900">没有订阅源</h3>
+    <p class="mt-1 text-sm text-gray-500">开始添加RSS订阅源。</p>
+</div>
+{% endif %}
+{% endblock %}

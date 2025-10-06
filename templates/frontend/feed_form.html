@@ -1,0 +1,72 @@
+{% load static %}
+<form hx-post="{% if feed %}/api/feeds/{{ feed.id }}/update/{% else %}/api/feeds/create/{% endif %}"
+      hx-target="#feed-form"
+      hx-swap="innerHTML"
+      class="bg-gray-50 rounded-md p-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">名称</label>
+            <input type="text" name="name" value="{% if feed %}{{ feed.name }}{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2" placeholder="可选">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">RSS源URL *</label>
+            <input type="url" name="feed_url" value="{% if feed %}{{ feed.feed_url }}{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2" required>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">更新频率（分钟）</label>
+            <input type="number" name="update_frequency" value="{% if feed %}{{ feed.update_frequency }}{% else %}30{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2" min="5">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">最大文章数</label>
+            <input type="number" name="max_posts" value="{% if feed %}{{ feed.max_posts }}{% else %}20{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2" min="1">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">目标语言</label>
+            <select name="target_language" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                {% for lang_code, lang_name in feed.target_language.field.choices %}
+                <option value="{{ lang_code }}" {% if feed and feed.target_language == lang_code %}selected{% endif %}>{{ lang_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="space-y-2">
+            <div class="flex items-center">
+                <input type="checkbox" name="translate_title" {% if feed.translate_title %}checked{% endif %}
+                       class="border border-gray-300 rounded mr-2">
+                <label class="text-sm font-medium text-gray-700">翻译标题</label>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" name="translate_content" {% if feed.translate_content %}checked{% endif %}
+                       class="border border-gray-300 rounded mr-2">
+                <label class="text-sm font-medium text-gray-700">翻译内容</label>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" name="summary" {% if feed.summary %}checked{% endif %}
+                       class="border border-gray-300 rounded mr-2">
+                <label class="text-sm font-medium text-gray-700">生成摘要</label>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" name="fetch_article" {% if feed.fetch_article %}checked{% endif %}
+                       class="border border-gray-300 rounded mr-2">
+                <label class="text-sm font-medium text-gray-700">获取原文</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 flex justify-end space-x-3">
+        <button type="button"
+                hx-get="{% if feed %}/api/feeds/{% else %}/api/feeds/create/{% endif %}"
+                hx-target="#feed-form"
+                hx-swap="innerHTML"
+                class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+            取消
+        </button>
+        <button type="submit"
+                class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-600">
+            {% if feed %}更新{% else %}创建{% endif %}
+        </button>
+    </div>
+</form>

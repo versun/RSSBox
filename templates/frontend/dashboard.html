@@ -1,0 +1,165 @@
+{% extends "frontend/base.html" %}
+
+{% block title %}仪表板 - RSSBox{% endblock %}
+{% block page_title %}仪表板{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+    <!-- Stats Cards - Compact -->
+    <div class="bg-white rounded border p-4">
+        <div class="grid grid-cols-2 gap-3">
+            <div class="text-center">
+                <div class="text-2xl font-bold text-blue-600">{{ total_feeds }}</div>
+                <div class="text-xs text-gray-500">订阅源</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-green-600">{{ total_entries }}</div>
+                <div class="text-xs text-gray-500">文章</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-yellow-600">{{ total_tags }}</div>
+                <div class="text-xs text-gray-500">标签</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-purple-600">{{ total_digests }}</div>
+                <div class="text-xs text-gray-500">摘要</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-red-600">{{ total_filters }}</div>
+                <div class="text-xs text-gray-500">过滤器</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-indigo-600">{{ total_agents }}</div>
+                <div class="text-xs text-gray-500">AI代理</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded border p-4">
+        <h3 class="text-sm font-semibold text-gray-900 mb-3">快速操作</h3>
+        <div class="grid grid-cols-2 gap-2">
+            <button hx-get="/feeds/" hx-target="#main-content" hx-swap="innerHTML"
+                    class="bg-blue-100 text-blue-700 px-3 py-2 rounded text-xs font-medium hover:bg-blue-200">
+                📡 管理订阅源
+            </button>
+            <button hx-get="/entries/" hx-target="#main-content" hx-swap="innerHTML"
+                    class="bg-green-100 text-green-700 px-3 py-2 rounded text-xs font-medium hover:bg-green-200">
+                📄 浏览文章
+            </button>
+            <button hx-get="/api/feeds/create/" hx-target="#main-content" hx-swap="innerHTML"
+                    class="bg-primary text-white px-3 py-2 rounded text-xs font-medium hover:bg-blue-600">
+                + 添加订阅源
+            </button>
+            <button hx-get="/api/feeds/import-opml/" hx-target="#main-content" hx-swap="innerHTML"
+                    class="bg-secondary text-white px-3 py-2 rounded text-xs font-medium hover:bg-gray-600">
+                📥 导入OPML
+            </button>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="bg-white rounded border p-4">
+        <h3 class="text-sm font-semibold text-gray-900 mb-3">系统状态</h3>
+        <div class="space-y-2 text-xs">
+            <div class="flex justify-between">
+                <span class="text-gray-500">Django版本:</span>
+                <span class="text-gray-900">{{ django_version|default:"5.2+" }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500">数据库:</span>
+                <span class="text-gray-900">{{ db_engine|default:"SQLite" }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500">缓存:</span>
+                <span class="text-green-600">{{ cache_status|default:"启用" }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+    <!-- Recent Feeds - Compact -->
+    <div class="bg-white rounded border">
+        <div class="p-3 border-b border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-900">最近更新的订阅源</h3>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+            {% for feed in recent_feeds %}
+            <div class="p-3 border-b border-gray-100 hover:bg-gray-50">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-900 truncate">
+                            {% if feed.name %}
+                                {{ feed.name }}
+                            {% else %}
+                                {{ feed.feed_url|truncatechars:30 }}
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate">{{ feed.feed_url }}</div>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-gray-500">{{ feed.entries.count }}</span>
+                        <span class="text-gray-400">•</span>
+                        <span class="text-gray-500">
+                            {% if feed.last_fetch %}
+                                {{ feed.last_fetch|date:"H:i" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-6 text-center">
+                <p class="text-sm text-gray-500">没有订阅源</p>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-3 border-t border-gray-200">
+            <a href="/feeds/" class="text-xs text-blue-600 hover:text-blue-800">查看所有 →</a>
+        </div>
+    </div>
+
+    <!-- Recent Entries - Compact -->
+    <div class="bg-white rounded border">
+        <div class="p-3 border-b border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-900">最近文章</h3>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+            {% for entry in recent_entries %}
+            <div class="p-3 border-b border-gray-100 hover:bg-gray-50">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-900 line-clamp-2">
+                            {% if entry.translated_title %}
+                                {{ entry.translated_title }}
+                            {% else %}
+                                {{ entry.original_title }}
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1 truncate">
+                            {{ entry.feed.name }}
+                            {% if entry.pubdate %} • {{ entry.pubdate|date:"M j H:i" }}{% endif %}
+                        </div>
+                    </div>
+                    <a href="{{ entry.link }}" target="_blank" class="text-blue-600 hover:text-blue-800 ml-2 flex-shrink-0">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-6 text-center">
+                <p class="text-sm text-gray-500">没有文章</p>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-3 border-t border-gray-200">
+            <a href="/entries/" class="text-xs text-blue-600 hover:text-blue-800">查看所有 →</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% load static %}
+<div class="bg-gray-50 rounded-md p-4">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">导入OPML文件</h3>
+
+    <form hx-post="/api/feeds/import-opml/process/"
+          hx-encoding="multipart/form-data"
+          hx-target="#import-result"
+          hx-swap="innerHTML"
+          enctype="multipart/form-data"
+          class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">选择OPML文件</label>
+            <input type="file"
+                   name="opml_file"
+                   accept=".opml,.xml"
+                   required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <p class="mt-1 text-sm text-gray-500">请选择一个OPML文件（.opml或.xml格式）</p>
+        </div>
+
+        <div class="flex justify-end space-x-3">
+            <button type="button"
+                    hx-get="/api/feeds/"
+                    hx-target="#feed-form"
+                    hx-swap="innerHTML"
+                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+                取消
+            </button>
+            <button type="submit"
+                    class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-600">
+                导入
+            </button>
+        </div>
+    </form>
+
+    <div id="import-result" class="mt-4">
+        <!-- Import results will be displayed here -->
+    </div>
+</div>

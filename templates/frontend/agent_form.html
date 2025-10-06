@@ -1,0 +1,178 @@
+{% load static %}
+<div class="bg-gray-50 rounded-md p-4">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-medium text-gray-900">
+            {% if agent %}编辑AI代理{% else %}创建AI代理{% endif %}
+        </h3>
+        <div class="text-sm text-gray-500">
+            类型: {{ agent_type|title|default:"OpenAI" }}
+        </div>
+    </div>
+
+    <form hx-post="{% if agent %}/api/agents/{{ agent.id }}/update/{% else %}/api/agents/create/{% endif %}"
+          hx-target="#main-content"
+          hx-swap="innerHTML"
+          hx-include="[name='agent_type']"
+          class="space-y-4">
+        <input type="hidden" name="agent_type" value="{{ agent_type|default:'openai' }}">
+
+        <!-- Common Fields -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">代理名称 *</label>
+            <input type="text"
+                   name="name"
+                   value="{% if agent %}{{ agent.name }}{% endif %}"
+                   required
+                   class="w-full border border-gray-300 rounded-md px-3 py-2"
+                   placeholder="为这个代理起个名字">
+        </div>
+
+        <!-- OpenAI Specific Fields -->
+        {% if agent_type == 'openai' or not agent_type %}
+        <div id="openai-fields" class="{% if agent_type != 'openai' %}hidden{% endif %}">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API密钥 *</label>
+                    <input type="password"
+                           name="api_key"
+                           value="{% if agent and agent_type == 'openai' %}{{ agent.api_key }}{% endif %}"
+                           required
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"
+                           placeholder="sk-...">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">模型</label>
+                    <select name="model" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                        <option value="gpt-3.5-turbo" {% if agent and agent_type == 'openai' and agent.model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5 Turbo</option>
+                        <option value="gpt-4" {% if agent and agent_type == 'openai' and agent.model == 'gpt-4' %}selected{% endif %}>GPT-4</option>
+                        <option value="gpt-4-turbo" {% if agent and agent_type == 'openai' and agent.model == 'gpt-4-turbo' %}selected{% endif %}>GPT-4 Turbo</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API URL</label>
+                    <input type="url"
+                           name="base_url"
+                           value="{% if agent and agent_type == 'openai' %}{{ agent.base_url }}{% else %}https://api.openai.com/v1{% endif %}"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           placeholder="https://api.openai.com/v1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">速率限制（RPM）</label>
+                    <input type="number"
+                           name="rate_limit_rpm"
+                           value="{% if agent and agent_type == 'openai' %}{{ agent.rate_limit_rpm }}{% else %}0{% endif %}"
+                           min="0"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           placeholder="0">
+                    <p class="mt-1 text-xs text-gray-500">每分钟最大请求数，0表示无限制</p>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">高级参数（JSON）</label>
+                <textarea name="advanced_params"
+                          rows="3"
+                          class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"
+                          placeholder='{"temperature": 0.2, "reasoning_effort": "minimal"}'>{% if agent and agent_type == 'openai' %}{{ agent.advanced_params|default:'{}' }}{% endif %}</textarea>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- DeepL Specific Fields -->
+        {% if agent_type == 'deepl' %}
+        <div id="deepl-fields">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API密钥 *</label>
+                    <input type="password"
+                           name="api_key"
+                           value="{% if agent and agent_type == 'deepl' %}{{ agent.api_key }}{% endif %}"
+                           required
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"
+                           placeholder="DeepL API Key">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">最大字符数</label>
+                    <input type="number"
+                           name="max_characters"
+                           value="{% if agent and agent_type == 'deepl' %}{{ agent.max_characters }}{% else %}5000{% endif %}"
+                           min="1000"
+                           max="100000"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API URL</label>
+                    <input type="url"
+                           name="server_url"
+                           value="{% if agent and agent_type == 'deepl' %}{{ agent.server_url }}{% endif %}"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           placeholder="https://api.deepl.com/v2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">代理服务器</label>
+                    <input type="url"
+                           name="proxy"
+                           value="{% if agent and agent_type == 'deepl' %}{{ agent.proxy }}{% endif %}"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           placeholder="http://proxy.example.com:8080">
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- LibreTranslate Specific Fields -->
+        {% if agent_type == 'libretranslate' %}
+        <div id="libretranslate-fields">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API密钥</label>
+                    <input type="password"
+                           name="api_key"
+                           value="{% if agent and agent_type == 'libretranslate' %}{{ agent.api_key }}{% endif %}"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm"
+                           placeholder="LibreTranslate API Key（如果需要）">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">最大字符数</label>
+                    <input type="number"
+                           name="max_characters"
+                           value="{% if agent and agent_type == 'libretranslate' %}{{ agent.max_characters }}{% else %}5000{% endif %}"
+                           min="1000"
+                           max="100000"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">服务器URL *</label>
+                <input type="url"
+                       name="server_url"
+                       value="{% if agent and agent_type == 'libretranslate' %}{{ agent.server_url }}{% else %}https://libretranslate.com{% endif %}"
+                       required
+                       class="w-full border border-gray-300 rounded-md px-3 py-2"
+                       placeholder="https://libretranslate.com">
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="flex justify-end space-x-3">
+            <button type="button"
+                    hx-get="{% if agent %}/agents/{% else %}/api/agents/create/{% endif %}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+                取消
+            </button>
+            <button type="submit"
+                    class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-600">
+                {% if agent %}更新{% else %}创建{% endif %}
+            </button>
+        </div>
+    </form>
+</div>

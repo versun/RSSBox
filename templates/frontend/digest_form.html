@@ -1,0 +1,110 @@
+{% load static %}
+<div class="bg-gray-50 rounded-md p-4">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">
+        {% if digest %}编辑摘要{% else %}创建摘要{% endif %}
+    </h3>
+
+    <form hx-post="{% if digest %}/api/digests/{{ digest.id }}/update/{% else %}/api/digests/create/{% endif %}"
+          hx-target="#main-content"
+          hx-swap="innerHTML"
+          class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">摘要名称 *</label>
+                <input type="text"
+                       name="name"
+                       value="{% if digest %}{{ digest.name }}{% endif %}"
+                       required
+                       class="w-full border border-gray-300 rounded-md px-3 py-2"
+                       placeholder="例如：科技日报">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">时间范围（天）</label>
+                <input type="number"
+                       name="days_range"
+                       value="{% if digest %}{{ digest.days_range }}{% else %}1{% endif %}"
+                       min="1"
+                       max="30"
+                       class="w-full border border-gray-300 rounded-md px-3 py-2"
+                       placeholder="1">
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+            <textarea name="description"
+                      rows="2"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="摘要的描述信息">{% if digest %}{{ digest.description }}{% endif %}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">目标语言 *</label>
+                <select name="target_language" class="w-full border border-gray-300 rounded-md px-3 py-2" required>
+                    {% for lang_code, lang_name in digest.target_language.field.choices %}
+                    <option value="{{ lang_code }}" {% if digest and digest.target_language == lang_code %}selected{% endif %}>{{ lang_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">AI代理 *</label>
+                <select name="summarizer" class="w-full border border-gray-300 rounded-md px-3 py-2" required>
+                    <option value="">选择AI代理</option>
+                    <!-- OpenAI agents will be populated -->
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">AI提示词</label>
+            <textarea name="prompt"
+                      rows="4"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="用于生成摘要的AI提示词">{% if digest %}{{ digest.prompt }}{% else %}You are an editor-in-chief and expert analyst. Create a concise, objective, and well-structured daily digest from multiple articles.
+
+OUTPUT FORMAT
+3–5 categories (auto-generated, short topic names):
+- Header: ## {category}
+- Keep only the most important articles in this category
+- For each kept article:
+  - **[Title](LINK_X)**
+  > 1–2 sentences, present tense, active voice; highlight novel results/decisions/metrics/impacts; avoid repeated phrasing.
+
+Selection policy (apply strictly):
+- Prioritize significance and real-world impact (e.g., regulatory decisions, major launches, security incidents, funding/M&A, peer-reviewed findings)
+- Prioritize novelty; ignore incremental or routine updates and marketing/promotional posts
+- Prefer credible, primary sources; avoid rumors/speculation
+- Deduplicate across sources; if multiple items cover the same event, keep the most comprehensive one and drop the rest
+- If a category has no important items, skip the category entirely
+
+General rules:
+- Maintain a neutral, objective tone; no content beyond the provided texts
+- Extract facts, named entities, numbers, dates, and concrete outcomes
+- Vary wording across items to avoid repetition
+- Title rewrite (each item): rewrite into {target_language} objectively (no hype/clickbait/exclamations). Do NOT copy source wording; always paraphrase into a concise, neutral title even if the source is already in {target_language}.{% endif %}</textarea>
+        </div>
+
+        <div class="flex items-center">
+            <input type="checkbox"
+                   name="is_active"
+                   {% if not digest or digest.is_active %}checked{% endif %}
+                   class="border border-gray-300 rounded mr-2">
+            <label class="text-sm font-medium text-gray-700">启用自动生成</label>
+        </div>
+
+        <div class="flex justify-end space-x-3">
+            <button type="button"
+                    hx-get="{% if digest %}/digests/{% else %}/api/digests/create/{% endif %}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+                取消
+            </button>
+            <button type="submit"
+                    class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-600">
+                {% if digest %}更新{% else %}创建{% endif %}
+            </button>
+        </div>
+    </form>
+</div>

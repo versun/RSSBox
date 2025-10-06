@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RSSBox - 现代化RSS阅读器{% endblock %}</title>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6B7280',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        error: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom styles */
+        .sidebar-transition {
+            transition: transform 0.3s ease-in-out;
+        }
+        .main-content {
+            transition: margin-left 0.3s ease-in-out;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .loading-spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3B82F6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Line clamp utility */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Mobile responsive sidebar */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 40;
+            }
+        }
+
+        /* Grid responsive adjustments */
+        @media (max-width: 640px) {
+            .grid-cols-1.md\\:grid-cols-2.lg\\:grid-cols-3.xl\\:grid-cols-4 {
+                grid-template-columns: repeat(1, minmax(0, 1fr));
+            }
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex h-screen">
+        <!-- Left Sidebar -->
+        <div class="w-64 bg-white shadow-lg flex flex-col sidebar">
+            <!-- Logo and Navigation -->
+            <div class="p-4 border-b border-gray-200">
+                <h1 class="text-lg font-bold text-gray-900">RSSBox</h1>
+            </div>
+
+            <!-- Navigation Menu -->
+            <nav class="flex-1 p-2">
+                <ul class="space-y-1">
+                    <li><a href="/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-100 text-blue-700{% endif %}">📊 概览</a></li>
+                    <li><a href="/feeds/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'feeds' %}bg-blue-100 text-blue-700{% endif %}">📡 订阅源</a></li>
+                    <li><a href="/tags/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'tags' %}bg-blue-100 text-blue-700{% endif %}">🏷️ 标签</a></li>
+                    <li><a href="/digests/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'digests' %}bg-blue-100 text-blue-700{% endif %}">📋 摘要</a></li>
+                    <li><a href="/filters/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'filters' %}bg-blue-100 text-blue-700{% endif %}">🔍 过滤器</a></li>
+                    <li><a href="/agents/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded {% if request.resolver_match.url_name == 'agents' %}bg-blue-100 text-blue-700{% endif %}">🤖 AI代理</a></li>
+                    <li><a href="/admin/" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">⚙️ 管理</a></li>
+                </ul>
+            </nav>
+
+            <!-- Quick Actions -->
+            <div class="p-4 border-t border-gray-200">
+                <div class="space-y-2">
+                    <button hx-get="/api/feeds/create/" hx-target="#main-content" hx-swap="innerHTML"
+                            class="w-full bg-primary text-white px-3 py-2 rounded text-xs font-medium hover:bg-blue-600">
+                        + 添加订阅源
+                    </button>
+                    <button hx-get="/api/feeds/import-opml/" hx-target="#main-content" hx-swap="innerHTML"
+                            class="w-full bg-secondary text-white px-3 py-2 rounded text-xs font-medium hover:bg-gray-600">
+                        📥 导入OPML
+                    </button>
+                    <button hx-post="/api/feeds/refresh/" hx-target="#main-content" hx-swap="innerHTML"
+                            class="w-full bg-success text-white px-3 py-2 rounded text-xs font-medium hover:bg-green-600">
+                        🔄 刷新全部
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Top Bar -->
+            <div class="bg-white border-b border-gray-200 p-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <!-- Mobile menu button -->
+                    <button id="mobile-menu-btn" class="md:hidden text-gray-600 hover:text-gray-900">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-lg font-semibold text-gray-900">{% block page_title %}RSSBox{% endblock %}</h2>
+                    {% block page_actions %}{% endblock %}
+                </div>
+                <div class="flex items-center space-x-2">
+                    <div class="relative">
+                        <input type="text" id="global-search" placeholder="搜索..."
+                               class="bg-gray-100 border border-gray-300 rounded px-3 py-1 text-sm w-48"
+                               hx-get="/api/entries/"
+                               hx-trigger="input changed delay:300ms"
+                               hx-include="#global-search"
+                               hx-target="#main-content"
+                               hx-swap="innerHTML">
+                    </div>
+                    <span class="text-xs text-gray-500" id="total-count">共 {{ total_count|default:0 }} 项</span>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div id="main-content" class="flex-1 overflow-auto p-4">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash messages -->
+    <div id="flash-messages" class="fixed top-4 right-4 z-50 space-y-2">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="bg-{{ message.tags|default:'info' }} text-white px-4 py-2 rounded-md shadow-lg fade-in" hx-on:load="setTimeout(() => this.remove(), 3000)">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading-indicator" class="fixed top-4 left-4 z-50 hidden">
+        <div class="bg-white px-4 py-2 rounded-md shadow-lg flex items-center space-x-2">
+            <div class="loading-spinner"></div>
+            <span class="text-sm text-gray-600">加载中...</span>
+        </div>
+    </div>
+
+    {% block extra_js %}
+    <script>
+        // Mobile menu toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.querySelector('.sidebar');
+
+            if (mobileMenuBtn && sidebar) {
+                mobileMenuBtn.addEventListener('click', function() {
+                    sidebar.classList.toggle('open');
+
+                    // Create overlay for mobile
+                    let overlay = document.querySelector('.sidebar-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.className = 'sidebar-overlay';
+                        document.body.appendChild(overlay);
+
+                        overlay.addEventListener('click', function() {
+                            sidebar.classList.remove('open');
+                            overlay.remove();
+                        });
+                    } else {
+                        overlay.remove();
+                    }
+                });
+            }
+
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth < 768) {
+                    const sidebar = document.querySelector('.sidebar');
+                    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+                    const overlay = document.querySelector('.sidebar-overlay');
+
+                    if (sidebar && sidebar.classList.contains('open') &&
+                        !sidebar.contains(event.target) &&
+                        !mobileMenuBtn.contains(event.target) &&
+                        overlay) {
+                        sidebar.classList.remove('open');
+                        overlay.remove();
+                    }
+                }
+            });
+        });
+    </script>
+    {% endblock %}
+</body>
+</html>

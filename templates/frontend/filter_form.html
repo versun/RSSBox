@@ -1,0 +1,131 @@
+{% load static %}
+<div class="bg-gray-50 rounded-md p-4">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">
+        {% if filter %}编辑过滤器{% else %}创建过滤器{% endif %}
+    </h3>
+
+    <form hx-post="{% if filter %}/api/filters/{{ filter.id }}/update/{% else %}/api/filters/create/{% endif %}"
+          hx-target="#main-content"
+          hx-swap="innerHTML"
+          class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">过滤器名称</label>
+            <input type="text"
+                   name="name"
+                   value="{% if filter %}{{ filter.name }}{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2"
+                   placeholder="输入过滤器名称（可选）">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">关键词标签</label>
+            <input type="text"
+                   name="keywords"
+                   value="{% if filter %}{{ filter.keywords|join:',' }}{% endif %}"
+                   class="w-full border border-gray-300 rounded-md px-3 py-2"
+                   placeholder="用逗号分隔的关键词，例如：广告,推广,营销">
+            <p class="mt-1 text-sm text-gray-500">这些关键词将用于过滤内容</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">过滤方式</label>
+                <select name="filter_method" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    <option value="0" {% if filter and filter.filter_method == 0 %}selected{% endif %}>仅关键词过滤</option>
+                    <option value="1" {% if filter and filter.filter_method == 1 %}selected{% endif %}>仅AI过滤</option>
+                    <option value="2" {% if not filter or filter.filter_method == 2 %}selected{% endif %}>关键词+AI过滤</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">操作模式</label>
+                <select name="operation" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    <option value="false" {% if filter and not filter.operation %}selected{% endif %}>排除模式（隐藏包含关键词的内容）</option>
+                    <option value="true" {% if not filter or filter.operation %}selected{% endif %}>包含模式（只显示包含关键词的内容）</option>
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">AI代理</label>
+            <select name="agent" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                <option value="">选择AI代理（可选）</option>
+                <!-- AI agents will be populated -->
+            </select>
+            <p class="mt-1 text-sm text-gray-500">选择用于AI过滤的AI代理</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">AI提示词</label>
+            <textarea name="filter_prompt"
+                      rows="3"
+                      class="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="用于AI过滤的提示词">{% if filter %}{{ filter.filter_prompt }}{% else %}You are an advanced RSS content curator. Analyze the article following these protocols:
+
+1. **Cross-article Deduplication**:
+   - Identify duplicate content using semantic similarity
+   - For duplicate sets:
+     • Keep the most comprehensive version
+
+2. **Ad Exclusion**:
+   • Discard if any detected:
+     - Promotional language patterns
+     - Affiliate links
+     - Brand mentions >5% of content
+     - "Sponsored" disclosure
+
+3. **Clickbait Detection**
+   Discard if headline:
+   - Uses sensational punctuation (e.g., "SHOCKING!", "You won't BELIEVE...")
+   - Poses unanswered questions ("What happened next?")
+   - Employs urgency/scarcity tactics ("Act NOW!"){% endif %}</textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">应用范围</label>
+            <div class="space-y-2">
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="filter_original_title"
+                           {% if not filter or filter.filter_original_title %}checked{% endif %}
+                           class="border border-gray-300 rounded mr-2">
+                    <label class="text-sm text-gray-700">原标题</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="filter_original_content"
+                           {% if not filter or filter.filter_original_content %}checked{% endif %}
+                           class="border border-gray-300 rounded mr-2">
+                    <label class="text-sm text-gray-700">原内容</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="filter_translated_title"
+                           {% if filter and filter.filter_translated_title %}checked{% endif %}
+                           class="border border-gray-300 rounded mr-2">
+                    <label class="text-sm text-gray-700">翻译标题</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox"
+                           name="filter_translated_content"
+                           {% if filter and filter.filter_translated_content %}checked{% endif %}
+                           class="border border-gray-300 rounded mr-2">
+                    <label class="text-sm text-gray-700">翻译内容</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end space-x-3">
+            <button type="button"
+                    hx-get="{% if filter %}/filters/{% else %}/api/filters/create/{% endif %}"
+                    hx-target="#main-content"
+                    hx-swap="innerHTML"
+                    class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+                取消
+            </button>
+            <button type="submit"
+                    class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-600">
+                {% if filter %}更新{% else %}创建{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
