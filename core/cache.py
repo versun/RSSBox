@@ -21,6 +21,17 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
 
     feed = Feed.objects.get(slug=feed_slug)
+    # 如果请求翻译版本，检查翻译状态  
+    if feed_type == "t" and (feed.translate_title or feed.translate_content or feed.summary):  
+        if feed.translation_status is None:  
+            # 翻译正在进行中，不更新缓存  
+            logger.debug(f"Translation in progress for {feed_slug}, using old cache if available")  
+            existing_cache = cache.get(cache_key)  
+            return existing_cache  # 返回旧缓存或 None  
+        elif feed.translation_status is False:  
+            # 翻译失败，记录警告但仍然生成 feed（包含原文）  
+            logger.warning(f"Translation failed for {feed_slug}, generating feed with original content")
+              
     atom_feed = generate_atom_feed(feed, feed_type)
     if not atom_feed:
         return None
