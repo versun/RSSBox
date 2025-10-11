@@ -132,14 +132,15 @@ class OpenAIAgent(Agent):
                 # 有些第三方源在key或url错误的情况下，并不会抛出异常代码，而是返回html广告，因此添加该行。
                 fr = res.choices[0].finish_reason
                 # 提交后台任务检测模型限制
-                results = task_manager.submit_task(
-                    f"detect_model_limit_{self.model}_{self.id}",
-                    self.detect_model_limit,
-                    force=True,
-                )
-                logger.info(
-                    f"Submitted background task to detect model limit for {self.model}"
-                )
+                if self.max_tokens == 0:
+                    task_manager.submit_task(
+                        f"detect_model_limit_{self.model}_{self.id}",
+                        self.detect_model_limit,
+                        force=True,
+                    )
+                    logger.info(
+                        f"Submitted background task to detect model limit for {self.model}"
+                    )
                 self.log = ""
                 self.valid = True
                 return True
@@ -153,7 +154,7 @@ class OpenAIAgent(Agent):
 
     def detect_model_limit(self, force=False) -> int:
         """通过二分搜索来高效检测模型实际限制"""
-        if not force and self.max_tokens > 0:
+        if not force and self.max_tokens != 0:
             return self.max_tokens
 
         # 二分搜索找到确切限制
@@ -263,7 +264,7 @@ class OpenAIAgent(Agent):
             # 计算系统提示的token占用
             system_prompt_tokens = get_token_count(system_prompt)
             # 获取最大可用token数（保留buffer）
-            if not self.max_tokens:
+            if self.max_tokens == 0:
                 task_manager.submit_task(
                     f"detect_model_limit_{self.model}_{self.id}",
                     self.detect_model_limit,
