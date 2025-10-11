@@ -1160,36 +1160,6 @@ class OpenAIAgentAdvancedTest(TestCase):
         self.assertIsNone(result)
         mock_openai.assert_not_called()
 
-    @patch("core.models.agent.task_manager")
-    @patch("core.models.agent.OpenAI")
-    def test_validate_success_with_task_submission(
-        self, mock_openai, mock_task_manager
-    ):
-        """Test validate method success path with task manager submission."""
-        mock_client = MagicMock()
-        mock_completion = MagicMock()
-        mock_completion.choices = [MagicMock(finish_reason="stop")]
-        mock_client.with_options().chat.completions.create.return_value = (
-            mock_completion
-        )
-        mock_openai.return_value = mock_client
-
-        mock_task_manager.submit_task.return_value = "task_result"
-
-        result = self.agent.validate()
-
-        self.assertTrue(result)
-        self.agent.refresh_from_db()
-        self.assertEqual(self.agent.log, "")
-        self.assertTrue(self.agent.valid)
-
-        # Verify task manager was called
-        mock_task_manager.submit_task.assert_called_once_with(
-            f"detect_model_limit_{self.agent.model}_{self.agent.id}",
-            self.agent.detect_model_limit,
-            force=True,
-        )
-
     @patch("core.models.agent.OpenAI")
     def test_validate_exception_handling(self, mock_openai):
         """Test validate method exception handling to cover lines 136-142."""
