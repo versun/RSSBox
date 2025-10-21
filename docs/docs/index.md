@@ -44,7 +44,7 @@ summary: 让RSS管理更智能，让信息获取更高效
 - **多格式输出** - 支持RSS和JSON格式的订阅输出
 - **更新频率控制** - 自定义每个源的更新间隔
 - **Docker部署** - 一键部署，简化运维
-   
+
 ### 支持的翻译引擎
 
 - **OpenAI生态** - 支持所有兼容OpenAI API接口的模型
@@ -75,11 +75,11 @@ summary: 让RSS管理更智能，让信息获取更高效
 
 欢迎任何形式的贡献！如果你想为 rssbox 做出贡献，请按照以下步骤操作：
 
-1. **Fork 本仓库**  
+1. **Fork 本仓库**
 
    点击右上角的 Fork 按钮，将项目复制到你的 GitHub 账户下。
 
-2. **克隆到本地**  
+2. **克隆到本地**
    ```bash
    git clone https://github.com/versun/rssbox.git
    cd rssbox
@@ -115,4 +115,3 @@ summary: 让RSS管理更智能，让信息获取更高效
 ## Star历史图
 
 [![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
-

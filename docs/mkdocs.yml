@@ -3,8 +3,7 @@ site_name: RSSBox
 site_url: https://rssbox.app
 site_author: versun
 site_description: >-
-  Smarter RSS management, more efficient information access
-
+    Smarter RSS management, more efficient information access
 # Repository
 repo_name: versun/rssbox
 repo_url: https://github.com/versun/rssbox
@@ -13,61 +12,47 @@ repo_url: https://github.com/versun/rssbox
 copyright: Copyright &copy; 2023 - 2025 Versun
 
 theme:
-  name: shadcn # https://github.com/asiffer/mkdocs-shadcn
-  icon: https://rssbox.app/assets/logo.ico
-  favicon: assets/logo.ico
-  logo: assets/logo.ico
+    name: shadcn # https://github.com/asiffer/mkdocs-shadcn
+    icon: https://rssbox.app/assets/logo.ico
+    favicon: assets/logo.ico
+    logo: assets/logo.ico
 
 plugins:
-  - search
-  - excalidraw
-  - i18n:
-        docs_structure: folder
-        languages:
-          - locale: zh
-            default: true
-            name: 中文
-            build: true
-          - locale: en
-            name: English
-            build: true
-            nav_translations:
-              主页: Home
-              安装: Install
-              一键部署: One Click
-              Docker安装: Docker
-              使用说明: Guide
-              翻译服务: Translate Services
-              常见问题: FAQ
-              开发进度: Roadmap
-              赞助: Sponsorship
-
-
-
-# Additional configuration
-# extra:
-#   social:
-#     - icon: fontawesome/brands/github
-#       link: https://github.com/versun/rssbox
-#     - icon: fontawesome/brands/docker
-#       link: https://hub.docker.com/r/versun/rssbox
-#     - icon: fontawesome/brands/telegram
-#       link: https://t.me/rssboxapp
-#     - icon: fontawesome/brands/twitter
-#       link: https://twitter.com/VersunPan
+    - search
+    - excalidraw
+    - i18n:
+          docs_structure: suffix
+          languages:
+              - locale: zh
+                default: true
+                name: 中文
+                build: true
+              - locale: en
+                name: English
+                build: true
+                nav_translations:
+                    主页: Home
+                    安装: Install
+                    一键部署: One Click
+                    Docker安装: Docker
+                    使用说明: Guide
+                    翻译服务: Translate Services
+                    常见问题: FAQ
+                    开发进度: Roadmap
+                    赞助: Sponsorship
 
 # Page tree
 nav:
-  - 主页: index.md
-  - Demo: demo.md
-  - 安装:
-      - Docker安装: install/docker.md
-      - 一键部署: install/one-click.md
-  - 使用说明: guide.md
-  - 翻译服务: translator.md
-  - 常见问题: faq.md
-  - 开发进度: https://github.com/users/versun/projects/8
-  - 赞助: https://rssbox.app/#_2
-  - Github: https://github.com/versun/rssbox
-  - Telegram: https://t.me/rssboxapp
-  - Releases: https://github.com/versun/rssbox/releases
+    - 主页: index.md
+    - Demo: demo.md
+    - 安装:
+          - Docker安装: install/docker.md
+          - 一键部署: install/one-click.md
+    - 使用说明: guide.md
+    - 翻译服务: translator.md
+    - 常见问题: faq.md
+    - 开发进度: https://github.com/users/versun/projects/8
+    - 赞助: https://rssbox.app/#_2
+    - Github: https://github.com/versun/rssbox
+    - Telegram: https://t.me/rssboxapp
+    - Releases: https://github.com/versun/rssbox/releases

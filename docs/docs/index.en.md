@@ -44,7 +44,7 @@ Official website: [rssbox.app](https://rssbox.app)
 - **Multi-format Output** - Support RSS and JSON format subscription output
 - **Update Frequency Control** - Customize update intervals for each source
 - **Docker Deployment** - One-click deployment, simplified operations
-   
+
 ### Supported Translation Engines
 
 - **OpenAI Ecosystem** - Support all models compatible with OpenAI API interface
@@ -76,11 +76,11 @@ If you find this project helpful, consider becoming a sponsor: [Afdian](https://
 
 We welcome all forms of contribution! To contribute to rssbox, please follow these steps:
 
-1. **Fork this repository**  
+1. **Fork this repository**
 
    Click the Fork button in the top right to copy the project to your GitHub account.
 
-2. **Clone to local**  
+2. **Clone to local**
    ```bash
    git clone https://github.com/versun/rssbox.git
    cd rssbox
@@ -116,4 +116,3 @@ We welcome all forms of contribution! To contribute to rssbox, please follow the
 ## Star History Chart
 
 [![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
-
