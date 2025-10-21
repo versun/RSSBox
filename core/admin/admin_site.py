@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User, Group
 from django.contrib.admin import AdminSite
 from django.utils.translation import gettext_lazy as _
 from django.core.paginator import Paginator
@@ -110,6 +111,48 @@ class CoreAdminSite(AdminSite):
                 ],
             },
         ]
+
+        # Add User and Group models if USER_MANAGEMENT is enabled
+        if settings.USER_MANAGEMENT:
+            app_list.append(
+                {
+                    "name": "",
+                    "app_label": "auth",
+                    "app_url": "/auth/",
+                    "has_module_perms": True,
+                    "models": [
+                        {
+                            "model": User,
+                            "name": "Users",
+                            "object_name": "User",
+                            "perms": {
+                                "add": True,
+                                "change": True,
+                                "delete": True,
+                                "view": True,
+                            },
+                            "admin_url": "/auth/user/",
+                            "add_url": "/auth/user/add/",
+                            "view_only": False,
+                        },
+                        {
+                            "model": Group,
+                            "name": "Groups",
+                            "object_name": "Group",
+                            "perms": {
+                                "add": True,
+                                "change": True,
+                                "delete": True,
+                                "view": True,
+                            },
+                            "admin_url": "/auth/group/",
+                            "add_url": "/auth/group/add/",
+                            "view_only": False,
+                        },
+                    ],
+                }
+            )
+
         return app_list
 
 
@@ -208,3 +251,7 @@ def agent_add(request):
 
 
 core_admin_site = CoreAdminSite()
+
+if settings.USER_MANAGEMENT:
+    core_admin_site.register(User)
+    core_admin_site.register(Group)
