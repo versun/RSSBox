@@ -1,6 +1,6 @@
 [project]
 name = "rssbox"
-version = "2025.10.11"
+version = "2025.10.21"
 description = "Smarter RSS management, more efficient information access"
 requires-python = ">=3.12"
 dependencies = [
@@ -36,7 +36,7 @@ dependencies = [
 package = true
 
 [tool.setuptools]
-packages = [ "config", "core", "locale", "scripts", "templates", "utils" ] 
+packages = [ "config", "core", "locale", "scripts", "templates", "utils" ]
 
 [project.scripts]
 server = "scripts.prod_server:main"
