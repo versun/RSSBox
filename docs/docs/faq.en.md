@@ -66,6 +66,16 @@ HTTP_PROXY=http://proxy.example.com:8080
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
+### How to configure timezone
+
+You can configure the system timezone by setting the `TIME_ZONE` environment variable, for example:
+```
+TIME_ZONE=Asia/Shanghai      # Beijing Time
+TIME_ZONE=America/New_York   # New York Time
+TIME_ZONE=Europe/London      # London Time
+```
+If this environment variable is not set, the system defaults to UTC timezone.
+
 ### Cloudflare SSL
 
 If Cloudflare's DNS proxy is enabled, you need to select Full for encryption mode on Cloudflare's SSL/TLS page.

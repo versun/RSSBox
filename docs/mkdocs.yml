@@ -37,6 +37,7 @@ plugins:
                     Docker安装: Docker
                     使用说明: Guide
                     翻译服务: Translate Services
+                    环境变量配置: Environment Variables
                     常见问题: FAQ
                     开发进度: Roadmap
                     赞助: Sponsorship
@@ -50,6 +51,7 @@ nav:
           - 一键部署: install/one-click.md
     - 使用说明: guide.md
     - 翻译服务: translator.md
+    - 环境变量配置: config.md
     - 常见问题: faq.md
     - 开发进度: https://github.com/users/versun/projects/8
     - 赞助: https://rssbox.app/#_2
