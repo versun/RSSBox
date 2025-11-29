@@ -292,16 +292,6 @@ def digest_view(request, slug):
     </body>
     </html>
     """
-                <strong>Tags:</strong> {", ".join([tag.name for tag in digest.tags.all()])}<br>
-                <strong>Days Range:</strong> {digest.days_range} days
-            </div>
-            <div class="content">
-                {html_content}
-            </div>
-        </div>
-    </body>
-    </html>
-    """
 
     return HttpResponse(html_response, content_type="text/html; charset=utf-8")
 
