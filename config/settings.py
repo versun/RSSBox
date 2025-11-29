@@ -183,7 +183,7 @@ LANGUAGES = [
 LOCALE_PATHS = [BASE_DIR / "locale"]
 
 
-TIME_ZONE = "UTC"
+TIME_ZONE = os.environ.get("TIME_ZONE", "UTC") # Asia/Shanghai,America/New_York,Europe/London
 
 USE_I18N = True
 
