@@ -88,7 +88,11 @@ def _build_atom_feed(
     # 确保必要字段有值:updated, title, id
     fg = FeedGenerator()
     fg.id(str(feed_id))
-    fg.title(title or updated_time.strftime("%Y-%m-%d %H:%M:%S"))
+    # 如果没有title，使用时间作为备用，转换到本地时区
+    if not title:
+        local_time = timezone.localtime(updated_time)
+        title = local_time.strftime("%Y-%m-%d %H:%M:%S")
+    fg.title(title)
     fg.author({"name": author or "Unknown"})
     fg.link(href=link, rel="alternate")
     fg.subtitle(subtitle or "")
@@ -135,7 +139,11 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
 
     # 创建条目
     fe = fg.add_entry()
-    fe.title(title or updated.strftime("%Y-%m-%d %H:%M:%S"))
+    # 如果没有title，使用时间作为备用，转换到本地时区
+    if not title:
+        local_time = timezone.localtime(updated)
+        title = local_time.strftime("%Y-%m-%d %H:%M:%S")
+    fe.title(title)
     fe.link(href=entry.link or "", rel="alternate")
     fe.author({"name": entry.author or "Unknown"})
     fe.id(entry.guid or entry.link)

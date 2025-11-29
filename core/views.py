@@ -1,6 +1,7 @@
 import logging
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
+from django.utils import timezone
 from django.core.cache import cache
 from django.views.decorators.http import condition
 from .models import Feed, Tag, Digest
@@ -203,6 +204,13 @@ def digest_view(request, slug):
     # Convert markdown to HTML
     # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
     html_content = mistune.html(latest.ai_summary)
+    
+    # Format last_generated time with timezone conversion
+    if digest.last_generated:
+        local_time = timezone.localtime(digest.last_generated)
+        generated_time = local_time.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        generated_time = "Never"
 
     # Create HTML response
     html_response = f"""
@@ -273,7 +281,17 @@ def digest_view(request, slug):
     <body>
         <div class="container">
             <div class="meta">
-                <strong>Generated:</strong> {digest.last_generated.strftime("%Y-%m-%d %H:%M:%S") if digest.last_generated else "Never"}<br>
+                <strong>Generated:</strong> {generated_time}<br>
+                <strong>Tags:</strong> {", ".join([tag.name for tag in digest.tags.all()])}<br>
+                <strong>Days Range:</strong> {digest.days_range} days
+            </div>
+            <div class="content">
+                {html_content}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
                 <strong>Tags:</strong> {", ".join([tag.name for tag in digest.tags.all()])}<br>
                 <strong>Days Range:</strong> {digest.days_range} days
             </div>

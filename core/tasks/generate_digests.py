@@ -121,7 +121,8 @@ Summary: {article["summary"]}
             self.prepare_articles()
 
             if not self.articles:
-                self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} No articles were found within the specified range.\n"
+                local_now = timezone.localtime(now)
+                self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} No articles were found within the specified range.\n"
                 return {"success": False, "error": "No articles were found within the specified range."}
 
             # Build prompt - 分离文章内容、系统提示和URL映射
@@ -193,7 +194,7 @@ Summary: {article["summary"]}
                 pubdate=now,
                 updated=now,
                 guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
-                original_title=f"{self.digest.name} | {now.strftime('%Y-%m-%d %H:%M')}",
+                original_title=f"{self.digest.name} | {timezone.localtime(now).strftime('%Y-%m-%d %H:%M')}",
                 translated_title=None,
                 original_content=None,
                 translated_content=None,
@@ -204,14 +205,16 @@ Summary: {article["summary"]}
             self.digest.status = True  # Set status to success
             cache_digest(self.digest.slug, "xml")
             cache_digest(self.digest.slug, "json")
-            self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation successful for {self.digest.name}\n"
+            local_now = timezone.localtime(now)
+            self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation successful for {self.digest.name}\n"
             return {
                 "success": True,
                 "entry_id": entry.id,
             }
         except Exception as e:
             logger.error(f"Digest generation failed for {self.digest.name}: {e}")
-            self.digest.log += f"{now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation failed for {self.digest.name}: {e}\n"
+            local_now = timezone.localtime(now)
+            self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation failed for {self.digest.name}: {e}\n"
             # Mark status as failed
             self.digest.status = False
             return {"success": False, "error": str(e)}

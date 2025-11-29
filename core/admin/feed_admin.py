@@ -2,6 +2,7 @@ import logging
 from django.contrib import admin
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 from django.urls import path, reverse
 from django.db import transaction
 from core.models import Feed
@@ -290,10 +291,17 @@ class FeedAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("Fetch Info"))
     def fetch_info(self, obj):
+        if obj.last_fetch:
+            # 将 UTC 时间转换为本地时区
+            local_time = timezone.localtime(obj.last_fetch)
+            time_str = local_time.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            time_str = "-"
+        
         return format_html(
             "<span>{0}</span><br><span>{1}</span>",
             self.simple_update_frequency(obj),
-            obj.last_fetch.strftime("%Y-%m-%d %H:%M:%S") if obj.last_fetch else "-",
+            time_str,
         )
 
     @admin.display(description=_("Cost Info"))
