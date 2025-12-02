@@ -158,7 +158,7 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
     return _generate_opml_feed(
         title_prefix="Translated Feeds",
         queryset=queryset,
-        get_feed_url_func=lambda feed: f"{settings.SITE_URL}/feed/rss/{feed.slug}",
+        get_feed_url_func=lambda feed: f"{settings.SITE_URL}/rss/{feed.slug}",
         filename_prefix="translated",
     )
 
