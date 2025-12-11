@@ -1,6 +1,6 @@
 import logging
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.urls import reverse
 from core.models import Tag
@@ -33,7 +33,7 @@ class TagAdmin(admin.ModelAdmin):
             f"<a href='{reverse('admin:core_filter_change', args=[f.id])}'>{f.name}</a>"
             for f in obj.filters.all()
         )
-        return format_html(filters_html)
+        return format_html("{}", mark_safe(filters_html))
 
     @admin.display(description="URL")
     def show_url(self, obj):

@@ -241,7 +241,7 @@ class DigestAdmin(admin.ModelAdmin):
             f"<a href='{reverse('admin:core_tag_change', args=[t.id])}'>#{t.name}</a>"
             for t in obj.tags.all()
         )
-        return format_html(tags_html)
+        return format_html("{}", mark_safe(tags_html))
 
     @admin.display(description=_("AI Agent"))
     def summarizer_name(self, obj):

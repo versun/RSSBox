@@ -1,4 +1,4 @@
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.contrib.contenttypes.models import ContentType
 from core.models import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
 
@@ -50,11 +50,16 @@ def status_icon(status):
     match status:
         case None:
             return format_html(
-                "<img src='/static/img/icon-loading.svg' alt='In Progress'>"
+                "{}",
+                mark_safe("<img src='/static/img/icon-loading.svg' alt='In Progress'>")
             )
         case True:
             return format_html(
-                "<img src='/static/admin/img/icon-yes.svg' alt='Succeed'>"
+                "{}",
+                mark_safe("<img src='/static/admin/img/icon-yes.svg' alt='Succeed'>")
             )
         case False:
-            return format_html("<img src='/static/admin/img/icon-no.svg' alt='Error'>")
+            return format_html(
+                "{}",
+                mark_safe("<img src='/static/admin/img/icon-no.svg' alt='Error'>")
+            )

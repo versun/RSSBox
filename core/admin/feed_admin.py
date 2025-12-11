@@ -273,7 +273,7 @@ class FeedAdmin(admin.ModelAdmin):
             html_content += f"✔️{_('Content')}<br>"
         if obj.summary:
             html_content += f"✔️{_('Summary')}<br>"
-        return format_html(html_content)
+        return format_html("{}", mark_safe(html_content))
 
     @admin.display(description=_("Log"))
     def show_log(self, obj):
@@ -330,7 +330,7 @@ class FeedAdmin(admin.ModelAdmin):
             f"<a href='{reverse('admin:core_filter_change', args=[f.id])}'>{f.name}</a>"
             for f in obj.filters.all()
         )
-        return format_html(filters_html)
+        return format_html("{}", mark_safe(filters_html))
 
     @admin.display(description=_("tags"))
     def show_tags(self, obj):
@@ -340,7 +340,7 @@ class FeedAdmin(admin.ModelAdmin):
             f"<a href='{reverse('admin:core_tag_change', args=[t.id])}'>#{t.name}</a>"
             for t in obj.tags.all()
         )
-        return format_html(tags_html)
+        return format_html("{}", mark_safe(tags_html))
 
 
 core_admin_site.register(Feed, FeedAdmin)
