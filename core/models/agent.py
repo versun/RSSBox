@@ -93,6 +93,11 @@ class OpenAIAgent(Agent):
         default=0,
         help_text=_("Maximum requests per minute (0 = no limit)"),
     )
+    merge_system_prompt = models.BooleanField(
+        _("Merge System Prompt to User Message"),
+        default=False,
+        help_text=_("Enable for models that don't support system system instructions (e.g., Gemma 3)")
+    )
     EXTRA_HEADERS = {
         "HTTP-Referer": "https://www.rssbox.app",
         "X-Title": "RSSBox",
@@ -260,9 +265,28 @@ class OpenAIAgent(Agent):
 
             # 应用速率限制
             self._wait_for_rate_limit()
-
+            
+            if self.merge_system_prompt:
+                merged_content = f"{system_prompt}\n\n{text}"
+                messages = [
+                    {"role": "user", "content": merged_content}
+                ]
+                system_prompt_tokens = 0
+                input_tokens = get_token_count(merged_content)
+            else:
+                messages = [
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user", 
+                        "content": text
+                    }
+                ]
             # 计算系统提示的token占用
-            system_prompt_tokens = get_token_count(system_prompt)
+                system_prompt_tokens = get_token_count(system_prompt)
+                input_tokens = get_token_count(system_prompt) + get_token_count(text)
             # 获取最大可用token数（保留buffer）
             if self.max_tokens == 0:
                 task_manager.submit_task(
@@ -328,10 +352,7 @@ class OpenAIAgent(Agent):
             res = client.with_options(max_retries=3).chat.completions.create(
                 extra_headers=self.EXTRA_HEADERS,
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text},
-                ],
+                messages=messages,
                 **call_kwargs,
             )
             if (
