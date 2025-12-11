@@ -271,6 +271,7 @@ class OpenAIAgent(Agent):
                 messages = [
                     {"role": "user", "content": merged_content}
                 ]
+                # 当合并 system prompt 时，system_prompt_tokens 为 0（因为已包含在 merged_content 中）
                 system_prompt_tokens = 0
                 input_tokens = get_token_count(merged_content)
             else:
@@ -284,9 +285,10 @@ class OpenAIAgent(Agent):
                         "content": text
                     }
                 ]
-            # 计算系统提示的token占用
+                # 计算系统提示的token占用
                 system_prompt_tokens = get_token_count(system_prompt)
                 input_tokens = get_token_count(system_prompt) + get_token_count(text)
+            
             # 获取最大可用token数（保留buffer）
             if self.max_tokens == 0:
                 task_manager.submit_task(
@@ -298,9 +300,19 @@ class OpenAIAgent(Agent):
                     "max_tokens is not set, Please wait for the model limit detection to complete"
                 )
 
-            max_usable_tokens = (
-                self.max_tokens - system_prompt_tokens - 100
-            )  # 100 token buffer
+            # 计算最大可用token数
+            # 当 merge_system_prompt=True 时，system_prompt 已包含在 merged_content 中，所以只需要考虑 text 的 token
+            if self.merge_system_prompt:
+                # 合并模式下，需要从总限制中减去 system_prompt 的 token（因为它会占用输入空间）
+                system_prompt_token_cost = get_token_count(system_prompt)
+                max_usable_tokens = (
+                    self.max_tokens - system_prompt_token_cost - 100
+                )  # 100 token buffer
+            else:
+                max_usable_tokens = (
+                    self.max_tokens - system_prompt_tokens - 100
+                )  # 100 token buffer
+            
             # 检查文本长度是否需要分块
             if get_token_count(text) > max_usable_tokens:
                 logger.info(
@@ -332,7 +344,7 @@ class OpenAIAgent(Agent):
                 return {"text": result_text, "tokens": tokens}
 
             # 计算合理的输出token限制
-            input_tokens = get_token_count(system_prompt) + get_token_count(text)
+            # input_tokens 已经在上面根据 merge_system_prompt 的情况正确计算了，直接使用
             # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
             output_token_limit = int(max(4096, (self.max_tokens - input_tokens) * 0.8))
 
