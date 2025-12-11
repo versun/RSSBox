@@ -95,6 +95,7 @@ class OpenAIAgentAdmin(AgentAdmin):
                     "rate_limit_rpm",
                     # "show_max_tokens",
                     "max_tokens",
+                    "merge_system_prompt",
                 )
             },
         ),
