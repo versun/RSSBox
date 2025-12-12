@@ -121,16 +121,28 @@ class OpenAIAgent(Agent):
                 # 应用速率限制
                 self._wait_for_rate_limit()
 
+                system_prompt = "You must only reply with exactly one character: 1"
+                user_content = "1"
+                
+                # 根据 merge_system_prompt 的值决定消息格式
+                if self.merge_system_prompt:
+                    merged_content = f"{system_prompt}\n\n{user_content}"
+                    messages = [
+                        {"role": "user", "content": merged_content}
+                    ]
+                else:
+                    messages = [
+                        {
+                            "role": "system",
+                            "content": system_prompt,
+                        },
+                        {"role": "user", "content": user_content},
+                    ]
+
                 res = client.with_options(max_retries=3).chat.completions.create(
                     extra_headers=self.EXTRA_HEADERS,
                     model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You must only reply with exactly one character: 1",
-                        },
-                        {"role": "user", "content": "1"},
-                    ],
+                    messages=messages,
                     # max_tokens=50,
                     max_completion_tokens=50,
                 )
