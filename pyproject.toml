@@ -1,6 +1,6 @@
 [project]
 name = "rssbox"
-version = "2025.12.13"
+version = "2026.1.7"
 description = "Smarter RSS management, more efficient information access"
 requires-python = ">=3.12"
 dependencies = [
