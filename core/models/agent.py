@@ -615,7 +615,7 @@ class LibreTranslateAgent(Agent):
             req.add_header("Content-Type", "application/x-www-form-urlencoded")
             req.add_header("User-Agent", "LibreTranslateAgent/1.0")
 
-            with request.urlopen(req, timeout=5) as response:
+            with request.urlopen(req, timeout=settings.LT_TIMEOUT) as response:
                 response_str = response.read().decode("utf-8")
                 return json.loads(response_str)
         except Exception as e:

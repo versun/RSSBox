@@ -28,6 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 with open(BASE_DIR / "pyproject.toml", "rb") as f:
     pyproject = tomllib.load(f)
     VERSION = pyproject["project"]["version"]
+LT_TIMEOUT=int(os.environ.get("LT_TIMEOUT", '5'))
 
 X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 
