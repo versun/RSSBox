@@ -1,38 +1,38 @@
 ---
-title: External API
-summary: RSSBox third-party integration API enablement, authentication, and MVP scope
+title: 外部 API
+summary: RSSBox 第三方集成管理 API 的启用方式、认证方式和 MVP 范围
 ---
 
-# External API
+# 外部 API
 
-RSSBox provides a small management API for third-party integrations. It is disabled by default and must be enabled explicitly.
+RSSBox 提供了一个面向第三方集成的小型管理 API。该 API 默认关闭，需要显式启用。
 
-## Enable The API
+## 启用 API
 
-Set these environment variables:
+设置以下环境变量：
 
 ```bash
 EXTERNAL_API_ENABLED=1
 EXTERNAL_API_TOKEN=replace-with-a-long-random-token
 ```
 
-When enabled, the API base path is `/api/v1/`.
+启用后，API 基础路径为 `/api/v1/`。
 
-If `EXTERNAL_API_ENABLED` is unset or not `1`, all API endpoints return `404`.
+如果 `EXTERNAL_API_ENABLED` 未设置或不等于 `1`，所有 API 端点都会返回 `404`。
 
-If the API is enabled but `EXTERNAL_API_TOKEN` is missing, all API endpoints return `503`.
+如果 API 已启用但未设置 `EXTERNAL_API_TOKEN`，所有 API 端点都会返回 `503`。
 
-## Authentication
+## 认证
 
-Use a Bearer token:
+使用 Bearer Token：
 
 ```http
 Authorization: Bearer <your-token>
 ```
 
-Missing or invalid tokens return `401`.
+缺少 token 或 token 无效时返回 `401`。
 
-## MVP Endpoints
+## MVP 端点
 
 - `GET /api/v1/feeds`
 - `GET /api/v1/feeds/{id}`
@@ -46,9 +46,9 @@ Missing or invalid tokens return `401`.
 - `DELETE /api/v1/tags/{id}`
 - `POST /api/v1/feeds/{id}/tags`
 
-## Exposed Feed Fields
+## Feed 暴露字段
 
-The API only exposes minimal safe fields:
+API 仅暴露最小且安全的字段：
 
 - `id`
 - `name`
@@ -68,18 +68,18 @@ The API only exposes minimal safe fields:
 - `last_translate`
 - `tags`
 
-Internal logs, etags, token counters, agent configuration, and other internal-only fields are not exposed.
+不会暴露内部日志、etag、token 统计、Agent 配置或其他仅供内部使用的字段。
 
-## Curl Examples
+## Curl 示例
 
-List feeds:
+列出 feeds：
 
 ```bash
 curl -H "Authorization: Bearer $EXTERNAL_API_TOKEN" \
   http://localhost:8000/api/v1/feeds
 ```
 
-Create a feed:
+创建 feed：
 
 ```bash
 curl -X POST \
@@ -94,7 +94,7 @@ curl -X POST \
   http://localhost:8000/api/v1/feeds
 ```
 
-Patch a feed:
+更新 feed：
 
 ```bash
 curl -X PATCH \
@@ -104,7 +104,7 @@ curl -X PATCH \
   http://localhost:8000/api/v1/feeds/1
 ```
 
-Queue a refresh:
+触发刷新排队：
 
 ```bash
 curl -X POST \
@@ -112,7 +112,7 @@ curl -X POST \
   http://localhost:8000/api/v1/feeds/1/refresh
 ```
 
-Replace a feed's tag set:
+替换 feed 的 tag 集合：
 
 ```bash
 curl -X POST \
@@ -122,7 +122,7 @@ curl -X POST \
   http://localhost:8000/api/v1/feeds/1/tags
 ```
 
-Create a tag:
+创建 tag：
 
 ```bash
 curl -X POST \
@@ -132,25 +132,25 @@ curl -X POST \
   http://localhost:8000/api/v1/tags
 ```
 
-## Local Verification Notes
+## 本地验证说明
 
-- The refresh pipeline reuses the existing RSSBox update flow.
-- In `DEBUG=0` or other production-like settings, Django cache is configured to use Redis via `REDIS_URL`.
-- After a successful refresh, RSSBox attempts to warm feed and tag caches. If Redis is unavailable, you will see log messages such as `Failed to cache RSS ...` or `Failed to cache tag ...`.
-- Those cache errors do not roll back the core feed fetch, translation, summary, or database updates. The refresh job still completes its main work first.
-- What remains incomplete is cache warm-up. If Redis stays unavailable, cache-backed RSS/tag output endpoints may fail until Redis is reachable again.
-- For local API verification, either run with `uv run dev` / `DEBUG=1` so Django uses its local in-process cache, or start Redis and set `REDIS_URL` explicitly.
+- 刷新流程复用了 RSSBox 现有的更新管线。
+- 在 `DEBUG=0` 或其他接近生产环境的配置下，Django 缓存会通过 `REDIS_URL` 使用 Redis。
+- 主刷新流程成功后，RSSBox 会继续尝试预热 feed 和 tag 缓存。如果 Redis 不可用，你会在日志中看到 `Failed to cache RSS ...` 或 `Failed to cache tag ...` 之类的报错。
+- 这些缓存错误不会回滚核心的抓取、翻译、摘要或数据库更新。刷新任务的主要工作会先完成。
+- 真正未完成的是缓存预热。如果 Redis 持续不可用，依赖缓存的 RSS/tag 输出端点可能会失败，直到 Redis 恢复可用。
+- 本地验证 API 时，要么使用 `uv run dev` / `DEBUG=1` 让 Django 使用本地进程内缓存，要么启动 Redis 并显式设置 `REDIS_URL`。
 
-## MVP Limitations
+## MVP 限制
 
-- Feed `create` and `patch` only save configuration. They do not fetch, translate, or summarize content automatically.
-- The `refresh` endpoint only queues asynchronous work. A `202` response means accepted, not completed.
-- There is no pagination, filter management API, agent management API, digest API, or task status API in this MVP.
-- AI weekly and digest APIs are explicitly out of scope.
+- Feed 的 `create` 和 `patch` 只会保存配置，不会自动抓取、翻译或生成摘要。
+- `refresh` 端点只负责将异步任务加入队列。返回 `202` 仅表示已接受，不表示刷新已完成。
+- 这个 MVP 不包含分页、过滤器管理 API、Agent 管理 API、Digest API 或任务状态 API。
+- AI 周报和摘要 API 明确不在当前范围内。
 
-## Explicitly Out Of Scope
+## 明确不包含
 
-- AI weekly or digest API
-- Unrelated refactors
-- Frontend or admin redesign
-- Large architecture changes
+- AI weekly 或 digest API
+- 无关重构
+- 前端或管理后台重设计
+- 大规模架构调整
