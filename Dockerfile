@@ -64,12 +64,12 @@ RUN mkdir -p /var/run/cron && \
 
 COPY config/rt_cron /etc/cron.d/rt_cron
 RUN chmod 0644 /etc/cron.d/rt_cron && \
-    crontab /etc/cron.d/rt_cron && \
     touch /var/log/cron.log
 
 # 设置entrypoint
 COPY scripts/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh
     
 # 声明端口
 EXPOSE ${PORT}
