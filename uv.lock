@@ -350,6 +350,19 @@ wheels = [
 ]
 
 [[package]]
+name = "django-ninja"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/28/e2b28ea02da0cd408f035f81c20b8c9f7c7661c773779a508827ab8d55b1/django_ninja-1.6.0.tar.gz", hash = "sha256:dd84230931f511503a251ac090200c65fd0be25a16ba2b9140073b814decc201", size = 3684883, upload-time = "2026-03-12T08:45:00.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/ff/51e518a434f1af18932d4fe52a4c46985b7c15a75e394aeed5ed87ff6f98/django_ninja-1.6.0-py3-none-any.whl", hash = "sha256:44c6e3f5f1b929cf51f645004715b36326ea32fddf1a94026c4917de8d230135", size = 2374822, upload-time = "2026-03-12T08:44:58.345Z" },
+]
+
+[[package]]
 name = "django-tagulous"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1150,7 +1163,7 @@ wheels = [
 
 [[package]]
 name = "rssbox"
-version = "2025.12.13"
+version = "2026.2.21"
 source = { editable = "." }
 dependencies = [
     { name = "bs4" },
@@ -1161,6 +1174,7 @@ dependencies = [
     { name = "django-autoslug" },
     { name = "django-debug-toolbar" },
     { name = "django-encrypted-model-fields" },
+    { name = "django-ninja" },
     { name = "django-tagulous" },
     { name = "fake-useragent" },
     { name = "feed2json" },
@@ -1191,6 +1205,7 @@ requires-dist = [
     { name = "django-autoslug", specifier = ">=1.9.9" },
     { name = "django-debug-toolbar", specifier = ">=5.2.0" },
     { name = "django-encrypted-model-fields", specifier = ">=0.6.5" },
+    { name = "django-ninja", specifier = ">=1.6.0" },
     { name = "django-tagulous", specifier = ">=2.1.1" },
     { name = "fake-useragent", specifier = ">=2.2.0" },
     { name = "feed2json", specifier = ">=2024.4.29" },

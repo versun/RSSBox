@@ -21,6 +21,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic.base import RedirectView
 from core.admin import core_admin_site
+from core.api import external_api
 
 favicon_view = RedirectView.as_view(url="/static/favicon.ico", permanent=True)
 
@@ -33,6 +34,7 @@ if settings.DEMO:
 
 urlpatterns = [
     path("favicon.ico", favicon_view),
+    path("api/v1/", external_api.urls),
     # path("log/", log, name="log"),
     path("rss/", include("core.urls")),
     path("", core_admin_site.urls),

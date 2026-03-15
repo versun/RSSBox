@@ -26,7 +26,7 @@ def start_development_server():
     """启动开发服务器"""
     print("🌐 Start DEV Server...")
     try:
-        subprocess.run(["python", "manage.py", "runserver"], check=True)
+        subprocess.run([sys.executable, "manage.py", "runserver"], check=True)
     except KeyboardInterrupt:
         print("\n🛑 Server Stopped by User")
     except subprocess.CalledProcessError as e:

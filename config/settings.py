@@ -22,6 +22,8 @@ import sys
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 USER_MANAGEMENT = os.environ.get("USER_MANAGEMENT") == "1"
 DEMO = os.environ.get("DEMO") == "1"
+EXTERNAL_API_ENABLED = os.environ.get("EXTERNAL_API_ENABLED") == "1"
+EXTERNAL_API_TOKEN = os.environ.get("EXTERNAL_API_TOKEN")
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Read version from pyproject.toml

@@ -36,6 +36,7 @@ plugins:
                     一键部署: One Click
                     Docker安装: Docker
                     使用说明: Guide
+                    外部 API: External API
                     翻译服务: Translate Services
                     环境变量配置: Environment Variables
                     常见问题: FAQ
@@ -50,6 +51,7 @@ nav:
           - Docker安装: install/docker.md
           - 一键部署: install/one-click.md
     - 使用说明: guide.md
+    - 外部 API: external-api.md
     - 翻译服务: translator.md
     - 环境变量配置: config.md
     - 常见问题: faq.md
