@@ -63,7 +63,8 @@ RUN mkdir -p /var/run/cron && \
     chmod 644 /var/run/crond.pid 
 
 COPY config/rt_cron /etc/cron.d/rt_cron
-RUN chmod 0644 /etc/cron.d/rt_cron && \
+RUN sed -i 's/\r$//' /etc/cron.d/rt_cron && \
+    chmod 0644 /etc/cron.d/rt_cron && \
     touch /var/log/cron.log
 
 # 设置entrypoint
