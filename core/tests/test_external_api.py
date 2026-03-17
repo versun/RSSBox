@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
-from core.management.commands.feed_updater import update_multiple_feeds
+from core.management.commands.feed_updater import update_single_feed
 from core.models import Feed, Tag
 
 
@@ -59,6 +59,21 @@ class ExternalAPIAuthTests(ExternalAPIBaseTestCase):
 
 @override_settings(EXTERNAL_API_ENABLED=True, EXTERNAL_API_TOKEN="secret-token")
 class ExternalAPIFeedTests(ExternalAPIBaseTestCase):
+    def test_feed_create_rejects_invalid_feed_url(self):
+        response = self.client.post(
+            "/api/v1/feeds",
+            data=json.dumps({"feed_url": "not-a-url"}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"][0]["loc"],
+            ["body", "payload", "feed_url"],
+        )
+        self.assertFalse(Feed.objects.filter(feed_url="not-a-url").exists())
+
     def test_list_and_detail_only_expose_safe_fields(self):
         list_response = self.client.get("/api/v1/feeds", **self.auth_headers())
         detail_response = self.client.get(
@@ -164,6 +179,133 @@ class ExternalAPIFeedTests(ExternalAPIBaseTestCase):
 
         self.assertEqual(response.status_code, 409)
 
+    def test_feed_create_rejects_update_frequency_above_weekly(self):
+        response = self.client.post(
+            "/api/v1/feeds",
+            data=json.dumps(
+                {
+                    "feed_url": "https://example.com/too-frequent.xml",
+                    "update_frequency": 20000,
+                }
+            ),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"][0]["loc"],
+            ["body", "payload", "update_frequency"],
+        )
+        self.assertFalse(
+            Feed.objects.filter(feed_url="https://example.com/too-frequent.xml").exists()
+        )
+
+    def test_duplicate_root_feed_url_create_returns_409(self):
+        Feed.objects.create(feed_url="https://example.com", name="Root Feed")
+
+        response = self.client.post(
+            "/api/v1/feeds",
+            data=json.dumps({"feed_url": "https://example.com"}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_feed_create_preserves_root_feed_url_string(self):
+        response = self.client.post(
+            "/api/v1/feeds",
+            data=json.dumps({"feed_url": "https://example.net"}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["feed_url"], "https://example.net")
+        self.assertTrue(Feed.objects.filter(feed_url="https://example.net").exists())
+
+    def test_feed_create_rejects_null_target_language(self):
+        response = self.client.post(
+            "/api/v1/feeds",
+            data=json.dumps(
+                {
+                    "feed_url": "https://example.com/null-target-language.xml",
+                    "target_language": None,
+                }
+            ),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"][0]["loc"],
+            ["body", "payload", "target_language"],
+        )
+        self.assertFalse(
+            Feed.objects.filter(
+                feed_url="https://example.com/null-target-language.xml"
+            ).exists()
+        )
+
+    def test_feed_update_rejects_null_fetch_article(self):
+        response = self.client.patch(
+            f"/api/v1/feeds/{self.feed.id}",
+            data=json.dumps({"fetch_article": None}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"][0]["loc"],
+            ["body", "payload", "fetch_article"],
+        )
+
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.fetch_article)
+
+    def test_feed_update_changing_feed_url_clears_existing_entries(self):
+        self.feed.entries.create(
+            original_title="Old Entry",
+            link="https://example.com/old-entry",
+        )
+
+        response = self.client.patch(
+            f"/api/v1/feeds/{self.feed.id}",
+            data=json.dumps({"feed_url": "https://example.com/new-feed.xml"}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.feed_url, "https://example.com/new-feed.xml")
+        self.assertEqual(self.feed.entries.count(), 0)
+
+    def test_feed_update_changing_target_language_clears_translation_fields(self):
+        entry = self.feed.entries.create(
+            original_title="Old Entry",
+            link="https://example.com/old-entry",
+            translated_title="旧标题",
+            translated_content="旧内容",
+            ai_summary="旧摘要",
+        )
+
+        response = self.client.patch(
+            f"/api/v1/feeds/{self.feed.id}",
+            data=json.dumps({"target_language": "English"}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        entry.refresh_from_db()
+        self.assertIsNone(entry.translated_title)
+        self.assertIsNone(entry.translated_content)
+        self.assertIsNone(entry.ai_summary)
+
     def test_refresh_endpoint_queues_async_update(self):
         with patch("core.api.task_manager.submit_task") as mock_submit_task:
             with self.captureOnCommitCallbacks(execute=True):
@@ -179,10 +321,9 @@ class ExternalAPIFeedTests(ExternalAPIBaseTestCase):
         self.assertEqual(payload["status"], "queued")
         mock_submit_task.assert_called_once()
         args = mock_submit_task.call_args.args
-        self.assertEqual(args[0], f"external_refresh_feed_{self.feed.id}")
-        self.assertIs(args[1], update_multiple_feeds)
-        self.assertEqual(len(args[2]), 1)
-        self.assertEqual(args[2][0].id, self.feed.id)
+        self.assertEqual(args[0], f"update_feed_{self.feed.slug}")
+        self.assertIs(args[1], update_single_feed)
+        self.assertEqual(args[2].id, self.feed.id)
 
 
 @override_settings(EXTERNAL_API_ENABLED=True, EXTERNAL_API_TOKEN="secret-token")
@@ -219,6 +360,23 @@ class ExternalAPITagTests(ExternalAPIBaseTestCase):
 
         self.assertEqual(delete_response.status_code, 204)
         self.assertFalse(Tag.objects.filter(id=created_tag_id).exists())
+
+    def test_tag_update_rejects_null_name(self):
+        response = self.client.patch(
+            f"/api/v1/tags/{self.tag.id}",
+            data=json.dumps({"name": None}),
+            content_type="application/json",
+            **self.auth_headers(),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(
+            response.json()["detail"][0]["loc"],
+            ["body", "payload", "name"],
+        )
+
+        self.tag.refresh_from_db()
+        self.assertEqual(self.tag.name, "Tech")
 
     def test_feed_tag_assignment_replaces_and_clears(self):
         second_tag = Tag.objects.create(name="News")

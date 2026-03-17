@@ -6,9 +6,9 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from ninja import NinjaAPI, Schema
 from ninja.errors import HttpError
-from pydantic import Field, field_validator
+from pydantic import AnyHttpUrl, Field, TypeAdapter, field_validator
 
-from core.management.commands.feed_updater import update_multiple_feeds
+from core.management.commands.feed_updater import update_single_feed
 from core.models import Feed, Tag
 from core.tasks.task_manager import task_manager
 
@@ -39,6 +39,9 @@ external_api = NinjaAPI(
     openapi_url=None,
     urls_namespace="external_api",
 )
+
+
+MAX_SUPPORTED_UPDATE_FREQUENCY = 10080
 
 
 def _allowed_target_languages() -> set[str]:
@@ -90,14 +93,20 @@ class FeedDetailSchema(FeedListItemSchema):
 class FeedCreateSchema(Schema):
     feed_url: str
     name: str | None = None
-    target_language: str | None = None
-    update_frequency: int | None = Field(default=None, ge=1)
-    max_posts: int | None = Field(default=None, ge=1)
-    fetch_article: bool | None = None
-    translate_title: bool | None = None
-    translate_content: bool | None = None
-    summary: bool | None = None
-    translation_display: int | None = None
+    target_language: str = None
+    update_frequency: int = Field(default=None, ge=1)
+    max_posts: int = Field(default=None, ge=1)
+    fetch_article: bool = None
+    translate_title: bool = None
+    translate_content: bool = None
+    summary: bool = None
+    translation_display: int = None
+
+    @field_validator("feed_url")
+    @classmethod
+    def validate_feed_url(cls, value: str) -> str:
+        TypeAdapter(AnyHttpUrl).validate_python(value)
+        return value
 
     @field_validator("target_language")
     @classmethod
@@ -113,9 +122,18 @@ class FeedCreateSchema(Schema):
             raise ValueError("Unsupported translation_display.")
         return value
 
+    @field_validator("update_frequency")
+    @classmethod
+    def validate_update_frequency(cls, value: int | None) -> int | None:
+        if value is not None and value > MAX_SUPPORTED_UPDATE_FREQUENCY:
+            raise ValueError(
+                f"update_frequency must be <= {MAX_SUPPORTED_UPDATE_FREQUENCY}."
+            )
+        return value
+
 
 class FeedUpdateSchema(FeedCreateSchema):
-    feed_url: str | None = None
+    feed_url: str = None
 
 
 class TagCreateSchema(Schema):
@@ -123,7 +141,7 @@ class TagCreateSchema(Schema):
 
 
 class TagUpdateSchema(Schema):
-    name: str | None = None
+    name: str = None
 
 
 class FeedTagSetSchema(Schema):
@@ -192,23 +210,58 @@ def _get_tag_or_404(tag_id: int) -> Tag:
 
 
 def _apply_feed_changes(feed: Feed, payload: dict[str, Any]) -> Feed:
+    feed_url_changed = "feed_url" in payload and payload["feed_url"] != feed.feed_url
+    target_language_changed = (
+        "target_language" in payload
+        and payload["target_language"] != feed.target_language
+    )
+
     for field_name, field_value in payload.items():
         setattr(feed, field_name, field_value)
 
     try:
         with transaction.atomic():
+            if feed_url_changed or target_language_changed:
+                feed.fetch_status = None
+                feed.translation_status = None
             feed.save()
+
+            if target_language_changed:
+                feed.entries.update(
+                    translated_content=None,
+                    translated_title=None,
+                    ai_summary=None,
+                )
+
+            if feed_url_changed:
+                feed.entries.all().delete()
     except IntegrityError as exc:
-        raise HttpError(409, "Feed with this feed_url and target_language already exists.") from exc
+        if _is_duplicate_feed_integrity_error(exc):
+            raise HttpError(
+                409, "Feed with this feed_url and target_language already exists."
+            ) from exc
+        raise
 
     return Feed.objects.prefetch_related("tags").get(id=feed.id)
 
 
+def _is_duplicate_feed_integrity_error(exc: IntegrityError) -> bool:
+    error_message = str(exc)
+    error_message_lower = error_message.lower()
+    return "unique_feed_lang" in error_message_lower or (
+        "feed_url" in error_message_lower
+        and "target_language" in error_message_lower
+        and (
+            "unique" in error_message_lower or "duplicate" in error_message_lower
+        )
+    )
+
+
 def _submit_refresh(feed: Feed) -> None:
     task_manager.submit_task(
-        f"external_refresh_feed_{feed.id}",
-        update_multiple_feeds,
-        [feed],
+        f"update_feed_{feed.slug}",
+        update_single_feed,
+        feed,
     )
 
 
