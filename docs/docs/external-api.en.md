@@ -70,6 +70,13 @@ The API only exposes minimal safe fields:
 
 Internal logs, etags, token counters, agent configuration, and other internal-only fields are not exposed.
 
+For write operations only, you may also provide:
+
+- `translator_option`: `"<content_type_id>:<agent_id>"`, used to configure the feed's translator
+- `summarizer_id`: an existing valid `OpenAIAgent` id used for summaries
+
+These configuration fields are write-only and are not returned in API responses. This MVP still does not include an agent listing API, so integrations must obtain those ids from an existing admin or database workflow.
+
 ## Curl Examples
 
 List feeds:
@@ -89,7 +96,8 @@ curl -X POST \
     "feed_url": "https://example.com/rss.xml",
     "name": "Example Feed",
     "update_frequency": 30,
-    "translate_title": true
+    "translate_title": true,
+    "translator_option": "12:34"
   }' \
   http://localhost:8000/api/v1/feeds
 ```
@@ -100,7 +108,7 @@ Patch a feed:
 curl -X PATCH \
   -H "Authorization: Bearer $EXTERNAL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Renamed Feed", "summary": true}' \
+  -d '{"name": "Renamed Feed", "summary": true, "summarizer_id": 56}' \
   http://localhost:8000/api/v1/feeds/1
 ```
 

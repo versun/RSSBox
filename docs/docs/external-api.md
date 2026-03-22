@@ -70,6 +70,13 @@ API 仅暴露最小且安全的字段：
 
 不会暴露内部日志、etag、token 统计、Agent 配置或其他仅供内部使用的字段。
 
+仅在写操作中，你还可以额外提交：
+
+- `translator_option`：`"<content_type_id>:<agent_id>"`，用于配置 feed 的翻译器
+- `summarizer_id`：一个已存在且有效的 `OpenAIAgent` id，用于生成摘要
+
+这些配置字段是只写的，不会出现在 API 响应里。当前 MVP 仍然不提供 agent 列表 API，因此这些 id 需要通过现有的管理后台或数据库流程获取。
+
 ## Curl 示例
 
 列出 feeds：
@@ -89,7 +96,8 @@ curl -X POST \
     "feed_url": "https://example.com/rss.xml",
     "name": "Example Feed",
     "update_frequency": 30,
-    "translate_title": true
+    "translate_title": true,
+    "translator_option": "12:34"
   }' \
   http://localhost:8000/api/v1/feeds
 ```
@@ -100,7 +108,7 @@ curl -X POST \
 curl -X PATCH \
   -H "Authorization: Bearer $EXTERNAL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Renamed Feed", "summary": true}' \
+  -d '{"name": "Renamed Feed", "summary": true, "summarizer_id": 56}' \
   http://localhost:8000/api/v1/feeds/1
 ```
 
