@@ -462,18 +462,6 @@ class OpenAIAgent(Agent):
         )
         return self.completions(text, system_prompt=system_prompt, **kwargs)
 
-    def digester(
-        self,
-        text: str,
-        system_prompt: str,
-        digest_name: str,
-        date: str,
-        **kwargs,
-    ) -> dict:
-        logger.info(f">>> Start Digesting [{digest_name}]-{date}")
-        # prompt = system_prompt + settings.output_format_for_digest_prompt
-        return self.completions(text, system_prompt=system_prompt, **kwargs)
-
     def filter(self, text: str, system_prompt: str, **kwargs) -> dict:
         logger.info(f">>> Start Filter: {text[:50]}...")
         passed = False

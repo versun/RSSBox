@@ -16,8 +16,8 @@ from ..actions import (
     feed_force_update,
     tag_force_update,
     feed_batch_modify,
-    create_digest,
 )
+from .. import actions as actions_module
 from unittest.mock import patch
 
 
@@ -220,21 +220,9 @@ class ActionsTestCase(TestCase):
                 root.find("head/title").text, "Translated Feeds | RSSBox"
             )
 
-    @patch("core.actions.reverse")
-    def test_create_digest_action(self, mock_reverse):
-        """Test create digest action."""
-        mock_reverse.return_value = "/admin/core/digest/add/"
-        feed2 = Feed.objects.create(
-            name="Feed 2", feed_url="https://example2.com/rss.xml"
-        )
-        queryset = Feed.objects.filter(id__in=[self.feed.id, feed2.id])
-
-        response = create_digest(self.modeladmin, self.factory.get("/"), queryset)
-
-        self.assertEqual(response.status_code, 302)
-        expected_ids = f"{self.feed.id},{feed2.id}"
-        self.assertIn(f"feed_ids={expected_ids}", response.url)
-        mock_reverse.assert_called_once_with("admin:core_digest_add")
+    def test_create_digest_action_removed(self):
+        """Digest action should no longer be exposed."""
+        self.assertFalse(hasattr(actions_module, "create_digest"))
 
     def test_opml_edge_cases(self):
         """Test OPML generation edge cases and error handling."""

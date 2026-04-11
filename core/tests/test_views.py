@@ -2,7 +2,7 @@ from django.test import TestCase, RequestFactory
 from django.http import Http404, JsonResponse
 from unittest.mock import patch, MagicMock
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.contrib.messages.storage.fallback import FallbackStorage
 import io
 import json
@@ -140,6 +140,17 @@ class ViewsTestCase(TestCase):
 
         self.assertEqual(Feed.objects.count(), initial_feed_count)
         self.assertIn("Invalid OPML: Missing body element", [str(m) for m in messages])
+
+    def test_digest_routes_removed(self):
+        """Digest URLs should no longer be registered."""
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_rss", kwargs={"slug": "removed"})
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_json", kwargs={"slug": "removed"})
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_view", kwargs={"slug": "removed"})
 
     @patch("core.views.feed2json")
     @patch("core.views.cache")

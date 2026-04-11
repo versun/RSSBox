@@ -5,9 +5,8 @@ from django.utils import timezone
 from ast import literal_eval
 from django.contrib import admin, messages
 from django.shortcuts import render, redirect
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse
 from django.db import transaction
-from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from lxml import etree
@@ -315,11 +314,3 @@ def feed_batch_modify(modeladmin, request, queryset):
             ],
         },
     )
-
-
-# @admin.display(description=_("Create Digest"))
-def create_digest(self, request, queryset):
-    selected_ids = queryset.values_list("id", flat=True)
-    ids_string = ",".join(str(id) for id in selected_ids)
-    url = reverse("admin:core_digest_add")
-    return HttpResponseRedirect(f"{url}?feed_ids={ids_string}")

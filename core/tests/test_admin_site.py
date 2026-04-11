@@ -35,12 +35,12 @@ class CoreAdminSiteTestCase(TestCase):
         # First app section - core models
         first_app = app_list[0]
         self.assertEqual(first_app["app_label"], "core")
-        # Allow optional Digest model; must at least contain Feed and Tag
         first_models = first_app["models"]
         self.assertGreaterEqual(len(first_models), 2)
         object_names = {m.get("object_name") for m in first_models}
         self.assertIn("Feed", object_names)
         self.assertIn("Tag", object_names)
+        self.assertNotIn("Digest", object_names)
 
         # Verify model entries exist and have required fields
         for model_entry in first_app["models"]:

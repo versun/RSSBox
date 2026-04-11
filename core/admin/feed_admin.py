@@ -128,15 +128,6 @@ class FeedAdmin(admin.ModelAdmin):
     ]
     list_per_page = 20
 
-    def get_queryset(self, request):
-        """
-        过滤掉系统生成的 Digest Feed，只显示用户添加的普通 Feed。
-        Digest Feed 的 feed_url 包含 '/core/digest/rss/' 路径。
-        """
-        queryset = super().get_queryset(request)
-        # 过滤掉 Digest Feed
-        return queryset.exclude(author="RSSBox Digest")
-
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [

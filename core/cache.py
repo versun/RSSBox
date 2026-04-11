@@ -61,25 +61,6 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
     return atom_feed
 
 
-def cache_digest(slug: str, format: str = "xml"):
-    logger.debug(f"Start cache_digest for {slug} with format {format}")
-    cache_key = f"cache_digest_{slug}_{format}"
-
-    from .models import Digest
-
-    digest = Digest.objects.get(slug=slug)
-    digest_feed = digest.get_digest_feed()
-
-    atom_feed = generate_atom_feed(digest_feed, "t")
-    if not atom_feed:
-        return None
-
-    ttl = digest_feed.update_frequency or 86400
-    cache.set(cache_key, atom_feed, ttl)
-    logger.debug(f"Cached successfully with key {cache_key}")
-    return atom_feed
-
-
 def _build_atom_feed(
     feed_id, title, author, link, subtitle, language, updated, pubdate=None
 ):
