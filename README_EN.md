@@ -36,6 +36,15 @@ Supported translation engines:
 
 More engines coming soon.
 
+## Current Code Structure
+
+- `core/models`: data structures and minimal model behavior
+- `core/services/feed`: update, refresh, filtering, and output logic
+- `core/services/admin`: admin actions and batch modification
+- `core/services/agent`: concrete agent implementations
+- `core/services/opml.py`: OPML import/export
+- `core/views.py` / `core/actions.py` / `core/management/commands`: entry layer
+
 ## Sponsors
 
 Thanks to the following companies for their open-source support.

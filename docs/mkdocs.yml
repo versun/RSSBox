@@ -36,6 +36,8 @@ plugins:
                     一键部署: One Click
                     Docker安装: Docker
                     使用说明: Guide
+                    代码结构: Architecture
+                    重构说明: Refactor Notes
                     翻译服务: Translate Services
                     环境变量配置: Environment Variables
                     常见问题: FAQ
@@ -50,6 +52,8 @@ nav:
           - Docker安装: install/docker.md
           - 一键部署: install/one-click.md
     - 使用说明: guide.md
+    - 代码结构: architecture.md
+    - 重构说明: refactor.md
     - 翻译服务: translator.md
     - 环境变量配置: config.md
     - 常见问题: faq.md

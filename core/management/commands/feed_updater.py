@@ -1,6 +1,5 @@
 import logging
 import sys
-from itertools import chain
 import time
 import os
 from concurrent.futures import wait
@@ -11,6 +10,7 @@ from core.tasks.fetch_feeds import handle_single_feed_fetch
 from core.tasks.translate_feeds import handle_feeds_translation
 from core.tasks.summarize_feeds import handle_feeds_summary
 from django.db import close_old_connections
+from core.services.feed import run_feed_update, refresh_updated_content
 from core.tasks.task_manager import task_manager
 from core.cache import cache_rss, cache_tag
 
@@ -82,36 +82,15 @@ class Command(BaseCommand):
 
 
 def update_single_feed(feed: Feed):
-    """在后台线程中执行feed更新"""
-    try:
-        # 确保在新线程中创建新的数据库连接
-        close_old_connections()
-
-        try:
-            logger.info(f"Starting feed update: {feed.name}")
-
-            handle_single_feed_fetch(feed)
-            # task_manager.update_progress(feed_id, 50)
-            # 执行更新操作
-            if feed.translate_title:
-                handle_feeds_translation([feed], target_field="title")
-            if feed.translate_content:
-                handle_feeds_translation([feed], target_field="content")
-            if feed.summary:
-                handle_feeds_summary([feed])
-
-            logger.info(f"Completed feed update: {feed.name}")
-
-            return True
-        except Feed.DoesNotExist:
-            logger.error(f"Feed not found: ID {feed.name}")
-            return False
-        except Exception as e:
-            logger.exception(f"Error updating feed ID {feed.name}: {str(e)}")
-            return False
-    finally:
-        # 确保关闭数据库连接
-        close_old_connections()
+    """Backward-compatible wrapper around the feed pipeline."""
+    return run_feed_update(
+        feed,
+        fetch_func=handle_single_feed_fetch,
+        translate_func=handle_feeds_translation,
+        summarize_func=handle_feeds_summary,
+        close_connections=close_old_connections,
+        pipeline_logger=logger,
+    )
 
 
 def update_multiple_feeds(feeds: list):
@@ -143,33 +122,14 @@ def update_multiple_feeds(feeds: list):
             except Exception as e:
                 logger.warning(f"A feed update task resulted in an exception: {e}")
 
-        # 所有任务完成后执行缓存操作
-        # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
-        for feed in feeds:
-            try:
-                cache_rss(feed.slug, feed_type="o", format="xml")
-                cache_rss(feed.slug, feed_type="o", format="json")
-                cache_rss(feed.slug, feed_type="t", format="xml")
-                cache_rss(feed.slug, feed_type="t", format="json")
-            except Exception as e:
-                logger.error(
-                    f"{time.time()}: Failed to cache RSS for {feed.slug}: {str(e)}"
-                )
-
-        # 获取所有 feeds 关联的 tags（去重）
-        tag_ids = set(
-            chain.from_iterable(
-                feed.tags.values_list("id", flat=True) for feed in feeds
-            )
+        refresh_updated_content(
+            feeds,
+            tag_model=Tag,
+            cache_rss_func=cache_rss,
+            cache_tag_func=cache_tag,
+            logger=logger,
+            time_func=time.time,
         )
-        tags = Tag.objects.filter(id__in=tag_ids)
-        for tag in tags:
-            try:
-                cache_tag(tag.slug, feed_type="o", format="xml")
-                cache_tag(tag.slug, feed_type="t", format="xml")
-                cache_tag(tag.slug, feed_type="t", format="json")
-            except Exception as e:
-                logger.error(f"Failed to cache tag {tag.slug}: {str(e)}")
 
     except Exception as e:
         logger.exception("Command update_multiple_feeds failed: %s", str(e))

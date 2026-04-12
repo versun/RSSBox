@@ -243,7 +243,9 @@ class ActionsTestCase(TestCase):
         self.assertEqual(len(category_outline.findall("outline")), 2)
 
         # Test exception handling
-        with patch("core.actions.etree.Element", side_effect=Exception("Test error")):
+        with patch(
+            "core.actions.build_opml_response", side_effect=Exception("Test error")
+        ):
             with patch("core.actions.logger.error") as mock_logger:
                 response = _generate_opml_feed(
                     "Test", queryset, lambda f: f.feed_url, "test"

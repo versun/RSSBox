@@ -1,5 +1,5 @@
 import logging
-from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.utils.encoding import smart_str
 from django.core.cache import cache
 from django.views.decorators.http import condition
@@ -7,11 +7,11 @@ from .models import Feed, Tag
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from lxml import etree
 from django.utils.translation import gettext_lazy as _
-from feed2json import feed2json
 
 from .cache import cache_rss, cache_tag
+from core.services.opml import import_opml_content
+from core.services.feed import build_feed_response
 
 logger = logging.getLogger(__name__)
 
@@ -47,77 +47,23 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
     return etag
 
 
-def _make_response(atom_feed, filename, format="xml"):
-    if format == "json":
-        # 如果需要返回 JSON 格式
-        if not atom_feed:
-            return JsonResponse({"error": "No feed data available"}, status=404)
-        feed_json = feed2json(atom_feed)
-        response = JsonResponse(feed_json)
-    else:
-        # 使用生成器函数实现流式传输
-        def stream_content():
-            if not atom_feed:
-                yield b"<error>No feed data available</error>"
-                return
-            chunk_size = 4096  # 每次发送4KB
-            for i in range(0, len(atom_feed), chunk_size):
-                yield atom_feed[i : i + chunk_size]
-
-        response = StreamingHttpResponse(
-            stream_content(),  # 使用生成器
-            content_type="application/xml; charset=utf-8",
-        )
-        response["Content-Disposition"] = f"inline; filename={filename}.xml"
-    return response
-
-
 def import_opml(request):
     if request.method == "POST":
         opml_file = request.FILES.get("opml_file")
         if opml_file and isinstance(opml_file, InMemoryUploadedFile):
             try:
-                # 直接读取字节数据（lxml 支持二进制解析）
-                opml_content = opml_file.read()
-
-                # 使用安全的 lxml 解析器解析 OPML
-                parser = etree.XMLParser(resolve_entities=False)
-                root = etree.fromstring(opml_content, parser=parser)
-                body = root.find("body")
-
-                if body is None:
-                    messages.error(request, _("Invalid OPML: Missing body element"))
-                    return redirect("admin:core_feed_changelist")
-
-                # 递归处理所有 outline 节点
-                def process_outlines(outlines, tag: str = None):
-                    for outline in outlines:
-                        # 检查是否为 feed（有 xmlUrl 属性）
-                        if "xmlUrl" in outline.attrib:
-                            feed, created = Feed.objects.get_or_create(
-                                feed_url=outline.get("xmlUrl"),
-                                defaults={
-                                    "name": outline.get("title") or outline.get("text")
-                                },
-                            )
-                            if tag:
-                                tag_obj, _ = Tag.objects.get_or_create(name=tag)
-                                feed.tags.add(tag_obj)
-                        # 处理嵌套结构（新类别）
-                        elif outline.find("outline") is not None:
-                            new_tag = outline.get("text") or outline.get("title")
-                            process_outlines(outline.findall("outline"), new_tag)
-
-                # 从 body 开始处理顶级 outline
-                process_outlines(body.findall("outline"))
-
+                import_opml_content(opml_file.read())
                 messages.success(request, _("OPML file imported successfully."))
-            except etree.XMLSyntaxError as e:
-                messages.error(request, _("XML syntax error: {}").format(str(e)))
+            except ValueError as e:
+                messages.error(request, _(str(e)))
             except Exception as e:
-                messages.error(
-                    request, _("Error importing OPML file: {}").format(str(e))
-                )
+                message = str(e)
+                if "XMLSyntaxError" in type(e).__name__:
+                    messages.error(request, _("XML syntax error: {}").format(message))
+                else:
+                    messages.error(
+                        request, _("Error importing OPML file: {}").format(message)
+                    )
         else:
             messages.error(request, _("Please upload a valid OPML file."))
 
@@ -137,7 +83,7 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
         else:
             logger.debug(f"Cache HIT for key: {cache_key}")
 
-        return _make_response(content, feed_slug, format)
+        return build_feed_response(content, feed_slug, format)
     except Exception as e:
         logger.warning(f"Feed not found {feed_slug}: {str(e)}")
         return HttpResponse(
@@ -161,7 +107,7 @@ def tag(request, tag: str, feed_type="t", format="xml"):
             content = cache_tag(tag, feed_type, format)
         else:
             logger.debug(f"Cache HIT for key: {cache_key}")
-        return _make_response(content, tag, format)
+        return build_feed_response(content, tag, format)
     except Exception as e:
         logger.warning("tag not found: %s / %s", tag, str(e))
         return HttpResponse(
