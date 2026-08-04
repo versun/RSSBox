@@ -1,3 +1,5 @@
+import fcntl
+import os
 from unittest.mock import patch, Mock, call, mock_open
 from argparse import ArgumentParser
 
@@ -43,51 +45,43 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                 self.command.handle(frequency=None)
             self.assertEqual(ctx.exception.code, 1)
 
-    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.fcntl")
     @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch("core.management.commands.feed_updater.os.path.exists", return_value=True)
-    def test_handle_lock_file_exists(self, mock_exists, mock_open_file, mock_remove):
-        """When lock file present, command should exit with code 0 and not proceed."""
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_handle_lock_held_by_another_process(
+        self, mock_update, mock_open_file, mock_fcntl
+    ):
+        """When another process holds the flock, exit with code 0 and do not proceed."""
+        mock_fcntl.flock.side_effect = BlockingIOError()
+
         with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
             with self.assertRaises(SystemExit) as ctx:
                 self.command.handle(frequency="5 min")
             self.assertEqual(ctx.exception.code, 0)
-        mock_open_file.assert_not_called()
-        mock_remove.assert_not_called()
 
-    @patch("core.management.commands.feed_updater.os.remove")
+        mock_update.assert_not_called()
+
+    @patch("core.management.commands.feed_updater.fcntl")
     @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch(
-        "core.management.commands.feed_updater.os.path.exists",
-        side_effect=[False, True],
-    )
     @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
-    def test_handle_happy_path(
-        self, mock_update, mock_exists, mock_open_file, mock_remove
-    ):
-        """Valid frequency without lock proceeds and cleans up lock file."""
-        # Mock stdout and stderr for the command instance
+    def test_handle_happy_path(self, mock_update, mock_open_file, mock_fcntl):
+        """Valid frequency with a free lock acquires the flock and proceeds."""
         with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
             self.command.handle(frequency="5 min")
 
-        mock_open_file.assert_called()
+        mock_fcntl.flock.assert_called_once()
         mock_update.assert_called_once_with(simple_update_frequency="5 min")
-        mock_remove.assert_called()
 
     def test_handle_all_valid_frequencies(self):
         """Test that all valid frequencies are accepted."""
         for frequency in self.valid_frequencies:
             with self.subTest(frequency=frequency):
                 with (
-                    patch(
-                        "core.management.commands.feed_updater.os.path.exists",
-                        return_value=False,
-                    ),
+                    patch("core.management.commands.feed_updater.fcntl"),
                     patch(
                         "core.management.commands.feed_updater.open",
                         new_callable=mock_open,
                     ),
-                    patch("core.management.commands.feed_updater.os.remove"),
                     patch(
                         "core.management.commands.feed_updater.update_feeds_for_frequency"
                     ) as mock_update,
@@ -102,15 +96,11 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                         simple_update_frequency=frequency
                     )
 
-    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.fcntl")
     @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch(
-        "core.management.commands.feed_updater.os.path.exists",
-        side_effect=[False, True],
-    )
     @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_exception_during_update(
-        self, mock_update, mock_exists, mock_open_file, mock_remove
+        self, mock_update, mock_open_file, mock_fcntl
     ):
         """Test exception handling during update_feeds_for_frequency."""
         mock_update.side_effect = Exception("Update failed")
@@ -121,18 +111,13 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                 self.command.handle(frequency="5 min")
 
         self.assertEqual(ctx.exception.code, 1)
-        mock_remove.assert_called()
 
-    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.fcntl")
     @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch(
-        "core.management.commands.feed_updater.os.path.exists",
-        side_effect=[False, True],
-    )
     @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     @patch("core.management.commands.feed_updater.logger")
     def test_handle_exception_logging(
-        self, mock_logger, mock_update, mock_exists, mock_open_file, mock_remove
+        self, mock_logger, mock_update, mock_open_file, mock_fcntl
     ):
         """Test that exceptions are properly logged."""
         mock_update.side_effect = Exception("Update failed")
@@ -146,14 +131,13 @@ class UpdateFeedsHandleTests(SimpleTestCase):
             "Command update_feeds_for_frequency failed: Update failed"
         )
 
-    @patch("core.management.commands.feed_updater.os.remove")
+    @patch("core.management.commands.feed_updater.fcntl")
     @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch("core.management.commands.feed_updater.os.path.exists", return_value=False)
     @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_handle_lock_file_creation_and_content(
-        self, mock_update, mock_exists, mock_open_file, mock_remove
+        self, mock_update, mock_open_file, mock_fcntl
     ):
-        """Test that lock file is created with correct content (PID)."""
+        """Test that the lock file is opened and records the holder PID."""
         # Mock stdout and stderr for the command instance
         with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
             with patch(
@@ -162,42 +146,83 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                 self.command.handle(frequency="hourly")
 
         expected_lock_path = "/tmp/update_feeds_hourly.lock"
-        mock_open_file.assert_called_with(expected_lock_path, "w")
+        mock_open_file.assert_called_once_with(expected_lock_path, "w")
 
         handle = mock_open_file.return_value.__enter__.return_value
         handle.write.assert_called_once_with("12345")
-
-    @patch("core.management.commands.feed_updater.os.remove")
-    @patch("core.management.commands.feed_updater.open", new_callable=mock_open)
-    @patch(
-        "core.management.commands.feed_updater.os.path.exists",
-        side_effect=[False, False],
-    )
-    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
-    def test_handle_lock_file_cleanup_when_not_exists(
-        self, mock_update, mock_exists, mock_open_file, mock_remove
-    ):
-        """Test that remove is not called if lock file doesn't exist in finally block."""
-        # Mock stdout and stderr for the command instance
-        with patch.object(self.command, "stdout"), patch.object(self.command, "stderr"):
-            self.command.handle(frequency="5 min")
-        mock_remove.assert_not_called()
 
     def test_handle_frequency_to_lock_file_mapping(self):
         """Test that frequency strings are correctly converted to lock file names."""
         for frequency, expected_lock_path in self.frequency_to_lock.items():
             with self.subTest(frequency=frequency):
-                with patch(
-                    "core.management.commands.feed_updater.os.path.exists",
-                    return_value=True,
-                ) as mock_exists:
+                with (
+                    patch("core.management.commands.feed_updater.fcntl"),
+                    patch(
+                        "core.management.commands.feed_updater.open",
+                        new_callable=mock_open,
+                    ) as mock_open_file,
+                    patch(
+                        "core.management.commands.feed_updater.update_feeds_for_frequency"
+                    ),
+                ):
                     with (
                         patch.object(self.command, "stdout"),
                         patch.object(self.command, "stderr"),
                     ):
-                        with self.assertRaises(SystemExit):
-                            self.command.handle(frequency=frequency)
-                    mock_exists.assert_called_with(expected_lock_path)
+                        self.command.handle(frequency=frequency)
+                    mock_open_file.assert_called_once_with(expected_lock_path, "w")
+
+
+class UpdateFeedsLockRegressionTests(SimpleTestCase):
+    """Regression tests for issue #161 using a real lock file on disk."""
+
+    lock_path = "/tmp/update_feeds_hourly.lock"
+
+    def tearDown(self):
+        if os.path.exists(self.lock_path):
+            os.remove(self.lock_path)
+
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_stale_lock_file_does_not_block_update(self, mock_update):
+        """A leftover lock file from a dead process must not block the next run."""
+        # Simulate the stale lock left behind by a killed process (issue #161):
+        # the file exists and contains a dead PID, but nobody holds the flock.
+        with open(self.lock_path, "w") as f:
+            f.write("999999")
+
+        command = cmd.Command()
+        with patch.object(command, "stdout"), patch.object(command, "stderr"):
+            command.handle(frequency="hourly")
+
+        mock_update.assert_called_once_with(simple_update_frequency="hourly")
+
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_lock_held_by_live_process_blocks_update(self, mock_update):
+        """While a live process holds the flock, the command exits without updating."""
+        with open(self.lock_path, "w") as holder:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            command = cmd.Command()
+            with patch.object(command, "stdout"), patch.object(command, "stderr"):
+                with self.assertRaises(SystemExit) as ctx:
+                    command.handle(frequency="hourly")
+            self.assertEqual(ctx.exception.code, 0)
+
+        mock_update.assert_not_called()
+
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_lock_released_after_failed_run(self, mock_update):
+        """A failed run releases the lock, so the next cron tick still runs."""
+        command = cmd.Command()
+        with patch.object(command, "stdout"), patch.object(command, "stderr"):
+            mock_update.side_effect = Exception("boom")
+            with self.assertRaises(SystemExit):
+                command.handle(frequency="hourly")
+
+            mock_update.side_effect = None
+            command.handle(frequency="hourly")
+
+        self.assertEqual(mock_update.call_count, 2)
 
 
 class UpdateSingleFeedTests(SimpleTestCase):

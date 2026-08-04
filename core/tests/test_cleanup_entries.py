@@ -1,5 +1,6 @@
 from django.test import TestCase, override_settings
 from unittest.mock import patch, Mock, mock_open, call
+import fcntl
 import os
 import tempfile
 import shutil
@@ -244,24 +245,11 @@ class CleanupEntriesCommandClassTests(TestCase):
                 original_content=f"Content {i}",
             )
 
-    @patch("core.management.commands.cleanup_entries.os.path.exists")
+    @patch("core.management.commands.cleanup_entries.fcntl")
     @patch("core.management.commands.cleanup_entries.open", new_callable=mock_open)
     @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
-    @patch("core.management.commands.cleanup_entries.os.remove")
-    def test_command_success(self, mock_remove, mock_cleanup, mock_file, mock_exists):
+    def test_command_success(self, mock_cleanup, mock_file, mock_fcntl):
         """Test successful command execution."""
-        # Mock lock file doesn't exist initially, but exists after creation
-        mock_exists.side_effect = [False, True]
-
-        # Mock file operations
-        mock_file.return_value.__enter__.return_value.write.return_value = None
-
-        # Mock cleanup function
-        mock_cleanup.return_value = None
-
-        # Mock os.remove
-        mock_remove.return_value = None
-
         # Capture stdout
         from io import StringIO
 
@@ -274,18 +262,18 @@ class CleanupEntriesCommandClassTests(TestCase):
         # Verify cleanup was called
         mock_cleanup.assert_called_once()
 
-        # Verify lock file was created and removed
-        mock_file.assert_called_once()
-        mock_remove.assert_called_once()
+        # Verify the flock was acquired
+        mock_fcntl.flock.assert_called_once()
 
         # Verify success message
         self.assertIn("Successfully cleaned up all feeds", out.getvalue())
 
-    @patch("core.management.commands.cleanup_entries.os.path.exists")
-    def test_command_already_running(self, mock_exists):
-        """Test command when cleanup is already running."""
-        # Mock lock file exists
-        mock_exists.return_value = True
+    @patch("core.management.commands.cleanup_entries.fcntl")
+    @patch("core.management.commands.cleanup_entries.open", new_callable=mock_open)
+    @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
+    def test_command_already_running(self, mock_cleanup, mock_file, mock_fcntl):
+        """Test command when cleanup is already running (flock held elsewhere)."""
+        mock_fcntl.flock.side_effect = BlockingIOError()
 
         # Capture stdout
         from io import StringIO
@@ -303,29 +291,19 @@ class CleanupEntriesCommandClassTests(TestCase):
         # Verify warning message
         self.assertIn("Cleanup process is already running", out.getvalue())
 
-    @patch("core.management.commands.cleanup_entries.os.path.exists")
+        # Verify cleanup did not run
+        mock_cleanup.assert_not_called()
+
+    @patch("core.management.commands.cleanup_entries.fcntl")
     @patch("core.management.commands.cleanup_entries.open", new_callable=mock_open)
     @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
-    @patch("core.management.commands.cleanup_entries.os.remove")
     @patch("core.management.commands.cleanup_entries.logger")
     def test_command_exception_handling(
-        self, mock_logger, mock_remove, mock_cleanup, mock_file, mock_exists
+        self, mock_logger, mock_cleanup, mock_file, mock_fcntl
     ):
         """Test command exception handling."""
-        # Mock lock file doesn't exist initially, but exists after creation
-        mock_exists.side_effect = [False, True]
-
-        # Mock file operations
-        mock_file.return_value.__enter__.return_value.write.return_value = None
-
         # Mock cleanup function to raise exception
         mock_cleanup.side_effect = Exception("Test error")
-
-        # Mock os.remove
-        mock_remove.return_value = None
-
-        # Mock logger to suppress output
-        mock_logger.exception.return_value = None
 
         # Capture stderr
         from io import StringIO
@@ -343,42 +321,54 @@ class CleanupEntriesCommandClassTests(TestCase):
         # Verify error message
         self.assertIn("Test error", err.getvalue())
 
-        # Verify lock file was still removed
-        mock_remove.assert_called_once()
 
-    @patch("core.management.commands.cleanup_entries.os.path.exists")
-    @patch("core.management.commands.cleanup_entries.open", new_callable=mock_open)
+class CleanupEntriesLockRegressionTests(TestCase):
+    """Regression tests for issue #161 using a real lock file on disk."""
+
+    lock_path = "/tmp/cleanup_entries.lock"
+
+    def tearDown(self):
+        if os.path.exists(self.lock_path):
+            os.remove(self.lock_path)
+
     @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
-    @patch("core.management.commands.cleanup_entries.os.remove")
-    @patch("core.management.commands.cleanup_entries.logger")
-    def test_command_lock_file_cleanup_on_exception(
-        self, mock_logger, mock_remove, mock_cleanup, mock_file, mock_exists
-    ):
-        """Test that lock file is cleaned up even when exception occurs."""
-        # Mock lock file doesn't exist initially, but exists after creation
-        mock_exists.side_effect = [False, True]
+    def test_stale_lock_file_does_not_block_cleanup(self, mock_cleanup):
+        """A leftover lock file from a dead process must not block the next run."""
+        # Simulate the stale lock left behind by a killed process (issue #161):
+        # the file exists and contains a dead PID, but nobody holds the flock.
+        with open(self.lock_path, "w") as f:
+            f.write("999999")
 
-        # Mock file operations
-        mock_file.return_value.__enter__.return_value.write.return_value = None
+        command = Command()
+        with patch.object(command, "stdout"), patch.object(command, "stderr"):
+            command.handle()
 
-        # Mock cleanup function to raise exception
-        mock_cleanup.side_effect = Exception("Test error")
+        mock_cleanup.assert_called_once()
 
-        # Mock os.remove
-        mock_remove.return_value = None
+    @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
+    def test_lock_held_by_live_process_blocks_cleanup(self, mock_cleanup):
+        """While a live process holds the flock, the command exits without cleaning."""
+        with open(self.lock_path, "w") as holder:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-        # Mock logger to suppress output
-        mock_logger.exception.return_value = None
+            command = Command()
+            with patch.object(command, "stdout"), patch.object(command, "stderr"):
+                with self.assertRaises(SystemExit) as ctx:
+                    command.handle()
+            self.assertEqual(ctx.exception.code, 0)
 
-        # Mock stderr to suppress error output
-        from io import StringIO
+        mock_cleanup.assert_not_called()
 
-        mock_stderr = StringIO()
-        self.command.stderr = mock_stderr
+    @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
+    def test_lock_released_after_failed_run(self, mock_cleanup):
+        """A failed run releases the lock, so the next run still proceeds."""
+        command = Command()
+        with patch.object(command, "stdout"), patch.object(command, "stderr"):
+            mock_cleanup.side_effect = Exception("boom")
+            with self.assertRaises(SystemExit):
+                command.handle()
 
-        # Execute command
-        with self.assertRaises(SystemExit):
-            self.command.handle()
+            mock_cleanup.side_effect = None
+            command.handle()
 
-        # Verify lock file was removed in finally block
-        mock_remove.assert_called_once()
+        self.assertEqual(mock_cleanup.call_count, 2)

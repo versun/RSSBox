@@ -1,3 +1,4 @@
+import fcntl
 import logging
 import sys
 from itertools import chain
@@ -52,33 +53,37 @@ class Command(BaseCommand):
 
         lock_file_path = f"/tmp/update_feeds_{target_frequency.replace(' ', '_')}.lock"
 
-        if os.path.exists(lock_file_path):
-            self.stdout.write(
-                self.style.WARNING(
-                    f"{current_time}: Another update process for frequency '{target_frequency}' is already running. Exiting."
+        # Use a kernel-managed flock instead of a plain PID file: the lock is
+        # released automatically when the process exits for ANY reason (crash,
+        # OOM kill, container stop), so it can never go stale and block all
+        # future runs of this frequency (issue #161).
+        with open(lock_file_path, "w") as lock_file:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"{current_time}: Another update process for frequency '{target_frequency}' is already running. Exiting."
+                    )
                 )
-            )
-            sys.exit(0)
+                sys.exit(0)
 
-        try:
-            # Create lock file
-            with open(lock_file_path, "w") as f:
-                f.write(str(os.getpid()))
+            # Record the holder PID for debugging only; the flock, not this
+            # file's existence, is what actually excludes other processes.
+            lock_file.write(str(os.getpid()))
+            lock_file.flush()
 
-            update_feeds_for_frequency(simple_update_frequency=target_frequency)
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"{current_time}: Successfully updated feeds for frequency: {target_frequency}"
+            try:
+                update_feeds_for_frequency(simple_update_frequency=target_frequency)
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"{current_time}: Successfully updated feeds for frequency: {target_frequency}"
+                    )
                 )
-            )
-        except Exception as e:
-            logger.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
-            self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
-            sys.exit(1)
-        finally:
-            # Ensure lock file is removed
-            if os.path.exists(lock_file_path):
-                os.remove(lock_file_path)
+            except Exception as e:
+                logger.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
+                self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
+                sys.exit(1)
 
 
 def update_single_feed(feed: Feed):

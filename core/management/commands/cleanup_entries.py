@@ -1,5 +1,6 @@
 # Remove entries greater than feed.max_posts
 
+import fcntl
 import os
 import sys
 import time
@@ -19,29 +20,34 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         lock_file_path = "/tmp/cleanup_entries.lock"
 
-        if os.path.exists(lock_file_path):
-            self.stdout.write(
-                self.style.WARNING(
-                    f"{current_time}: Cleanup process is already running. Exiting."
+        # Kernel-managed flock: released automatically on process exit (even on
+        # crash/OOM/container stop), so it can never go stale (see issue #161).
+        with open(lock_file_path, "w") as lock_file:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"{current_time}: Cleanup process is already running. Exiting."
+                    )
                 )
-            )
-            sys.exit(0)
+                sys.exit(0)
 
-        try:
-            with open(lock_file_path, "w") as f:
-                f.write(str(os.getpid()))
+            # Record the holder PID for debugging only; the flock itself is the lock.
+            lock_file.write(str(os.getpid()))
+            lock_file.flush()
 
-            cleanup_all_feeds()
-            self.stdout.write(
-                self.style.SUCCESS(f"{current_time}: Successfully cleaned up all feeds")
-            )
-        except Exception as e:
-            logger.exception(f"Command cleanup_entries failed: {str(e)}")
-            self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
-            sys.exit(1)
-        finally:
-            if os.path.exists(lock_file_path):
-                os.remove(lock_file_path)
+            try:
+                cleanup_all_feeds()
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"{current_time}: Successfully cleaned up all feeds"
+                    )
+                )
+            except Exception as e:
+                logger.exception(f"Command cleanup_entries failed: {str(e)}")
+                self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
+                sys.exit(1)
 
 
 def cleanup_feed_entries(feed: Feed):
