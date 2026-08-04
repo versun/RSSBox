@@ -229,7 +229,7 @@ class FilterModelTest(TestCase):
         filtered = keyword_filter.apply_filter(queryset)
         self.assertIn(entry, filtered)
 
-        # Test AI_ONLY method with TestAgent
+        # Test AI_ONLY method
         agent = OpenAIAgent.objects.create(name=f"Test Agent {uuid.uuid4()}")
         ai_filter = Filter.objects.create(
             name="AI Filter",
@@ -237,9 +237,10 @@ class FilterModelTest(TestCase):
             filter_method=Filter.AI_ONLY,
             filter_prompt="Test prompt",
         )
-        filtered = ai_filter.apply_filter(Entry.objects.filter(id=entry.id))
-        # TestAgent returns random results, so we just verify it runs
-        self.assertTrue(entry in filtered or entry not in filtered)
+        with patch.object(OpenAIAgent, "completions") as mock_completions:
+            mock_completions.return_value = {"text": "Passed", "tokens": 10}
+            filtered = ai_filter.apply_filter(Entry.objects.filter(id=entry.id))
+        self.assertIn(entry, filtered)
 
         # Test content field filtering
         translated_filter = Filter.objects.create(

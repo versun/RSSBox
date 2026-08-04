@@ -543,10 +543,12 @@ class FilterModelAdvancedTest(TestCase):
 
         self.assertIn(self.entry, filtered)
 
-    def test_filter_apply_method_ai_only(self):
+    @patch.object(OpenAIAgent, "completions")
+    def test_filter_apply_method_ai_only(self, mock_completions):
         """
         Test Filter apply method with AI_ONLY filter method.
         """
+        mock_completions.return_value = {"text": "Passed", "tokens": 10}
         filter_obj = Filter.objects.create(
             name="AI Filter",
             agent=self.agent,
@@ -557,13 +559,14 @@ class FilterModelAdvancedTest(TestCase):
         queryset = Entry.objects.filter(id=self.entry.id)
         filtered = filter_obj.apply_filter(queryset)
 
-        # TestAgent return random result
-        self.assertTrue(self.entry in filtered or self.entry not in filtered)
+        self.assertIn(self.entry, filtered)
 
-    def test_filter_apply_method_both(self):
+    @patch.object(OpenAIAgent, "completions")
+    def test_filter_apply_method_both(self, mock_completions):
         """
         Test Filter apply method with BOTH filter method.
         """
+        mock_completions.return_value = {"text": "Passed", "tokens": 10}
         filter_obj = Filter.objects.create(
             name="Combined Filter",
             keywords="Python",
@@ -576,8 +579,7 @@ class FilterModelAdvancedTest(TestCase):
         filtered = filter_obj.apply_filter(queryset)
 
         # Entry should pass both keyword and AI filters
-        # TestAgent return random result
-        self.assertTrue(self.entry in filtered or self.entry not in filtered)
+        self.assertIn(self.entry, filtered)
 
     def test_filter_different_content_fields(self):
         """
