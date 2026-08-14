@@ -106,4 +106,4 @@ Thank you for your participation and support!
 
 ## Star History Chart
 
-[![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=versun/rssbox&type=Date)](https://star-history.dera.page/#versun/rssbox&Date)
