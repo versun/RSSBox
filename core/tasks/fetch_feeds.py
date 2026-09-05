@@ -1,5 +1,7 @@
 import logging
 import time
+from functools import lru_cache
+from django.conf import settings
 from django.utils import timezone
 from core.models import Feed, Entry
 from typing import Dict
@@ -7,6 +9,27 @@ import feedparser
 from fake_useragent import UserAgent
 
 logger = logging.getLogger(__name__)
+
+# Plain HTTP-client UA, used as fallback when a WAF blocks browser-like
+# User-Agents with a 403 (e.g. Cloudflare's cf-mitigated challenge).
+FALLBACK_USER_AGENT = "curl/8.10.1"
+
+
+@lru_cache(maxsize=1)
+def _user_agent_generator() -> UserAgent:
+    # fake-useragent loads its dataset on instantiation; reuse one instance.
+    return UserAgent()
+
+
+def get_fetch_user_agent() -> str:
+    """
+    Return the User-Agent for feed requests.
+    Priority: RSS_FETCH_USER_AGENT env var > random browser UA.
+    """
+    custom = settings.RSS_FETCH_USER_AGENT.strip()
+    if custom:
+        return custom
+    return _user_agent_generator().random.strip()
 
 
 def handle_single_feed_fetch(feed: Feed):
@@ -70,18 +93,17 @@ def convert_struct_time_to_datetime(time_str):
     )
 
 
-def manual_fetch_feed(url: str, etag: str = "") -> Dict:
+def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
     import httpx
 
     update = False
     feed = {}
     error = None
     response = None
-    ua = UserAgent()
     headers = {
         "If-None-Match": etag,
         #'If-Modified-Since': modified,
-        "User-Agent": ua.random.strip(),
+        "User-Agent": user_agent or get_fetch_user_agent(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
         "Accept-Encoding": "gzip, deflate, br",
@@ -94,18 +116,39 @@ def manual_fetch_feed(url: str, etag: str = "") -> Dict:
         "Cache-Control": "max-age=0",
     }
 
-    client = httpx.Client()
-
     try:
-        response = client.get(url, headers=headers, timeout=30, follow_redirects=True)
+        with httpx.Client() as client:
+            response = client.get(
+                url, headers=headers, timeout=30, follow_redirects=True
+            )
 
-        if response.status_code == 200:
-            feed = feedparser.parse(response.text)
-            update = True
-        elif response.status_code == 304:
-            update = False
-        else:
-            response.raise_for_status()
+            # A 403 here usually means a WAF (e.g. Cloudflare) blocked the
+            # browser-like UA: retry once with a plain HTTP-client UA and a
+            # matching minimal header set, so the client fingerprint is
+            # consistent and often passes.
+            if (
+                response.status_code == 403
+                and headers["User-Agent"] != FALLBACK_USER_AGENT
+            ):
+                logger.warning(
+                    "Got 403 for %s, retrying with fallback UA", url
+                )
+                fallback_headers = {
+                    "If-None-Match": etag,
+                    "User-Agent": FALLBACK_USER_AGENT,
+                    "Accept": "*/*",
+                }
+                response = client.get(
+                    url, headers=fallback_headers, timeout=30, follow_redirects=True
+                )
+
+            if response.status_code == 200:
+                feed = feedparser.parse(response.text)
+                update = True
+            elif response.status_code == 304:
+                update = False
+            else:
+                response.raise_for_status()
 
     except httpx.HTTPStatusError as exc:
         error = f"HTTP status error while requesting {url}: {exc.response.status_code} {exc.response.reason_phrase}"
@@ -128,8 +171,8 @@ def manual_fetch_feed(url: str, etag: str = "") -> Dict:
 
 def fetch_feed(url: str, etag: str = "") -> Dict:
     try:
-        ua = UserAgent()
-        feed = feedparser.parse(url, etag=etag, agent=ua.random.strip())
+        agent = get_fetch_user_agent()
+        feed = feedparser.parse(url, etag=etag, agent=agent)
         if feed.status == 304:
             logger.info(f"Feed {url} not modified, using cached version.")
             return {
@@ -137,9 +180,12 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
                 "update": False,
                 "error": None,
             }
+        # WAF-blocked responses (403) surface as bozo with no entries;
+        # manual_fetch_feed will retry with a fallback UA. Pass the same UA
+        # through so the retry logic sees the exact UA that was blocked.
         if feed.bozo and not feed.entries:
             logger.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
-            results = manual_fetch_feed(url, etag)
+            results = manual_fetch_feed(url, etag, user_agent=agent)
             return results
         else:
             return {

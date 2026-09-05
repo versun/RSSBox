@@ -68,6 +68,29 @@ class FetchFeedTests(SimpleTestCase):
         self.assertIsNone(result["feed"])
         self.assertEqual(result["error"], "Invalid URL")
 
+    @mock.patch("core.tasks.fetch_feeds.get_fetch_user_agent", return_value="test-UA")
+    @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
+    @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
+    def test_manual_fetch_reuses_same_user_agent(
+        self, mock_parse, mock_manual, mock_ua
+    ):
+        """The UA used by feedparser is passed through to manual_fetch_feed."""
+        dummy = DummyFeed(status=403, bozo=True, entries=[])
+        mock_parse.return_value = dummy
+        manual_return = {"feed": "manual", "update": True, "error": None}
+        mock_manual.return_value = manual_return
+
+        result = fetch_feed("https://example.com/rss.xml", etag="abc")
+
+        self.assertEqual(result, manual_return)
+        mock_ua.assert_called_once_with()
+        mock_parse.assert_called_once_with(
+            "https://example.com/rss.xml", etag="abc", agent="test-UA"
+        )
+        mock_manual.assert_called_once_with(
+            "https://example.com/rss.xml", "abc", user_agent="test-UA"
+        )
+
     @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
     @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
     def test_fetch_feed_with_bozo_exception(self, mock_parse, mock_manual):

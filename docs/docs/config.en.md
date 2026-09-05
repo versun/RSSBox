@@ -106,6 +106,14 @@ This document lists all available environment variable configuration options for
   - Disabled by default to avoid resending the same request after a timeout
   - Increase it only if you explicitly want automatic retries
 
+## Fetch Configuration
+
+### RSS_FETCH_USER_AGENT
+- **Description**: Custom User-Agent used when fetching feeds
+- **Default**: empty (uses a random browser UA; automatically retries with a fallback UA when blocked by a WAF)
+- **Example**: `curl/8.10.1`
+- **Note**: Some sites (e.g. behind Cloudflare WAF) block browser UAs; setting a simple UA can bypass this
+
 ## Cache Configuration
 
 ### REDIS_URL

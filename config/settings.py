@@ -32,6 +32,8 @@ LT_TIMEOUT=int(os.environ.get("LT_TIMEOUT", '5'))
 SQLITE_TIMEOUT=float(os.environ.get("SQLITE_TIMEOUT", "30"))
 OPENAI_API_TIMEOUT = float(os.environ.get("OPENAI_API_TIMEOUT", "120"))
 OPENAI_API_MAX_RETRIES = max(0, int(os.environ.get("OPENAI_API_MAX_RETRIES", "0")))
+# Custom User-Agent for fetching feeds. Empty = use built-in default.
+RSS_FETCH_USER_AGENT = os.environ.get("RSS_FETCH_USER_AGENT", "")
 
 X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 

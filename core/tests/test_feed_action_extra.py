@@ -2,7 +2,8 @@ import time
 from types import SimpleNamespace
 from unittest import mock
 
-from django.test import SimpleTestCase
+import httpx
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 
 from core.cache import (
@@ -10,8 +11,11 @@ from core.cache import (
     _add_atom_entry,
     _finalize_atom_feed,
 )
+from core.tasks import fetch_feeds
 from core.tasks.fetch_feeds import (
+    FALLBACK_USER_AGENT,
     convert_struct_time_to_datetime,
+    get_fetch_user_agent,
     manual_fetch_feed,
 )
 
@@ -44,7 +48,7 @@ class ManualFetchFeedTests(SimpleTestCase):
         ]
         self.mock_useragent.return_value.random = "UA"
         self.mock_client = mock.Mock()
-        self.mock_client_cls.return_value = self.mock_client
+        self.mock_client_cls.return_value.__enter__.return_value = self.mock_client
 
     def tearDown(self):
         for p in self.mock_patches:
@@ -179,6 +183,129 @@ class ManualFetchFeedTests(SimpleTestCase):
         self.assertTrue(result["update"])  # update is still True for 200 status
         self.assertEqual(result["feed"], dummy_feed)
         self.assertEqual(result["error"], "bozo exception")
+
+
+class GetFetchUserAgentTests(SimpleTestCase):
+    """Tests for get_fetch_user_agent and its UserAgent instance cache."""
+
+    def setUp(self):
+        fetch_feeds._user_agent_generator.cache_clear()
+        self.ua_patch = mock.patch("core.tasks.fetch_feeds.UserAgent")
+        self.mock_useragent = self.ua_patch.start()
+        self.mock_useragent.return_value.random = "random-UA"
+
+    def tearDown(self):
+        self.ua_patch.stop()
+        fetch_feeds._user_agent_generator.cache_clear()
+
+    @override_settings(RSS_FETCH_USER_AGENT="  my-custom-UA  ")
+    def test_custom_user_agent_is_stripped(self):
+        self.assertEqual(get_fetch_user_agent(), "my-custom-UA")
+        self.mock_useragent.assert_not_called()
+
+    @override_settings(RSS_FETCH_USER_AGENT="   ")
+    def test_whitespace_only_falls_back_to_random(self):
+        self.assertEqual(get_fetch_user_agent(), "random-UA")
+
+    @override_settings(RSS_FETCH_USER_AGENT="")
+    def test_empty_falls_back_to_random(self):
+        self.assertEqual(get_fetch_user_agent(), "random-UA")
+
+    @override_settings(RSS_FETCH_USER_AGENT="")
+    def test_user_agent_instance_is_cached(self):
+        get_fetch_user_agent()
+        get_fetch_user_agent()
+        self.mock_useragent.assert_called_once_with()
+
+
+class ManualFetchFeedFallbackTests(SimpleTestCase):
+    """Tests for the WAF (403) fallback UA retry in manual_fetch_feed."""
+
+    def setUp(self):
+        fetch_feeds._user_agent_generator.cache_clear()
+        self.mock_patches = [
+            mock.patch("core.tasks.fetch_feeds.UserAgent"),
+            mock.patch("httpx.Client"),
+            mock.patch("core.tasks.fetch_feeds.feedparser.parse"),
+        ]
+        self.mock_useragent, self.mock_client_cls, self.mock_parse = [
+            p.start() for p in self.mock_patches
+        ]
+        self.mock_useragent.return_value.random = "browser-UA"
+        self.mock_client = mock.Mock()
+        self.mock_client_cls.return_value.__enter__.return_value = self.mock_client
+
+    def tearDown(self):
+        for p in self.mock_patches:
+            p.stop()
+        fetch_feeds._user_agent_generator.cache_clear()
+
+    @staticmethod
+    def _challenge_response():
+        return mock.Mock(status_code=403, headers={"cf-mitigated": "challenge"})
+
+    @staticmethod
+    def _forbidden_error(response):
+        return httpx.HTTPStatusError(
+            "Forbidden", request=mock.Mock(), response=response
+        )
+
+    def test_cf_challenge_retries_with_fallback_ua(self):
+        """403 + cf-mitigated triggers one retry with the fallback UA."""
+        ok = mock.Mock(status_code=200, headers={}, text="<rss></rss>")
+        self.mock_client.get.side_effect = [self._challenge_response(), ok]
+        dummy_feed = SimpleNamespace(
+            bozo=False, entries=["item"], get=lambda *a, **k: None
+        )
+        self.mock_parse.return_value = dummy_feed
+
+        result = manual_fetch_feed("http://example.com/rss")
+
+        self.assertTrue(result["update"])
+        self.assertIsNone(result["error"])
+        self.assertEqual(self.mock_client.get.call_count, 2)
+
+        # First request uses the browser UA with the full header set.
+        first_headers = self.mock_client.get.call_args_list[0].kwargs["headers"]
+        self.assertEqual(first_headers["User-Agent"], "browser-UA")
+
+        # Retry uses the fallback UA with a minimal, consistent header set.
+        retry_headers = self.mock_client.get.call_args_list[1].kwargs["headers"]
+        self.assertEqual(
+            retry_headers,
+            {
+                "If-None-Match": "",
+                "User-Agent": FALLBACK_USER_AGENT,
+                "Accept": "*/*",
+            },
+        )
+
+    def test_plain_403_also_retries(self):
+        """Any 403 (not just Cloudflare's cf-mitigated) triggers the retry."""
+        forbidden = mock.Mock(status_code=403, headers={})
+        forbidden.raise_for_status.side_effect = self._forbidden_error(forbidden)
+        self.mock_client.get.side_effect = [forbidden, forbidden]
+
+        result = manual_fetch_feed("http://example.com/rss")
+
+        self.assertEqual(self.mock_client.get.call_count, 2)
+        retry_headers = self.mock_client.get.call_args_list[1].kwargs["headers"]
+        self.assertEqual(retry_headers["User-Agent"], FALLBACK_USER_AGENT)
+        self.assertFalse(result["update"])
+        self.assertIn("403", result["error"])
+
+    def test_no_retry_when_fallback_ua_already_in_use(self):
+        """No retry loop when the fallback UA itself was challenged."""
+        challenge = self._challenge_response()
+        challenge.raise_for_status.side_effect = self._forbidden_error(challenge)
+        self.mock_client.get.return_value = challenge
+
+        result = manual_fetch_feed(
+            "http://example.com/rss", user_agent=FALLBACK_USER_AGENT
+        )
+
+        self.assertEqual(self.mock_client.get.call_count, 1)
+        self.assertIn("403", result["error"])
 
 
 class AtomFeedTests(SimpleTestCase):
