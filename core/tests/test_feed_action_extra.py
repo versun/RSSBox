@@ -270,11 +270,12 @@ class ManualFetchFeedFallbackTests(SimpleTestCase):
         self.assertEqual(first_headers["User-Agent"], "browser-UA")
 
         # Retry uses the fallback UA with a minimal, consistent header set.
+        # No etag was given, so If-None-Match is omitted entirely (httpx would
+        # reject a None value before the request is even sent).
         retry_headers = self.mock_client.get.call_args_list[1].kwargs["headers"]
         self.assertEqual(
             retry_headers,
             {
-                "If-None-Match": "",
                 "User-Agent": FALLBACK_USER_AGENT,
                 "Accept": "*/*",
             },

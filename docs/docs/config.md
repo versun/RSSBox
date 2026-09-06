@@ -109,7 +109,7 @@ summary: RSSBox 所有可用的环境变量配置说明
 ## 抓取配置
 
 ### RSS_FETCH_USER_AGENT
-- **说明**: 抓取 Feed 时使用的自定义 User-Agent
+- **说明**: 抓取 Feed 和原文正文时使用的自定义 User-Agent
 - **默认值**: 空（使用随机浏览器 UA；若被 WAF 拦截会自动用备用 UA 重试）
 - **示例**: `curl/8.10.1`
 - **注意**: 某些站点（如启用 Cloudflare WAF 的站点）会拦截浏览器 UA，可设置为简单 UA 规避

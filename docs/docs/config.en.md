@@ -109,7 +109,7 @@ This document lists all available environment variable configuration options for
 ## Fetch Configuration
 
 ### RSS_FETCH_USER_AGENT
-- **Description**: Custom User-Agent used when fetching feeds
+- **Description**: Custom User-Agent used when fetching feeds and full article content
 - **Default**: empty (uses a random browser UA; automatically retries with a fallback UA when blocked by a WAF)
 - **Example**: `curl/8.10.1`
 - **Note**: Some sites (e.g. behind Cloudflare WAF) block browser UAs; setting a simple UA can bypass this

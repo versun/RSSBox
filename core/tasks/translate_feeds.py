@@ -6,6 +6,7 @@ import newspaper
 
 from core.models import Feed, Entry, Agent
 from utils import text_handler
+from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, get_fetch_user_agent
 from core.tasks.utils import auto_retry
 
 logger = logging.getLogger(__name__)
@@ -249,18 +250,38 @@ def _translate_entry_content(
     return {"tokens": total_tokens, "characters": total_characters}
 
 
+def _download_article(link: str, user_agent: str):
+    """Download and parse one article with an explicit User-Agent."""
+    config = newspaper.Config()
+    config.browser_user_agent = user_agent
+    article = newspaper.Article(link, config=config)
+    article.download()
+    article.parse()
+    return article
+
+
 def _fetch_article_content(link: str) -> str:
     """Fetch full article content with explicit cleanup."""
     content = ""
+    article = None
     try:
-        article = newspaper.Article(link)
-        article.download()
-        article.parse()
+        user_agent = get_fetch_user_agent()
+        try:
+            article = _download_article(link, user_agent)
+        except Exception:
+            # A WAF (e.g. Cloudflare) may block browser-like UAs: retry once
+            # with the plain HTTP-client UA, mirroring the feed fetch fallback.
+            if user_agent == FALLBACK_USER_AGENT:
+                raise
+            logger.warning(
+                "Article download failed for %s, retrying with fallback UA", link
+            )
+            article = _download_article(link, FALLBACK_USER_AGENT)
         content = mistune.html(article.text)
     except Exception as e:
-        logger.error(f"Article fetch failed: {str(e)}")
+        logger.error(f"Article fetch failed: {link}: {str(e)}")
     finally:
         # Explicitly clean up newspaper objects
-        if "article" in locals():
+        if article is not None:
             del article
         return content

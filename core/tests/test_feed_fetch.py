@@ -1,7 +1,7 @@
 from django.test import SimpleTestCase
 from unittest import mock
 
-from core.tasks.fetch_feeds import fetch_feed
+from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, fetch_feed, manual_fetch_feed
 
 
 class DummyFeed:
@@ -110,3 +110,79 @@ class FetchFeedTests(SimpleTestCase):
         result = fetch_feed("https://example.com/rss.xml")
         mock_manual.assert_called_once()
         self.assertEqual(result, manual_return)
+
+
+class ManualFetchFeedTests(SimpleTestCase):
+    """manual_fetch_feed header construction, especially the nullable etag."""
+
+    VALID_FEED = "<rss version='2.0'><channel><title>t</title></channel></rss>"
+
+    def _response(self, status=200, text=VALID_FEED):
+        response = mock.Mock(status_code=status, text=text)
+        response.raise_for_status = mock.Mock()
+        return response
+
+    @mock.patch("httpx.Client")
+    def test_null_etag_omits_if_none_match(self, mock_client_cls):
+        """A NULL etag from the DB must not end up in the httpx headers."""
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.return_value = self._response()
+
+        result = manual_fetch_feed(
+            "https://example.com/rss.xml", etag=None, user_agent="test-UA"
+        )
+
+        headers = client.get.call_args.kwargs["headers"]
+        self.assertNotIn("If-None-Match", headers)
+        self.assertIsNone(result["error"])
+        self.assertTrue(result["update"])
+
+    @mock.patch("httpx.Client")
+    def test_empty_etag_omits_if_none_match(self, mock_client_cls):
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.return_value = self._response()
+
+        manual_fetch_feed("https://example.com/rss.xml", etag="", user_agent="test-UA")
+
+        headers = client.get.call_args.kwargs["headers"]
+        self.assertNotIn("If-None-Match", headers)
+
+    @mock.patch("httpx.Client")
+    def test_etag_sets_if_none_match(self, mock_client_cls):
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.return_value = self._response()
+
+        manual_fetch_feed(
+            "https://example.com/rss.xml", etag='"abc"', user_agent="test-UA"
+        )
+
+        headers = client.get.call_args.kwargs["headers"]
+        self.assertEqual(headers["If-None-Match"], '"abc"')
+
+    @mock.patch("httpx.Client")
+    def test_fallback_request_omits_null_etag(self, mock_client_cls):
+        """The 403 fallback retry must not send a null If-None-Match either."""
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.side_effect = [self._response(status=403, text=""), self._response()]
+
+        result = manual_fetch_feed(
+            "https://example.com/rss.xml", etag=None, user_agent="browser-UA"
+        )
+
+        self.assertEqual(client.get.call_count, 2)
+        fallback_headers = client.get.call_args_list[1].kwargs["headers"]
+        self.assertEqual(fallback_headers["User-Agent"], FALLBACK_USER_AGENT)
+        self.assertNotIn("If-None-Match", fallback_headers)
+        self.assertTrue(result["update"])
+
+    @mock.patch("httpx.Client")
+    def test_fallback_request_keeps_etag(self, mock_client_cls):
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.side_effect = [self._response(status=403, text=""), self._response()]
+
+        manual_fetch_feed(
+            "https://example.com/rss.xml", etag='"abc"', user_agent="browser-UA"
+        )
+
+        fallback_headers = client.get.call_args_list[1].kwargs["headers"]
+        self.assertEqual(fallback_headers["If-None-Match"], '"abc"')

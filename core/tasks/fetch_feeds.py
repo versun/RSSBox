@@ -38,7 +38,7 @@ def handle_single_feed_fetch(feed: Feed):
     """
     try:
         feed.fetch_status = None
-        etag = feed.etag if feed.max_posts <= feed.entries.count() else ""
+        etag = (feed.etag or "") if feed.max_posts <= feed.entries.count() else ""
         fetch_results = fetch_feed(url=feed.feed_url, etag=etag)
 
         if fetch_results["error"]:
@@ -100,8 +100,10 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
     feed = {}
     error = None
     response = None
+    # If-None-Match is only sent with a real value: feed.etag is nullable in
+    # the DB, and httpx rejects a None header value before the request even
+    # leaves the process.
     headers = {
-        "If-None-Match": etag,
         #'If-Modified-Since': modified,
         "User-Agent": user_agent or get_fetch_user_agent(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -115,6 +117,8 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
         "Sec-Fetch-User": "?1",
         "Cache-Control": "max-age=0",
     }
+    if etag:
+        headers["If-None-Match"] = etag
 
     try:
         with httpx.Client() as client:
@@ -134,10 +138,11 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
                     "Got 403 for %s, retrying with fallback UA", url
                 )
                 fallback_headers = {
-                    "If-None-Match": etag,
                     "User-Agent": FALLBACK_USER_AGENT,
                     "Accept": "*/*",
                 }
+                if etag:
+                    fallback_headers["If-None-Match"] = etag
                 response = client.get(
                     url, headers=fallback_headers, timeout=30, follow_redirects=True
                 )

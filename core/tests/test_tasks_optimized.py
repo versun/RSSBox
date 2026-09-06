@@ -8,7 +8,11 @@ import gc
 from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
-from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
+from core.tasks.fetch_feeds import (
+    FALLBACK_USER_AGENT,
+    handle_feeds_fetch,
+    handle_single_feed_fetch,
+)
 from core.tasks.translate_feeds import (
     handle_feeds_translation,
     _translate_entry_title,
@@ -701,6 +705,64 @@ class TasksOptimizedTestCase(TestCase):
         self.assertIn("Article text content", result)
         mock_article.download.assert_called_once()
         mock_article.parse.assert_called_once()
+
+    @patch("core.tasks.translate_feeds.newspaper.Article")
+    @patch("core.tasks.translate_feeds.newspaper.Config")
+    def test_fetch_article_content_uses_fetch_user_agent(
+        self, mock_config_cls, mock_article_class
+    ):
+        """正文抓取的 UA 与 Feed 抓取一致（含 RSS_FETCH_USER_AGENT 环境变量）"""
+        config = mock_config_cls.return_value
+        mock_article = Mock()
+        mock_article.text = "content"
+        mock_article_class.return_value = mock_article
+
+        with patch(
+            "core.tasks.translate_feeds.get_fetch_user_agent",
+            return_value="custom-UA",
+        ):
+            _fetch_article_content("https://example.com/article")
+
+        self.assertEqual(config.browser_user_agent, "custom-UA")
+        mock_article_class.assert_called_once_with(
+            "https://example.com/article", config=config
+        )
+
+    @patch("core.tasks.translate_feeds._download_article")
+    def test_fetch_article_content_retries_with_fallback_ua(self, mock_download):
+        """下载被 WAF 拦截后用备用 UA 重试一次（与 Feed 抓取回退逻辑一致）"""
+        good_article = Mock()
+        good_article.text = "retry content"
+        mock_download.side_effect = [Exception("403"), good_article]
+
+        with patch(
+            "core.tasks.translate_feeds.get_fetch_user_agent",
+            return_value="blocked-UA",
+        ):
+            result = _fetch_article_content("https://example.com/article")
+
+        self.assertIn("retry content", result)
+        self.assertEqual(mock_download.call_count, 2)
+        mock_download.assert_any_call("https://example.com/article", "blocked-UA")
+        mock_download.assert_any_call(
+            "https://example.com/article", FALLBACK_USER_AGENT
+        )
+
+    @patch("core.tasks.translate_feeds._download_article")
+    def test_fetch_article_content_no_retry_when_already_fallback_ua(
+        self, mock_download
+    ):
+        """主 UA 已是备用 UA 时不再重试"""
+        mock_download.side_effect = Exception("403")
+
+        with patch(
+            "core.tasks.translate_feeds.get_fetch_user_agent",
+            return_value=FALLBACK_USER_AGENT,
+        ):
+            result = _fetch_article_content("https://example.com/article")
+
+        self.assertEqual(result, "")
+        mock_download.assert_called_once()
 
     @patch("core.tasks.translate_feeds.text_handler.should_skip")
     def test_translate_content_skip_processing(self, mock_should_skip):
