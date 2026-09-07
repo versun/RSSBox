@@ -60,29 +60,6 @@ Through the tag system you can:
 - Organize multiple related RSS sources together
 - Create topic-categorized aggregated sources
 - Apply unified filtering rules
-- Facilitate subsequent AI digest generation
-
-### AI Digest Generation
-
-**AI Digest is a highlight feature of RSSBox**, intelligently aggregating multiple information sources:
-
-#### Configuration Steps
-1. **Create tags and associate RSS sources**
-   - Create new tags in the admin interface (e.g., "Tech News", "AI Information", etc.)
-   - Associate relevant RSS sources to corresponding tags
-   - Ensure associated sources have regularly updated content
-
-2. **Configure digest settings**
-   - Enter digest management page
-   - Create new digest configuration:
-     - Name: Daily Tech Information
-     - Description: Intelligent analysis of global tech news
-     - Associated tags: Select created tags
-     - AI Engine: Select valid translation engine as summary generator
-     - Publishing days: Can check Monday through Sunday, starts generating around 2 AM
-
-3. **Subscribe to generated digests**
-   - After configuration is complete, the system will automatically generate digests at specified times
 
 ## 📋 Practical Tips
 

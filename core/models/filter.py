@@ -2,9 +2,13 @@ import logging
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from tagulous.models import TagField
-from utils import text_handler
-import json
 from config import settings
+from core.services.feed.filters import (
+    apply_ai_filter as service_apply_ai_filter,
+    apply_filter as service_apply_filter,
+    apply_keywords_filter as service_apply_keywords_filter,
+    needs_re_evaluation as service_needs_re_evaluation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,111 +96,16 @@ class Filter(models.Model):
         verbose_name_plural = _("Filter")
 
     def apply_keywords_filter(self, queryset):
-        """
-        应用过滤器到查询集，检查文本内容是否包含标签关键词
-        :param queryset: 要过滤的查询集
-        :return: 过滤后的查询集
-        """
-        keywords = self.keywords.values_list("name", flat=True)
-
-        if not keywords:
-            return queryset.none() if self.operation == self.INCLUDE else queryset
-
-        # 构建查询条件：内容包含任何关键词
-        query = models.Q()
-        for keyword in keywords:
-            if self.filter_original_title:
-                query |= models.Q(original_title__icontains=keyword)
-            if self.filter_original_content:
-                query |= models.Q(original_content__icontains=keyword)
-            if self.filter_translated_title:
-                query |= models.Q(translated_title__icontains=keyword)
-            if self.filter_translated_content:
-                query |= models.Q(translated_content__icontains=keyword)
-
-        if self.operation == self.INCLUDE:
-            # 包含模式：只显示包含任何关键词的内容
-            return queryset.filter(query).distinct()
-        else:
-            # 排除模式：隐藏包含任何关键词的内容
-            return queryset.exclude(query).distinct()
+        return service_apply_keywords_filter(self, queryset)
 
     def apply_ai_filter(self, queryset):
-        """
-        应用AI过滤器到查询集，使用AI代理处理内容
-        :param queryset: 要过滤的查询集
-        :return: 过滤后的查询集
-        """
-        passed_ids = []
-        tokens = 0
-        for entry in queryset:
-            # 尝试获取缓存结果
-            result, created = FilterResult.objects.get_or_create(
-                filter=self,
-                entry=entry,
-            )
-
-            # 检查是否需要重新评估
-            if created or self.needs_re_evaluation(result, entry):
-                # 准备要发送给AI的内容
-                json_data = {}
-                if self.filter_original_title:
-                    json_data["original_title"] = entry.original_title
-                if self.filter_original_content:
-                    json_data["original_content"] = text_handler.clean_content(
-                        entry.original_content
-                    )
-                if self.filter_translated_title:
-                    json_data["translated_title"] = entry.translated_title
-                if self.filter_translated_content:
-                    json_data["translated_content"] = text_handler.clean_content(
-                        entry.translated_content
-                    )
-
-                text_str = json.dumps(json_data, ensure_ascii=False)
-                passed = None
-                if self.agent:
-                    filter_results = self.agent.filter(
-                        text=text_str, system_prompt=self.filter_prompt
-                    )
-                    passed = filter_results["passed"]
-                    tokens += filter_results["tokens"]
-                result.passed = passed
-                result.save()
-            else:
-                passed = result.passed
-
-            if passed:
-                passed_ids.append(entry.id)
-
-        # 过滤出通过的项目
-        return queryset.filter(id__in=passed_ids), tokens
+        return service_apply_ai_filter(self, queryset)
 
     def apply_filter(self, queryset):
-        tokens = 0
-        # 优先尝试使用关键字过滤
-        if self.filter_method in [self.KEYWORD_ONLY, self.BOTH]:
-            queryset = self.apply_keywords_filter(queryset)
-
-        # 检查是否需要AI过滤
-        if self.filter_method in [self.AI_ONLY, self.BOTH] and self.agent:
-            queryset, tokens = self.apply_ai_filter(queryset)
-
-        if tokens > 0:
-            self.total_tokens += tokens
-            self.save()
-
-        return queryset
+        return service_apply_filter(self, queryset)
 
     def needs_re_evaluation(self, result, entry):
-        """检查缓存是否失效"""
-        # 1. 如果从未评估过
-        if result.passed is None:
-            return True
-
-        # 2. 检查条目内容是否更新
-        if entry.updated and entry.updated > result.last_updated:
-            return True
+        return service_needs_re_evaluation(result, entry)
 
     def save(self, *args, **kwargs):
         """

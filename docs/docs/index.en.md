@@ -10,7 +10,7 @@ summary: Smarter RSS management, more efficient information access
 <p><em>Formerly RSS Translator</em></p>
 [中文](/) | [English](/en)
 
-Breaking language barriers for global information access. RSSBox helps you automatically translate foreign RSS content, supporting multi-engine translation, intelligent filtering, and AI digest generation for a one-stop cross-language information solution.
+Breaking language barriers for global information access. RSSBox helps you automatically translate foreign RSS content, supporting multi-engine translation and intelligent filtering for a one-stop cross-language information solution.
 
 Official website: [rssbox.app](https://rssbox.app)
 
@@ -26,12 +26,6 @@ Official website: [rssbox.app](https://rssbox.app)
 - **Keyword Filtering** - Precisely control wanted or excluded content
 - **AI Smart Filtering** - Semantic understanding-based intelligent content filtering, say goodbye to information overload
 - **Multi-layer Filtering** - Set independent filtering rules for each source
-
-### 📊 AI Digest Generation
-- **Intelligent Aggregation** - Automatically collect content from multiple information sources
-- **Topic Classification** - AI automatically identifies and categorizes news topics
-- **Custom Digests** - Generate structured daily information summaries
-- **Tag Management** - Merge multiple RSS sources into unified topics through tags
 
 ### ⚡ Efficient Management
 - **Batch Operations** - Support batch updating, translation, and RSS source management

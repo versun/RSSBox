@@ -34,6 +34,15 @@
 - DeepL
 - 兼容所有支持 OpenAI 接口的模型
 
+## 当前代码结构
+
+- `core/models`：数据结构与最基本模型行为
+- `core/services/feed`：更新、刷新、过滤、输出
+- `core/services/admin`：后台动作与批量修改
+- `core/services/agent`：各类 Agent 的具体执行逻辑
+- `core/services/opml.py`：OPML 导入导出
+- `core/views.py` / `core/actions.py` / `core/management/commands`：入口层
+
 ## 赞助
 
 感谢以下公司为本项目提供的开源支持。

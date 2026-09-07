@@ -17,8 +17,8 @@ from core.actions import (
 )
 from utils.modelAdmin_utils import status_icon
 from core.tasks.task_manager import task_manager
+from core.services.feed import run_feed_update
 from core.views import import_opml
-from core.management.commands.feed_updater import update_single_feed
 from core.admin import core_admin_site
 
 logger = logging.getLogger(__name__)
@@ -128,15 +128,6 @@ class FeedAdmin(admin.ModelAdmin):
     ]
     list_per_page = 20
 
-    def get_queryset(self, request):
-        """
-        过滤掉系统生成的 Digest Feed，只显示用户添加的普通 Feed。
-        Digest Feed 的 feed_url 包含 '/core/digest/rss/' 路径。
-        """
-        queryset = super().get_queryset(request)
-        # 过滤掉 Digest Feed
-        return queryset.exclude(author="RSSBox Digest")
-
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -202,7 +193,7 @@ class FeedAdmin(admin.ModelAdmin):
 
     def _submit_feed_update_task(self, feed):
         task_id = task_manager.submit_task(
-            f"update_feed_{feed.slug}", update_single_feed, feed
+            f"update_feed_{feed.slug}", run_feed_update, feed
         )
         logger.info(f"Submitted feed update task after commit: {task_id}")
 

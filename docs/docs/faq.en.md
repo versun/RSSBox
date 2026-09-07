@@ -36,11 +36,6 @@ If deployed using other methods, wait for 5 minutes and if the problem persists,
 1. Check if AI engine is correctly configured and valid
 2. Check if filter prompts are clear and specific
 
-### AI Digest Generation Failed
-1. Check if RSS sources are correctly created and associated with tags
-2. Confirm that AI engine used for digest generation is working properly
-3. Check if tags have sufficient content (recommend 3-5 active sources)
-
 ### Tag System Issues
 1. Check if RSS sources are correctly associated with tags
 2. Confirm that associated sources have new content updates

@@ -2,7 +2,7 @@ from django.test import TestCase, RequestFactory
 from django.http import Http404, JsonResponse
 from unittest.mock import patch, MagicMock
 from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.contrib.messages.storage.fallback import FallbackStorage
 import io
 import json
@@ -141,39 +141,43 @@ class ViewsTestCase(TestCase):
         self.assertEqual(Feed.objects.count(), initial_feed_count)
         self.assertIn("Invalid OPML: Missing body element", [str(m) for m in messages])
 
-    @patch("core.views.feed2json")
+    def test_digest_routes_removed(self):
+        """Digest URLs should no longer be registered."""
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_rss", kwargs={"slug": "removed"})
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_json", kwargs={"slug": "removed"})
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("core:digest_view", kwargs={"slug": "removed"})
+
     @patch("core.views.cache")
     @patch("core.views.cache_rss")
-    def test_rss_view_json_format(self, mock_cache_rss, mock_cache, mock_feed2json):
+    def test_rss_view_json_format(self, mock_cache_rss, mock_cache):
         """Test the rss view with format='json'."""
         mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = (
             "<rss><channel><title>Test Feed</title></channel></rss>"
         )
-        mock_feed2json.return_value = {"title": "JSON Feed"}
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug, feed_type="o", format="json")
 
         mock_cache_rss.assert_called_once_with(self.feed.slug, "o", "json")
-        mock_feed2json.assert_called_once_with(
-            "<rss><channel><title>Test Feed</title></channel></rss>"
-        )
         self.assertIsInstance(response, JsonResponse)
         self.assertEqual(response.status_code, 200)
         json_content = json.loads(response.content)
-        self.assertEqual(json_content["title"], "JSON Feed")
+        self.assertEqual(json_content["title"], "Test Feed")
 
-    @patch("core.views.feed2json")
     @patch("core.views.cache")
     @patch("core.views.cache_rss")
     def test_rss_view_json_format_no_feed_data(
-        self, mock_cache_rss, mock_cache, mock_feed2json
+        self, mock_cache_rss, mock_cache
     ):
         """Test the rss view with format='json' when no feed data is available."""
         mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = None  # No feed data
-        mock_feed2json.return_value = {"title": "JSON Feed"}
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug, format="json")
@@ -285,7 +289,6 @@ class ViewsTestCase(TestCase):
         response = import_opml(request)
 
         self.assertEqual(response.status_code, 302)
-        # The mock file will cause XML parsing error, so we check for that instead
         self.assertTrue(any("XML syntax error:" in str(m) for m in messages))
 
     def test_import_opml_xml_syntax_error(self):
@@ -314,9 +317,9 @@ class ViewsTestCase(TestCase):
         request = self.factory.post("/fake-url", {"opml_file": opml_file})
         messages = self._setup_request_with_messages(request)
 
-        # Mock Feed.objects.get_or_create to raise an exception
-        with patch("core.views.Feed.objects.get_or_create") as mock_get_or_create:
-            mock_get_or_create.side_effect = Exception("Database error")
+        # Mock service to raise an exception
+        with patch("core.views.import_opml_content") as mock_import_opml_content:
+            mock_import_opml_content.side_effect = Exception("Database error")
 
             initial_feed_count = Feed.objects.count()
             import_opml(request)

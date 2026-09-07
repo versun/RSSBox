@@ -7,6 +7,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from tagulous.models import TagField
+from core.services.feed.filters import apply_feed_filters
 
 
 class Feed(models.Model):
@@ -231,7 +232,4 @@ class Feed(models.Model):
 
     @property
     def filtered_entries(self):
-        queryset = self.entries.all()
-        for filter_obj in self.filters.all():
-            queryset = filter_obj.apply_filter(queryset)
-        return queryset
+        return apply_feed_filters(self, self.entries.all())

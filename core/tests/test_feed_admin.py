@@ -298,6 +298,8 @@ class FeedAdminDisplayMethodsTest(TestCase):
     @patch("core.tasks.task_manager.task_manager.submit_task")
     def test_submit_feed_update_task(self, mock_submit_task):
         """Test _submit_feed_update_task method (lines 190-193)."""
+        from core.services.feed import run_feed_update
+
         mock_submit_task.return_value = "task-123"
 
         self.admin._submit_feed_update_task(self.feed)
@@ -305,6 +307,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         mock_submit_task.assert_called_once()
         args = mock_submit_task.call_args
         self.assertEqual(args[0][0], f"update_feed_{self.feed.slug}")
+        self.assertIs(args[0][1], run_feed_update)
 
     def test_simple_update_frequency_cases(self):
         """Test simple_update_frequency for different time intervals."""
