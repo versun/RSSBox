@@ -50,7 +50,7 @@ class Feed(models.Model):
         blank=True,
         null=True,
     )
-    feed_url = models.URLField(_("Feed URL"))
+    feed_url = models.URLField(_("Feed URL"), max_length=1000)
     fetch_status = models.BooleanField(
         _("Fetch Status"),
         null=True,
