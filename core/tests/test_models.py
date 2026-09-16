@@ -381,6 +381,26 @@ class TagModelTest(TestCase):
         self.assertNotEqual(slug_tag.slug, original_slug)
         self.assertEqual(slug_tag.slug, "new-name")
 
+    def test_tag_unicode_slug_generation(self):
+        """Test Tag unicode slug generation for Chinese and special characters."""
+        # Test Chinese tag
+        chinese_tag = Tag.objects.create(name="深度学习")
+        self.assertEqual(chinese_tag.slug, "深度学习")
+
+        # Test mixed English and Chinese with space
+        mixed_tag = Tag.objects.create(name="AI 资讯")
+        self.assertEqual(mixed_tag.slug, "ai-资讯")
+
+        # Test duplicate Chinese tag generates unique slug
+        dup_tag = Tag.objects.create(name="深度学习")
+        self.assertEqual(dup_tag.slug, "深度学习-2")
+
+        # Test punctuation-only tag falls back gracefully
+        punct_tag = Tag.objects.create(name="???")
+        self.assertEqual(punct_tag.slug, "tag")
+        punct_tag_2 = Tag.objects.create(name="!!!")
+        self.assertEqual(punct_tag_2.slug, "tag-2")
+
     def test_tag_filter_relationship(self):
         """
         Test ManyToMany relationship between Tag and Filter.

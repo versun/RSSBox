@@ -51,3 +51,9 @@ class TagAdminTestCase(TestCase):
         new_tag = Tag(name="Unsaved Tag")
         result = self.admin.show_url(new_tag)
         self.assertEqual(result, "-")
+
+        # Test with Chinese slug tag (URL quote)
+        chinese_tag = Tag.objects.create(name="深度学习")
+        result_chinese = self.admin.show_url(chinese_tag)
+        self.assertIn("/rss/tag/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0", result_chinese)
+        self.assertIn("/rss/tag/json/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0", result_chinese)

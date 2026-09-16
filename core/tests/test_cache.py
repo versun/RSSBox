@@ -165,3 +165,25 @@ class CacheTagTest(TestCase):
 
         cache_key = "cache_tag_test-tag_o_json"
         self.assertEqual(cache.get(cache_key), mock_atom_content)
+
+    @patch("core.cache.merge_feeds_into_one_atom")
+    def test_cache_tag_by_slug_when_name_differs(self, mock_merge_feeds):
+        """测试当Tag的name和slug不同时，仍能正确通过slug找到关联Feed"""
+        chinese_tag = Tag.objects.create(name="中文标签")
+        feed = Feed.objects.create(
+            name="Chinese Feed",
+            feed_url="https://example.com/chinese.xml",
+            slug="chinese-feed",
+            update_frequency=3600,
+        )
+        feed.tags.add(chinese_tag)
+
+        mock_atom_content = "<feed>chinese content</feed>"
+        mock_merge_feeds.return_value = mock_atom_content
+
+        result = cache_tag(chinese_tag.slug, "t", "xml")
+        self.assertEqual(result, mock_atom_content)
+
+        call_args = mock_merge_feeds.call_args
+        feeds_arg = call_args[0][1]
+        self.assertEqual(list(feeds_arg), [feed])

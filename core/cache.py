@@ -47,7 +47,7 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
     # 生成唯一的缓存键
     cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
 
-    feeds = Feed.objects.filter(tags__name=tag)
+    feeds = Feed.objects.filter(tags__slug=tag)
     max_frequency_feed = feeds.order_by("-update_frequency").first()
     atom_feed = merge_feeds_into_one_atom(tag, feeds, feed_type)
 

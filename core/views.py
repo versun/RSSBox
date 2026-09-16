@@ -1,4 +1,5 @@
 import logging
+from django.utils.http import content_disposition_header
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
 from django.utils import timezone
@@ -70,7 +71,9 @@ def _make_response(atom_feed, filename, format="xml"):
             stream_content(),  # 使用生成器
             content_type="application/xml; charset=utf-8",
         )
-        response["Content-Disposition"] = f"inline; filename={filename}.xml"
+        response["Content-Disposition"] = content_disposition_header(
+            as_attachment=False, filename=f"{filename}.xml"
+        )
     return response
 
 
@@ -166,9 +169,7 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
 
 def tag(request, tag: str, feed_type="t", format="xml"):
     tag = smart_str(tag)
-    all_tag = list(Tag.objects.values_list("slug", flat=True))
-
-    if tag not in all_tag:
+    if not Tag.objects.filter(slug=tag).exists():
         return HttpResponse(status=404)
 
     try:

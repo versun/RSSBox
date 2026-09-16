@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import quote
 from django.contrib import admin
 from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
@@ -38,10 +39,11 @@ class TagAdmin(admin.ModelAdmin):
     @admin.display(description="URL")
     def show_url(self, obj):
         if obj.pk:
+            slug = quote(obj.slug or "")
             return format_html(
                 "<a href='{0}' target='_blank'>rss</a> | <a href='{1}' target='_blank'>json</a>",
-                f"/rss/tag/{obj.slug}",
-                f"/rss/tag/json/{obj.slug}",
+                f"/rss/tag/{slug}",
+                f"/rss/tag/json/{slug}",
             )
         else:
             return "-"

@@ -8,7 +8,7 @@ import io
 import json
 
 from ..models import Feed, Tag
-from ..views import rss, tag as tag_view, import_opml
+from ..views import rss, tag as tag_view, import_opml, _make_response
 
 
 class ViewsTestCase(TestCase):
@@ -80,6 +80,34 @@ class ViewsTestCase(TestCase):
         request = self.factory.get("/tag/non-existent-tag")
         response = tag_view(request, "non-existent-tag")
         self.assertEqual(response.status_code, 404)
+
+    @patch("core.views.cache")
+    @patch("core.views.cache_tag")
+    def test_tag_view_chinese_slug(self, mock_cache_tag, mock_cache):
+        """Test tag view with Chinese slug."""
+        chinese_tag = Tag.objects.create(name="深度学习")
+        mock_cache.get.return_value = None
+        mock_cache_tag.return_value = "<rss><channel><title>Deep Learning</title></channel></rss>"
+
+        request = self.factory.get(f"/tag/{chinese_tag.slug}")
+        response = tag_view(request, chinese_tag.slug)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("filename*=utf-8''%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0.xml", response["Content-Disposition"])
+        mock_cache_tag.assert_called_once_with(chinese_tag.slug, "t", "xml")
+
+    def test_make_response_content_disposition(self):
+        """Test _make_response sets Content-Disposition header correctly."""
+        # ASCII filename
+        resp_ascii = _make_response("<feed/>", "tech")
+        self.assertEqual(resp_ascii["Content-Disposition"], 'inline; filename="tech.xml"')
+
+        # Unicode filename
+        resp_unicode = _make_response("<feed/>", "人工智能")
+        self.assertEqual(
+            resp_unicode["Content-Disposition"],
+            "inline; filename*=utf-8''%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD.xml",
+        )
 
     def test_import_opml_success(self):
         """Test the import_opml view with a valid OPML file."""

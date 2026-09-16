@@ -1,7 +1,13 @@
 from django.db import models
 from django.template.defaultfilters import default
+from django.utils.text import slugify as django_slugify
 from django.utils.translation import gettext_lazy as _
 from autoslug import AutoSlugField
+
+
+def unicode_slugify(value):
+    """保留 Unicode 字符（如中文）的 slugify，供 AutoSlugField 使用。"""
+    return django_slugify(value, allow_unicode=True)
 
 
 class Tag(models.Model):
@@ -20,6 +26,7 @@ class Tag(models.Model):
         verbose_name=_("URL Slug"),
         populate_from="name",
         unique=True,
+        slugify=unicode_slugify,
     )
 
     total_tokens = models.PositiveIntegerField(_("Tokens Cost"), default=0)
