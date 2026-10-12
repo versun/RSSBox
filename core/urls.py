@@ -47,7 +47,6 @@ urlpatterns = [
     path(
         "json/<str:feed_slug>/", views.rss, kwargs={"feed_type": "t", "format": "json"}
     ),
-    path("import_opml/", views.import_opml, name="import_opml"),
     # Digest URLs
     path("digest/view/<str:slug>", views.digest_view, name="digest_view"),
     path("digest/view/<str:slug>/", views.digest_view, name="digest_view"),

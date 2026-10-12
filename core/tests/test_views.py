@@ -380,3 +380,34 @@ class ViewsTestCase(TestCase):
         new_feed = Feed.objects.get(feed_url="http://example.com/tech.xml")
         new_tag = Tag.objects.get(name="Technology")
         self.assertTrue(new_feed.tags.filter(name="Technology").exists())
+
+
+class ImportOpmlAccessTestCase(TestCase):
+    """GHSA-6g83-8v98-rq5v: OPML import must not be reachable anonymously."""
+
+    OPML = (
+        b'<?xml version="1.0"?><opml version="1.0"><body>'
+        b'<outline text="x" xmlUrl="http://169.254.169.254/latest/meta-data/"/>'
+        b"</body></opml>"
+    )
+
+    def _post(self, url):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        token = "a" * 32
+        client.cookies["csrftoken"] = token
+        opml = SimpleUploadedFile("a.opml", self.OPML, content_type="text/xml")
+        return client.post(url, {"opml_file": opml}, HTTP_X_CSRFTOKEN=token)
+
+    def test_public_import_route_does_not_create_feeds(self):
+        response = self._post("/rss/import_opml/")
+        self.assertNotEqual(response.status_code, 302)
+        self.assertEqual(Feed.objects.count(), 0)
+
+    def test_admin_import_route_requires_login(self):
+        response = self._post(reverse("admin:core_feed_import_opml"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
+        self.assertEqual(Feed.objects.count(), 0)
