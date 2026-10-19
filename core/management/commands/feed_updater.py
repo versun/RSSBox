@@ -125,28 +125,30 @@ def update_multiple_feeds(feeds: list):
         logger.info("No feeds to update.")
         return
     try:
-        # 先执行所有feed更新任务
-        futures = [
-            task_manager.submit_task(
-                f"update_feed_{feed.name}", update_single_feed, feed
-            )
-            for feed in feeds
-        ]
+        futures = []
+        try:
+            for feed in feeds:
+                futures.append(
+                    task_manager.submit_task(
+                        f"update_feed_{feed.name}", update_single_feed, feed
+                    )
+                )
 
-        # 等待所有任务完成（最多30分钟）
-        timeout = 1800  # 30分钟（1800秒）
-        done, not_done = wait(futures, timeout=timeout)
-
-        if not_done:
-            logger.warning(
-                f"Feed update task timed out. {len(not_done)} tasks did not complete."
-            )
-
-        for future in done:
-            try:
-                future.result()
-            except Exception as e:
-                logger.warning(f"A feed update task resulted in an exception: {e}")
+            _, not_done = wait(futures, timeout=1800)
+            if not_done:
+                logger.warning(
+                    f"Feed update task timed out. {len(not_done)} tasks did not complete. "
+                    "Waiting for workers before releasing the update lock."
+                )
+        finally:
+            # wait(timeout=...) does not stop running threads. Drain every
+            # submitted task before returning to Command.handle, which owns
+            # the frequency lock. Also cover a partial submission failure.
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.warning(f"A feed update task resulted in an exception: {e}")
 
         # 所有任务完成后执行缓存操作
         # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
