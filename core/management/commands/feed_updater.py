@@ -57,7 +57,9 @@ class Command(BaseCommand):
         # released automatically when the process exits for ANY reason (crash,
         # OOM kill, container stop), so it can never go stale and block all
         # future runs of this frequency (issue #161).
-        with open(lock_file_path, "w") as lock_file:
+        # Open without truncating: a competing run must not wipe the PID
+        # written by the process that holds the lock.
+        with open(lock_file_path, "a") as lock_file:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -70,6 +72,7 @@ class Command(BaseCommand):
 
             # Record the holder PID for debugging only; the flock, not this
             # file's existence, is what actually excludes other processes.
+            lock_file.truncate(0)
             lock_file.write(str(os.getpid()))
             lock_file.flush()
 

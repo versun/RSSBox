@@ -146,7 +146,7 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                 self.command.handle(frequency="hourly")
 
         expected_lock_path = "/tmp/update_feeds_hourly.lock"
-        mock_open_file.assert_called_once_with(expected_lock_path, "w")
+        mock_open_file.assert_called_once_with(expected_lock_path, "a")
 
         handle = mock_open_file.return_value.__enter__.return_value
         handle.write.assert_called_once_with("12345")
@@ -170,7 +170,7 @@ class UpdateFeedsHandleTests(SimpleTestCase):
                         patch.object(self.command, "stderr"),
                     ):
                         self.command.handle(frequency=frequency)
-                    mock_open_file.assert_called_once_with(expected_lock_path, "w")
+                    mock_open_file.assert_called_once_with(expected_lock_path, "a")
 
 
 class UpdateFeedsLockRegressionTests(SimpleTestCase):
@@ -195,6 +195,45 @@ class UpdateFeedsLockRegressionTests(SimpleTestCase):
             command.handle(frequency="hourly")
 
         mock_update.assert_called_once_with(simple_update_frequency="hourly")
+
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_holder_pid_replaces_stale_lock_file_content(self, mock_update):
+        """The lock holder overwrites whatever a previous run left in the file."""
+        with open(self.lock_path, "w") as f:
+            f.write("9999999999")
+        contents = []
+
+        def read_lock_file(**kwargs):
+            with open(self.lock_path) as lock_file:
+                contents.append(lock_file.read())
+
+        mock_update.side_effect = read_lock_file
+
+        command = cmd.Command()
+        with patch.object(command, "stdout"), patch.object(command, "stderr"):
+            command.handle(frequency="hourly")
+
+        self.assertEqual(contents, [str(os.getpid())])
+
+    @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
+    def test_competing_run_keeps_holder_pid(self, mock_update):
+        """Regression: the lock file was opened with mode "w" before flock, so
+        every competing cron run erased the PID of the process holding it."""
+        with open(self.lock_path, "w") as holder:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            holder.write("4242")
+            holder.flush()
+
+            command = cmd.Command()
+            with patch.object(command, "stdout"), patch.object(command, "stderr"):
+                with self.assertRaises(SystemExit) as ctx:
+                    command.handle(frequency="hourly")
+            self.assertEqual(ctx.exception.code, 0)
+
+            with open(self.lock_path) as f:
+                self.assertEqual(f.read(), "4242")
+
+        mock_update.assert_not_called()
 
     @patch("core.management.commands.feed_updater.update_feeds_for_frequency")
     def test_lock_held_by_live_process_blocks_update(self, mock_update):
