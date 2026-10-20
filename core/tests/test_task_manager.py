@@ -6,11 +6,40 @@ Test TaskManager functionality:
 3. Test new features and edge cases
 """
 
+import subprocess
+import sys
 import time
 import threading
 from unittest.mock import patch, MagicMock
+from django.conf import settings
 from django.test import TestCase
 from core.tasks.task_manager import TaskManager, TaskStatus
+
+# More tasks than the removed restart_threshold default (200), submitted while
+# an earlier task is still running. Prints the number of completed tasks.
+TASK_BURST_SCRIPT = """
+import sys
+import threading
+from core.tasks.task_manager import TaskManager
+
+tm = TaskManager(max_workers=2)
+gate = threading.Event()
+threading.Timer(0.5, gate.set).start()
+
+
+def burst(prefix):
+    futures = [tm.submit_task(f"{prefix}_0", gate.wait, 10)]
+    futures += [tm.submit_task(f"{prefix}_{i}", lambda: None) for i in range(1, 250)]
+    for future in futures:
+        future.result(timeout=10)
+    return len(futures)
+
+
+if sys.argv[1] == "nested":
+    print(tm.submit_task("outer", burst, "inner").result(timeout=20))
+else:
+    print(burst("burst"))
+"""
 
 
 def test_function(name, duration=0.02, **kwargs):
@@ -131,18 +160,15 @@ class TaskManagerTestCase(TestCase):
     def test_constructor_validation(self):
         """Test constructor parameter validation."""
         # Test valid parameters
-        tm = TaskManager(max_workers=1, max_task_history=10, restart_threshold=5)
+        tm = TaskManager(max_workers=1, max_task_history=10)
         self.assertEqual(tm.max_workers, 1)
         self.assertEqual(tm.max_task_history, 10)
-        self.assertEqual(tm.restart_threshold, 5)
 
         # Test invalid parameters
         with self.assertRaises(ValueError):
             TaskManager(max_workers=0)
         with self.assertRaises(ValueError):
             TaskManager(max_task_history=0)
-        with self.assertRaises(ValueError):
-            TaskManager(restart_threshold=0)
 
     def test_submit_task_validation(self):
         """Test submit_task parameter validation."""
@@ -374,18 +400,31 @@ class TaskManagerTestCase(TestCase):
             status = tm.get_task_status("context_test")
             self.assertEqual(status["status"], "completed")
 
-    def test_restart_executor_threshold(self):
-        """Test executor restart when threshold is reached."""
-        # Create TaskManager with low threshold
-        tm = TaskManager(max_workers=2, restart_threshold=2)
+    def run_task_burst(self, mode):
+        """Run a 250-task burst in a child process so a deadlock fails the test
+        (via the subprocess timeout) instead of hanging the test runner."""
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", TASK_BURST_SCRIPT, mode],
+                cwd=settings.BASE_DIR,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail(f"TaskManager deadlocked during a {mode} burst of 250 tasks")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "250")
 
-        # Submit tasks to trigger restart
-        for i in range(3):
-            future = tm.submit_task(f"restart_test_{i}", test_function, f"test_{i}")
-            future.result()
+    def test_submit_more_tasks_than_old_restart_threshold_while_running(self):
+        """Regression: the 201st submission used to shut down the executor while
+        holding the lock its workers need, deadlocking the feed_updater cron."""
+        self.run_task_burst("direct")
 
-        # Verify executor was restarted
-        self.assertEqual(tm.tasks_executed_since_restart, 1)
+    def test_nested_submissions_from_worker_do_not_deadlock(self):
+        """Regression: the admin Force update action submits feed tasks from a
+        TaskManager worker; crossing the old threshold there joined its own pool."""
+        self.run_task_burst("nested")
 
     def test_cleanup_tasks_functionality(self):
         """Test task cleanup functionality."""

@@ -29,19 +29,14 @@ class TaskManager:
         self,
         max_workers: int = 5,
         max_task_history: int = 1000,
-        restart_threshold: int = 200,
     ):
         if max_workers <= 0:
             raise ValueError("max_workers must be positive")
         if max_task_history <= 0:
             raise ValueError("max_task_history must be positive")
-        if restart_threshold <= 0:
-            raise ValueError("restart_threshold must be positive")
 
         self.max_workers = max_workers
         self.max_task_history = max_task_history
-        self.restart_threshold = restart_threshold
-        self.tasks_executed_since_restart = 0
         self.executor = ThreadPoolExecutor(
             max_workers=self.max_workers, thread_name_prefix="task_manager_"
         )
@@ -49,28 +44,6 @@ class TaskManager:
         self.futures: Dict[str, Future] = {}
         self.lock = threading.RLock()  # 使用可重入锁，提高性能
         self._shutdown = False
-
-    def _restart_executor(self) -> None:
-        """
-        Safely restarts the ThreadPoolExecutor to prevent memory leaks.
-        This method shuts down the current executor, waits for active tasks to complete,
-        and then creates a new executor.
-        """
-        logger.info(
-            f"Task manager: Restarting worker threads. Tasks executed: {self.tasks_executed_since_restart}"
-        )
-        # Shutdown the existing executor
-        self.executor.shutdown(wait=True)
-
-        # Create a new one
-        self.executor = ThreadPoolExecutor(
-            max_workers=self.max_workers, thread_name_prefix="task_manager_"
-        )
-        # Clear futures mapping since old futures are no longer valid
-        self.futures.clear()
-        # Reset the counter
-        self.tasks_executed_since_restart = 0
-        logger.info("Task manager: Worker threads restarted successfully.")
 
     def submit_task(self, task_name: str, task_fn: Callable, *args, **kwargs) -> Future:
         """提交新任务，始终返回Future对象"""
@@ -95,12 +68,7 @@ class TaskManager:
                     # 返回已存在的Future
                     return self.futures.get(task_name)
 
-            if self.tasks_executed_since_restart >= self.restart_threshold:
-                self._restart_executor()
-            self.tasks_executed_since_restart += 1
-            logger.debug(
-                f"Submitting task: {task_name} (Total executed: {self.tasks_executed_since_restart})"
-            )
+            logger.debug(f"Submitting task: {task_name}")
 
         self._cleanup_tasks()
         task_info = {

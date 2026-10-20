@@ -56,7 +56,7 @@ class TaskManagerTests(SimpleTestCase):
         def add(a, b):
             return a + b
 
-        tm = TaskManager(max_workers=2, restart_threshold=10)
+        tm = TaskManager(max_workers=2)
         future = tm.submit_task("add", add, 1, 2)
 
         # 验证任务执行结果
@@ -70,13 +70,3 @@ class TaskManagerTests(SimpleTestCase):
         self.assertEqual(info["status"], "completed")
         self.assertEqual(info["result"], 3)
         self.assertEqual(tm.get_task_status(task_id)["status"], "completed")
-
-    def test_restart_threshold(self):
-        tm = TaskManager(max_workers=1, restart_threshold=3)
-
-        # 执行4个任务触发重启阈值
-        for _ in range(4):
-            tm.submit_task("noop", lambda: None).result(timeout=2)
-
-        # 验证重启后任务计数重置
-        self.assertLessEqual(tm.tasks_executed_since_restart, 1)
