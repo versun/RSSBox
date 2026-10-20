@@ -1,6 +1,9 @@
+import socket
+
 from django.test import SimpleTestCase
 from unittest import mock
 
+from core.tasks import fetch_feeds
 from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, fetch_feed, manual_fetch_feed
 
 
@@ -13,7 +16,8 @@ class DummyFeed:
         self.entries = [] if entries is None else entries
 
     def get(self, key, default=None):
-        return default
+        # feedparser results expose keys as attributes too (FeedParserDict).
+        return self.__dict__.get(key, default)
 
 
 class FetchFeedTests(SimpleTestCase):
@@ -113,6 +117,25 @@ class FetchFeedTests(SimpleTestCase):
         result = fetch_feed("https://example.com/rss.xml")
         mock_manual.assert_called_once()
         self.assertEqual(result, manual_return)
+
+    def test_connection_failure_reports_real_error_and_falls_back(self):
+        """Regression: feedparser results for URLError have no "status" key, so
+        fetch_feed reported "object has no attribute 'status'" and skipped the
+        httpx fallback."""
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            url = f"http://127.0.0.1:{sock.getsockname()[1]}/feed"
+        # The port is closed now, so both fetch paths get "connection refused".
+
+        with mock.patch.object(
+            fetch_feeds, "manual_fetch_feed", wraps=manual_fetch_feed
+        ) as manual:
+            result = fetch_feed(url)
+
+        manual.assert_called_once()
+        self.assertFalse(result["update"])
+        self.assertNotIn("status", result["error"])
+        self.assertIn("refused", result["error"].lower())
 
 
 class ManualFetchFeedTests(SimpleTestCase):
