@@ -360,6 +360,25 @@ class CleanupEntriesLockRegressionTests(TestCase):
         mock_cleanup.assert_not_called()
 
     @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
+    def test_competing_run_keeps_holder_pid(self, mock_cleanup):
+        """Regression: competing cleanup run must not wipe the holder PID."""
+        with open(self.lock_path, "w") as holder:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            holder.write("4242")
+            holder.flush()
+
+            command = Command()
+            with patch.object(command, "stdout"), patch.object(command, "stderr"):
+                with self.assertRaises(SystemExit) as ctx:
+                    command.handle()
+            self.assertEqual(ctx.exception.code, 0)
+
+            with open(self.lock_path) as f:
+                self.assertEqual(f.read(), "4242")
+
+        mock_cleanup.assert_not_called()
+
+    @patch("core.management.commands.cleanup_entries.cleanup_all_feeds")
     def test_lock_released_after_failed_run(self, mock_cleanup):
         """A failed run releases the lock, so the next run still proceeds."""
         command = Command()

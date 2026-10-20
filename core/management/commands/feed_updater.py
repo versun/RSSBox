@@ -73,6 +73,7 @@ class Command(BaseCommand):
             # Record the holder PID for debugging only; the flock, not this
             # file's existence, is what actually excludes other processes.
             lock_file.truncate(0)
+            lock_file.seek(0)
             lock_file.write(str(os.getpid()))
             lock_file.flush()
 
@@ -139,7 +140,9 @@ def update_multiple_feeds(feeds: list):
 
             _, not_done = wait(futures, timeout=1800)
             if not_done:
-                stuck = [f.name for f, fut in zip(feeds, futures) if fut in not_done]
+                stuck = [
+                    f.name or f.slug for f, fut in zip(feeds, futures) if fut in not_done
+                ]
                 logger.warning(
                     f"Feed update timed out; {len(not_done)} tasks did not complete: "
                     f"{stuck}. Waiting for remaining workers to finish."
