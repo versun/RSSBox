@@ -1,3 +1,5 @@
+import threading
+
 from django.test import TestCase
 from unittest.mock import patch, Mock
 from concurrent.futures import Future
@@ -5,6 +7,7 @@ from concurrent.futures import Future
 from core.management.commands import feed_updater as cmd
 
 from core.models import Feed, Tag
+from core.tasks.task_manager import TaskManager
 
 
 class UpdateMultipleFeedsTests(TestCase):
@@ -66,3 +69,38 @@ class UpdateMultipleFeedsTests(TestCase):
         mock_tm.submit_task.assert_called_once()
         # Verify wait was called with timeout
         mock_wait.assert_called_once_with([mock_future], timeout=1800)
+
+    @patch("core.management.commands.feed_updater.cache_tag")
+    @patch("core.management.commands.feed_updater.cache_rss")
+    def test_feeds_with_same_name_are_all_updated(self, mock_cache_rss, mock_cache_tag):
+        """Regression: task names were keyed by the non-unique Feed.name, so the
+        second same-named feed (same feed_url, another target_language) was
+        deduplicated by TaskManager and never fetched."""
+        feed_zh = Feed.objects.create(
+            feed_url="https://news.example.com/rss",
+            name="Hacker News",
+            target_language="Chinese Simplified",
+        )
+        feed_en = Feed.objects.create(
+            feed_url="https://news.example.com/rss",
+            name="Hacker News",
+            target_language="English",
+        )
+        updated = []
+        release = threading.Event()
+
+        def fake_update(feed):
+            # Keep the first task running while the second one is submitted.
+            release.wait(5)
+            updated.append(feed.pk)
+            return True
+
+        tm = TaskManager(max_workers=2)
+        self.addCleanup(tm.shutdown)
+        with patch.object(cmd, "task_manager", tm), patch.object(
+            cmd, "update_single_feed", side_effect=fake_update
+        ):
+            threading.Timer(0.2, release.set).start()
+            cmd.update_multiple_feeds([feed_zh, feed_en])
+
+        self.assertCountEqual(updated, [feed_zh.pk, feed_en.pk])
