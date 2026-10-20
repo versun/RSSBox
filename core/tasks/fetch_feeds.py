@@ -77,13 +77,6 @@ def handle_single_feed_fetch(feed: Feed):
         feed.log = f"{timezone.now()} {str(e)}<br>"
     finally:
         feed.save()
-        # Explicitly clean up large objects
-        if "latest_feed" in locals():
-            del latest_feed
-        if "sorted_entries" in locals():
-            del sorted_entries
-        if "fetch_results" in locals():
-            del fetch_results
 
 
 def handle_feeds_fetch(feeds: list):
@@ -92,8 +85,6 @@ def handle_feeds_fetch(feeds: list):
     """
     for feed in feeds:
         handle_single_feed_fetch(feed)
-        # Explicitly clean up reference
-        del feed
 
 
 def convert_struct_time_to_datetime(time_str):
@@ -197,21 +188,27 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
         feed = feedparser.parse(
             url, etag=etag, agent=agent, handlers=[_FeedTimeoutHandler()]
         )
-        # feedparser omits "status" when the request itself failed (URLError:
-        # DNS, connection refused, connect/TLS timeout); those results are
-        # bozo with no entries and go through the httpx fallback below.
-        if feed.get("status") == 304:
+        status = feed.get("status")
+        if status == 304:
             logger.info(f"Feed {url} not modified, using cached version.")
             return {
                 "feed": None,
                 "update": False,
                 "error": None,
             }
-        # WAF-blocked responses (403) surface as bozo with no entries;
-        # manual_fetch_feed will retry with a fallback UA. Pass the same UA
-        # through so the retry logic sees the exact UA that was blocked.
-        if feed.bozo and not feed.entries:
-            logger.warning("Manual fetch feed %s %s", url, feed.get("bozo_exception"))
+        # Fallback to manual_fetch_feed (httpx) on HTTP error status (>= 400),
+        # such as 403 WAF blocks, 404, 500, or when feedparser encountered
+        # a bozo exception without parsing any entries (e.g. connection failure).
+        if (isinstance(status, int) and status >= 400) or (
+            feed.bozo and not feed.entries
+        ):
+            logger.warning(
+                "Manual fetch feed %s status=%s bozo=%s %s",
+                url,
+                status,
+                feed.bozo,
+                feed.get("bozo_exception"),
+            )
             results = manual_fetch_feed(url, etag, user_agent=agent)
             return results
         else:

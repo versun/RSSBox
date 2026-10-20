@@ -137,6 +137,23 @@ class FetchFeedTests(SimpleTestCase):
         self.assertNotIn("status", result["error"])
         self.assertIn("refused", result["error"].lower())
 
+    @mock.patch("core.tasks.fetch_feeds.manual_fetch_feed")
+    @mock.patch("core.tasks.fetch_feeds.feedparser.parse")
+    def test_http_error_statuses_trigger_manual_fallback(self, mock_parse, mock_manual):
+        """HTTP error responses (403, 404, 500) from feedparser have bozo=False
+        and no entries; they must fall back to manual_fetch_feed rather than
+        treating the error response as an update."""
+        manual_return = {"feed": {}, "update": False, "error": "HTTP error"}
+        mock_manual.return_value = manual_return
+
+        for code in (403, 404, 500):
+            with self.subTest(status=code):
+                mock_manual.reset_mock()
+                mock_parse.return_value = DummyFeed(status=code, bozo=False, entries=[])
+                result = fetch_feed("https://example.com/rss.xml")
+                mock_manual.assert_called_once()
+                self.assertEqual(result, manual_return)
+
 
 class ManualFetchFeedTests(SimpleTestCase):
     """manual_fetch_feed header construction, especially the nullable etag."""
@@ -212,3 +229,20 @@ class ManualFetchFeedTests(SimpleTestCase):
 
         fallback_headers = client.get.call_args_list[1].kwargs["headers"]
         self.assertEqual(fallback_headers["If-None-Match"], '"abc"')
+
+    @mock.patch("httpx.Client")
+    def test_bozo_parse_failure_with_no_entries_reports_error(
+        self, mock_client_cls
+    ):
+        """When the response body cannot be parsed as a feed and yields no entries,
+        manual_fetch_feed must report the parse error in result['error']."""
+        client = mock_client_cls.return_value.__enter__.return_value
+        client.get.return_value = self._response(
+            status=200, text="<<invalid xml>> not a feed"
+        )
+
+        result = manual_fetch_feed(
+            "https://example.com/rss.xml", etag="", user_agent="test-UA"
+        )
+
+        self.assertIsNotNone(result["error"])
