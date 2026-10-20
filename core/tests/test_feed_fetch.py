@@ -85,7 +85,10 @@ class FetchFeedTests(SimpleTestCase):
         self.assertEqual(result, manual_return)
         mock_ua.assert_called_once_with()
         mock_parse.assert_called_once_with(
-            "https://example.com/rss.xml", etag="abc", agent="test-UA"
+            "https://example.com/rss.xml",
+            etag="abc",
+            agent="test-UA",
+            handlers=[mock.ANY],
         )
         mock_manual.assert_called_once_with(
             "https://example.com/rss.xml", "abc", user_agent="test-UA"

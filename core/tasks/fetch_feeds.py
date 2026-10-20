@@ -1,6 +1,7 @@
 import logging
 import time
 from functools import lru_cache
+from urllib.request import BaseHandler
 from django.conf import settings
 from django.utils import timezone
 from core.models import Feed, Entry
@@ -13,6 +14,16 @@ logger = logging.getLogger(__name__)
 # Plain HTTP-client UA, used as fallback when a WAF blocks browser-like
 # User-Agents with a 403 (e.g. Cloudflare's cf-mitigated challenge).
 FALLBACK_USER_AGENT = "curl/8.10.1"
+
+
+class _FeedTimeoutHandler(BaseHandler):
+    """Bound feedparser HTTP requests without changing global socket defaults."""
+
+    def http_request(self, request):
+        request.timeout = settings.RSS_FETCH_TIMEOUT
+        return request
+
+    https_request = http_request
 
 
 @lru_cache(maxsize=1)
@@ -123,7 +134,10 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
     try:
         with httpx.Client() as client:
             response = client.get(
-                url, headers=headers, timeout=30, follow_redirects=True
+                url,
+                headers=headers,
+                timeout=settings.RSS_FETCH_TIMEOUT,
+                follow_redirects=True,
             )
 
             # A 403 here usually means a WAF (e.g. Cloudflare) blocked the
@@ -144,7 +158,10 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
                 if etag:
                     fallback_headers["If-None-Match"] = etag
                 response = client.get(
-                    url, headers=fallback_headers, timeout=30, follow_redirects=True
+                    url,
+                    headers=fallback_headers,
+                    timeout=settings.RSS_FETCH_TIMEOUT,
+                    follow_redirects=True,
                 )
 
             if response.status_code == 200:
@@ -177,7 +194,9 @@ def manual_fetch_feed(url: str, etag: str = "", user_agent: str = "") -> Dict:
 def fetch_feed(url: str, etag: str = "") -> Dict:
     try:
         agent = get_fetch_user_agent()
-        feed = feedparser.parse(url, etag=etag, agent=agent)
+        feed = feedparser.parse(
+            url, etag=etag, agent=agent, handlers=[_FeedTimeoutHandler()]
+        )
         if feed.status == 304:
             logger.info(f"Feed {url} not modified, using cached version.")
             return {

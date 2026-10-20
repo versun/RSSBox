@@ -323,7 +323,8 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         cmd.update_multiple_feeds(feeds)
 
         mock_logger.warning.assert_called_once_with(
-            "Feed update task timed out. 1 tasks did not complete."
+            "Feed update task timed out. 1 tasks did not complete. "
+            "Waiting for workers before releasing the update lock."
         )
 
     @patch("core.management.commands.feed_updater.cache_rss")
