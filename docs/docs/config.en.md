@@ -112,7 +112,7 @@ This document lists all available environment variable configuration options for
 - **Description**: Socket timeout in seconds for HTTP(S) feed downloads, including fallback requests
 - **Default**: `30`
 - **Example**: `60`
-- **Details**: Applies to individual blocking network operations, not the total duration of an update or translation. Scheduled updates keep their frequency lock until submitted workers finish; the 30-minute warning does not terminate workers.
+- **Details**: Must be > 0, otherwise startup fails. Applies to individual blocking network operations, not the total duration of an update or translation. Scheduled updates keep their frequency lock until submitted workers finish; the 30-minute warning does not terminate workers.
 
 ### RSS_FETCH_USER_AGENT
 - **Description**: Custom User-Agent used when fetching feeds and full article content

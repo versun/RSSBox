@@ -427,13 +427,13 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         mock_task_manager.submit_task.return_value = mock_future1
 
         # Mock timeout scenario
-        mock_wait.return_value = ([mock_future1], [mock_future2])
+        mock_wait.return_value = ([], [mock_future1])
 
         cmd.update_multiple_feeds([self.mock_feed1])
 
         mock_logger.warning.assert_called_once_with(
-            "Feed update task timed out. 1 tasks did not complete. "
-            "Waiting for workers before releasing the update lock."
+            "Feed update timed out; 1 tasks did not complete: "
+            "['Feed 1']. Waiting for remaining workers to finish."
         )
 
     @patch("core.management.commands.feed_updater.task_manager")

@@ -93,6 +93,7 @@ class FeedDownloadTimeoutTests(SimpleTestCase):
         self.assertFalse(result["update"])
         self.assertIsNotNone(result["error"])
 
+    @override_settings(RSS_FETCH_TIMEOUT=5)
     def test_etag_and_relative_links_are_preserved(self):
         result = fetch_feed(self.base_url + "/feed")
         self.assertTrue(result["update"])

@@ -36,6 +36,8 @@ OPENAI_API_MAX_RETRIES = max(0, int(os.environ.get("OPENAI_API_MAX_RETRIES", "0"
 RSS_FETCH_USER_AGENT = os.environ.get("RSS_FETCH_USER_AGENT", "")
 # Per-operation socket timeout for HTTP(S) feed downloads, including fallback requests.
 RSS_FETCH_TIMEOUT = float(os.environ.get("RSS_FETCH_TIMEOUT", "30"))
+if not RSS_FETCH_TIMEOUT > 0:
+    raise ValueError("RSS_FETCH_TIMEOUT must be a positive number of seconds")
 
 X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 

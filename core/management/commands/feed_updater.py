@@ -136,9 +136,10 @@ def update_multiple_feeds(feeds: list):
 
             _, not_done = wait(futures, timeout=1800)
             if not_done:
+                stuck = [f.name for f, fut in zip(feeds, futures) if fut in not_done]
                 logger.warning(
-                    f"Feed update task timed out. {len(not_done)} tasks did not complete. "
-                    "Waiting for workers before releasing the update lock."
+                    f"Feed update timed out; {len(not_done)} tasks did not complete: "
+                    f"{stuck}. Waiting for remaining workers to finish."
                 )
         finally:
             # wait(timeout=...) does not stop running threads. Drain every
