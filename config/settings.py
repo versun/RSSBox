@@ -16,6 +16,7 @@ import tomllib
 
 # from django.utils.crypto import get_random_string
 from django.core.management.utils import get_random_secret_key
+import math
 import os
 import sys
 
@@ -36,8 +37,8 @@ OPENAI_API_MAX_RETRIES = max(0, int(os.environ.get("OPENAI_API_MAX_RETRIES", "0"
 RSS_FETCH_USER_AGENT = os.environ.get("RSS_FETCH_USER_AGENT", "")
 # Per-operation socket timeout for HTTP(S) feed downloads, including fallback requests.
 RSS_FETCH_TIMEOUT = float(os.environ.get("RSS_FETCH_TIMEOUT", "30"))
-if not RSS_FETCH_TIMEOUT > 0:
-    raise ValueError("RSS_FETCH_TIMEOUT must be a positive number of seconds")
+if not (math.isfinite(RSS_FETCH_TIMEOUT) and RSS_FETCH_TIMEOUT > 0):
+    raise ValueError("RSS_FETCH_TIMEOUT must be a positive, finite number of seconds")
 
 X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 
