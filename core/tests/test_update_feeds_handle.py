@@ -383,10 +383,10 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         # Verify task submission
         self.assertEqual(mock_task_manager.submit_task.call_count, 2)
         mock_task_manager.submit_task.assert_any_call(
-            "update_feed_Feed 1", cmd.update_single_feed, self.mock_feed1
+            "update_feed_feed-1", cmd.update_single_feed, self.mock_feed1
         )
         mock_task_manager.submit_task.assert_any_call(
-            "update_feed_Feed 2", cmd.update_single_feed, self.mock_feed2
+            "update_feed_feed-2", cmd.update_single_feed, self.mock_feed2
         )
 
         # Verify wait call

@@ -130,7 +130,7 @@ def update_multiple_feeds(feeds: list):
             for feed in feeds:
                 futures.append(
                     task_manager.submit_task(
-                        f"update_feed_{feed.name}", update_single_feed, feed
+                        f"update_feed_{feed.slug}", update_single_feed, feed
                     )
                 )
 
