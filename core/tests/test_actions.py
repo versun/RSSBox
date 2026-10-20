@@ -133,6 +133,10 @@ class ActionsTestCase(TestCase):
         tag.refresh_from_db()
         self.assertIsNotNone(tag.last_updated)
         self.assertEqual(mock_submit_task.call_count, 2)
+        task_names = [call.args[0] for call in mock_submit_task.call_args_list]
+        self.assertEqual(len(task_names), len(set(task_names)))
+        self.assertIn(f"force_update_tag_{tag.slug}_xml", task_names)
+        self.assertIn(f"force_update_tag_{tag.slug}_json", task_names)
 
     def test_feed_batch_modify_boolean_fields(self):
         """Test batch modify for boolean fields."""

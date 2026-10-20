@@ -10,15 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import math
+import os
 from pathlib import Path
+import sys
 import tomllib
-
 
 # from django.utils.crypto import get_random_string
 from django.core.management.utils import get_random_secret_key
-import math
-import os
-import sys
 
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 USER_MANAGEMENT = os.environ.get("USER_MANAGEMENT") == "1"
@@ -36,8 +35,11 @@ OPENAI_API_MAX_RETRIES = max(0, int(os.environ.get("OPENAI_API_MAX_RETRIES", "0"
 # Custom User-Agent for fetching feeds. Empty = use built-in default.
 RSS_FETCH_USER_AGENT = os.environ.get("RSS_FETCH_USER_AGENT", "")
 # Per-operation socket timeout for HTTP(S) feed downloads, including fallback requests.
-RSS_FETCH_TIMEOUT = float(os.environ.get("RSS_FETCH_TIMEOUT", "30"))
-if not (math.isfinite(RSS_FETCH_TIMEOUT) and RSS_FETCH_TIMEOUT > 0):
+try:
+    RSS_FETCH_TIMEOUT = float(os.environ.get("RSS_FETCH_TIMEOUT", "30"))
+    if not (math.isfinite(RSS_FETCH_TIMEOUT) and RSS_FETCH_TIMEOUT > 0):
+        raise ValueError
+except ValueError:
     raise ValueError("RSS_FETCH_TIMEOUT must be a positive, finite number of seconds")
 
 X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")

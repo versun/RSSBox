@@ -20,7 +20,7 @@ class RssFetchTimeoutSettingsTests(SimpleTestCase):
         )
 
     def test_rejects_non_positive_or_non_finite(self):
-        for value in ("0", "-5", "nan", "inf", "-inf"):
+        for value in ("0", "-5", "nan", "inf", "-inf", "invalid"):
             with self.subTest(value=value):
                 result = self._check(value)
                 self.assertNotEqual(result.returncode, 0)

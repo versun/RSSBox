@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from django.utils import timezone
 
@@ -173,8 +174,10 @@ def feed_force_update(modeladmin, request, queryset):
             instance.translation_status = None
             instance.save()
 
-    feeds = queryset
-    task_manager.submit_task("Force Update Feeds", update_multiple_feeds, feeds)
+    feeds = list(queryset)
+    task_manager.submit_task(
+        f"force_update_feeds_{time.time_ns()}", update_multiple_feeds, feeds
+    )
 
 
 @admin.display(description=_("Recombine related feeds."))
@@ -184,10 +187,18 @@ def tag_force_update(modeladmin, request, queryset):
     with transaction.atomic():
         for instance in queryset:
             task_manager.submit_task(
-                "Force Update Tags", cache_tag, instance.slug, "t", "xml"
+                f"force_update_tag_{instance.slug}_xml",
+                cache_tag,
+                instance.slug,
+                "t",
+                "xml",
             )
             task_manager.submit_task(
-                "Force Update Tags", cache_tag, instance.slug, "t", "json"
+                f"force_update_tag_{instance.slug}_json",
+                cache_tag,
+                instance.slug,
+                "t",
+                "json",
             )
             instance.last_updated = timezone.now()
             instance.save()
