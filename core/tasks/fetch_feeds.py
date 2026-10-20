@@ -197,7 +197,10 @@ def fetch_feed(url: str, etag: str = "") -> Dict:
         feed = feedparser.parse(
             url, etag=etag, agent=agent, handlers=[_FeedTimeoutHandler()]
         )
-        if feed.status == 304:
+        # feedparser omits "status" when the request itself failed (URLError:
+        # DNS, connection refused, connect/TLS timeout); those results are
+        # bozo with no entries and go through the httpx fallback below.
+        if feed.get("status") == 304:
             logger.info(f"Feed {url} not modified, using cached version.")
             return {
                 "feed": None,
