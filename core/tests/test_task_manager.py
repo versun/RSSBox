@@ -371,6 +371,27 @@ class TaskManagerTestCase(TestCase):
         remaining_tasks = self.tm.list_tasks()
         self.assertIn("clear_task_3", remaining_tasks)
 
+    def test_clear_completed_tasks_includes_cancelled(self):
+        """clear_completed_tasks and _cleanup_tasks must also clear cancelled tasks."""
+        # Fill worker threads so the next task stays pending
+        blocker = threading.Event()
+        for i in range(self.tm.max_workers):
+            self.tm.submit_task(f"blocker_{i}", blocker.wait, 5)
+
+        self.tm.submit_task("to_cancel", lambda: None)
+        cancelled = self.tm.cancel_task("to_cancel")
+        self.assertTrue(cancelled)
+        blocker.set()
+
+        # Both clear_completed_tasks and _cleanup_tasks recognize CANCELLED
+        self.assertEqual(
+            self.tm.get_task_status("to_cancel")["status"],
+            TaskStatus.CANCELLED.value,
+        )
+        cleared = self.tm.clear_completed_tasks()
+        self.assertGreaterEqual(cleared, 1)
+        self.assertNotIn("to_cancel", self.tm.list_tasks())
+
     def test_shutdown_functionality(self):
         """Test shutdown functionality."""
         # Submit a task

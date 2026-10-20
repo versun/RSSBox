@@ -19,6 +19,13 @@ class TaskStatus(Enum):
     CANCELLED = "cancelled"
 
 
+FINISHED_STATUSES = (
+    TaskStatus.COMPLETED.value,
+    TaskStatus.FAILED.value,
+    TaskStatus.CANCELLED.value,
+)
+
+
 class TaskManager:
     """
     简易任务管理系统，用于管理后台任务
@@ -62,46 +69,40 @@ class TaskManager:
                     TaskStatus.PENDING.value,
                     TaskStatus.RUNNING.value,
                 ):
-                    logger.warning(
-                        f"Task '{task_name}' already exists with status '{existing_status}', returning existing future"
-                    )
-                    # 返回已存在的Future
-                    return self.futures.get(task_name)
+                    existing_future = self.futures.get(task_name)
+                    if existing_future is not None:
+                        logger.warning(
+                            f"Task '{task_name}' already exists with status '{existing_status}', returning existing future"
+                        )
+                        return existing_future
 
-            logger.debug(f"Submitting task: {task_name}")
-
-        self._cleanup_tasks()
-        task_info = {
-            "id": task_name,
-            "name": task_name,
-            "status": TaskStatus.PENDING.value,
-            "result": None,
-            "exception": None,
-            "progress": 0,
-            "start_time": time.time(),
-            "finish_time": None,
-            "args": str(args),
-            "kwargs": str(kwargs),
-        }
-
-        with self.lock:
+            self._cleanup_tasks()
+            task_info = {
+                "id": task_name,
+                "name": task_name,
+                "status": TaskStatus.PENDING.value,
+                "result": None,
+                "exception": None,
+                "progress": 0,
+                "start_time": time.time(),
+                "finish_time": None,
+                "args": str(args),
+                "kwargs": str(kwargs),
+            }
             self.tasks[task_name] = task_info
 
-        future = self.executor.submit(
-            self._wrap_task, task_name, task_fn, *args, **kwargs
-        )
-        future.add_done_callback(self._make_done_callback(task_name))
-
-        # 存储Future映射
-        with self.lock:
+            future = self.executor.submit(
+                self._wrap_task, task_name, task_fn, *args, **kwargs
+            )
+            future.add_done_callback(self._make_done_callback(task_name))
             self.futures[task_name] = future
-
-        return future
+            logger.debug(f"Submitting task: {task_name}")
+            return future
 
     def _cleanup_tasks(self, max_age_seconds: int = 3600) -> None:
         """
         清理任务列表:
-        1. 移除所有超过 max_age_seconds 的已完成或失败的任务。
+        1. 移除所有超过 max_age_seconds 的已结束任务。
         2. 如果任务总数仍然超过 max_task_history，则从最旧的任务开始移除，直到满足数量限制。
         """
         with self.lock:
@@ -110,8 +111,7 @@ class TaskManager:
             to_delete = [
                 task_id
                 for task_id, task in self.tasks.items()
-                if task["status"]
-                in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value)
+                if task["status"] in FINISHED_STATUSES
                 and task["finish_time"]
                 and now - task["finish_time"] > max_age_seconds
             ]
@@ -250,8 +250,7 @@ class TaskManager:
             to_delete = [
                 task_id
                 for task_id, task in self.tasks.items()
-                if task["status"]
-                in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value)
+                if task["status"] in FINISHED_STATUSES
             ]
             for task_id in to_delete:
                 del self.tasks[task_id]
