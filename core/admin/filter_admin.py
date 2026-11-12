@@ -39,7 +39,7 @@ class FilterAdmin(admin.ModelAdmin):
         ),
         (
             _("AI"),
-            {"fields": ("agent", "filter_prompt", "tokens_info")},
+            {"fields": ("agent", "filter_prompt", "reevaluate_existing", "tokens_info")},
         ),
     )
 

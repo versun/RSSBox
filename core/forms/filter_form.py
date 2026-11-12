@@ -14,6 +14,16 @@ class FilterForm(forms.ModelForm):
         ("translated_content", _("Translated Content")),
     )
     keywords = TagField(required=False)
+    reevaluate_existing = forms.BooleanField(
+        required=False,
+        initial=False,
+        label=_("Reevaluate existing articles"),
+        help_text=_(
+            "Leave unchecked to keep saved AI decisions. Checking this clears decisions "
+            "for every feed and tag using this filter. Their next refresh evaluates recent "
+            "articles again and may use substantial AI quota across multiple feeds."
+        ),
+    )
 
     class Meta:
         model = Filter
@@ -74,6 +84,13 @@ class FilterForm(forms.ModelForm):
             instance.filter_translated_content = True
 
     @transaction.atomic
+    def _save_m2m(self):
+        super()._save_m2m()
+        if self.cleaned_data.get("reevaluate_existing") and not getattr(self, "_reevaluated", False):
+            self.instance.clear_ai_filter_cache_results()
+            self._reevaluated = True
+
+    @transaction.atomic
     def save(self, commit=True):
         instance = super(FilterForm, self).save(commit=False)
 
@@ -81,5 +98,6 @@ class FilterForm(forms.ModelForm):
 
         if commit:
             instance.save()
+            self._save_m2m()
 
         return instance

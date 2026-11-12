@@ -55,9 +55,11 @@ After configuration is complete, wait for translation status to complete, then y
 - Can set filtering topics and criteria
 - More accurate and flexible than keyword filtering
 
-Editing an AI filter's prompt, agent, method, or input fields preserves saved AI decisions for unchanged articles. New or unevaluated articles use the current settings; articles whose content has changed can still be reevaluated. Keyword rules continue to apply to the current feed output.
+Editing an AI filter preserves saved decisions for unchanged articles by default. New or unevaluated articles use the current settings; articles whose content changes can still be reevaluated.
 
-To deliberately reevaluate existing articles, select the filter and use **Clean filter results**. This clears its saved decisions across every feed and tag using it, so subsequent feed generation may make AI calls for older retained articles as well. Deleting an article also removes its saved decisions; if fetched again, it is evaluated using the current filter settings.
+To apply the new settings to existing articles, check **Reevaluate existing articles** when saving the filter. It is unchecked by default. This clears decisions for every feed and tag sharing the filter, so opting in can still use substantial AI quota (for example, up to 400 articles across 20 feeds with a 20-article limit). The **Clean filter results** action also explicitly clears decisions. Deleting and refetching articles makes them eligible for evaluation again.
+
+AI evaluation is limited before filtering: each feed considers its latest `max_posts` articles, and a tag considers at most 100 recent articles combined, after each feed's limit. Rejected articles are not replaced by older candidates, so the output may contain fewer articles than the limit. This bounds both automatic and manual reevaluation. Keyword-only feeds keep their existing selection behavior.
 
 ### Tag Management
 Through the tag system you can:

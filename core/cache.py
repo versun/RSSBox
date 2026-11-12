@@ -240,7 +240,11 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     all_entries.sort(key=lambda x: x[0], reverse=True)
 
     # 获取tag filter对象
-    tag_filters = Tag.objects.get(slug=tag).filters.all()
+    tag_filters = list(Tag.objects.get(slug=tag).filters.all())
+    if any(f.filter_method in (f.AI_ONLY, f.BOTH) and f.agent_id for f in tag_filters):
+        # Bound AI work before evaluating filters, not just the final output.
+        all_entries = all_entries[:100]
+        entry_ids = [entry.pk for _, entry in all_entries]
 
     # 开始过滤 - 使用批量查询优化性能
     if not tag_filters:
