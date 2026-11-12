@@ -71,7 +71,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
     for entry in entries:
         try:
-            logger.debug(f"Processing entry {entry}")
+            logger.debug("Processing entry %s", entry.pk)
             if not feed.translator:
                 raise Exception("Translate Engine Not Set")
 
@@ -168,7 +168,7 @@ def _translate_entry_title(
     total_characters = 0
 
     # Check if title needs translation
-    if entry.translated_title:
+    if entry.translated_title or not (entry.original_title or "").strip():
         return {"tokens": 0, "characters": 0}
 
     logger.debug("[Title] Translating title")
