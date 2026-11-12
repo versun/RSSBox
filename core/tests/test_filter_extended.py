@@ -250,8 +250,8 @@ class FilterExtendedTestCase(TestCase):
         existing_filter = Filter.objects.create(name="Existing Filter")
         existing_filter.save()  # Should not raise errors
 
-    def test_save_filter_cache_clearing(self):
-        """Test save method cache clearing for different field changes."""
+    def test_save_filter_preserves_cached_results(self):
+        """Editing filter settings must not clear historical AI decisions."""
         # Test keywords changed in AI_ONLY mode (should not clear cache)
         filter_keywords = Filter.objects.create(
             name="Keywords Filter", filter_method=Filter.AI_ONLY, agent=self.agent
@@ -268,7 +268,7 @@ class FilterExtendedTestCase(TestCase):
             filter_keywords.save()
             mock_clear.assert_not_called()
 
-        # Test AI fields changed (should clear cache)
+        # Test AI fields changed (should preserve cache)
         filter_ai = Filter.objects.create(
             name="AI Filter",
             filter_method=Filter.AI_ONLY,
@@ -280,9 +280,9 @@ class FilterExtendedTestCase(TestCase):
         with patch.object(filter_ai, "clear_ai_filter_cache_results") as mock_clear:
             filter_ai.filter_prompt = "New prompt"
             filter_ai.save()
-            mock_clear.assert_called_once()
+            mock_clear.assert_not_called()
 
-        # Test agent changed (should clear cache)
+        # Test agent changed (should preserve cache)
         new_agent = OpenAIAgent.objects.create(name=f"New Agent {uuid.uuid4()}", api_key="test-key")
         filter_agent = Filter.objects.create(
             name="Agent Filter", filter_method=Filter.BOTH, agent=self.agent
@@ -291,7 +291,7 @@ class FilterExtendedTestCase(TestCase):
         with patch.object(filter_agent, "clear_ai_filter_cache_results") as mock_clear:
             filter_agent.agent = new_agent
             filter_agent.save()
-            mock_clear.assert_called_once()
+            mock_clear.assert_not_called()
 
     def test_cache_and_edge_cases(self):
         """Test cache clearing and edge cases."""

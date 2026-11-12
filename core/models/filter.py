@@ -198,45 +198,6 @@ class Filter(models.Model):
         if entry.updated and entry.updated > result.last_updated:
             return True
 
-    def save(self, *args, **kwargs):
-        """
-        当关键配置变化时清除缓存结果
-        """
-        # 检查是否是新建对象
-        is_new = self._state.adding
-
-        # 如果不是新对象，获取数据库中的原始值
-        original = None
-        if not is_new:
-            original = Filter.objects.get(pk=self.pk)
-
-        # 调用父类保存方法
-        super().save(*args, **kwargs)
-
-        # 如果不是新对象且关键字段发生变化，清除缓存
-        if not is_new and original is not None:
-            # 检查关键字段是否变化
-            ai_fields = [
-                "agent_id",
-                "filter_prompt",
-                "filter_method",
-                "filter_original_title",
-                "filter_original_content",
-                "filter_translated_title",
-                "filter_translated_content",
-            ]
-
-            ai_fields_changed = any(
-                getattr(original, field) != getattr(self, field) for field in ai_fields
-            ) and self.filter_method in [self.AI_ONLY, self.BOTH]
-
-            need_clear_ai_filter_cache = (
-                self.filter_method in [self.AI_ONLY, self.BOTH] and ai_fields_changed
-            )
-            # 如果有变化，清除所有相关缓存结果
-            if need_clear_ai_filter_cache:
-                self.clear_ai_filter_cache_results()
-
     def clear_ai_filter_cache_results(self):
         """
         清除与此过滤器相关的所有缓存结果

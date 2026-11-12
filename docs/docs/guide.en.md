@@ -55,6 +55,10 @@ After configuration is complete, wait for translation status to complete, then y
 - Can set filtering topics and criteria
 - More accurate and flexible than keyword filtering
 
+Editing an AI filter's prompt, agent, method, or input fields preserves saved AI decisions for unchanged articles. New or unevaluated articles use the current settings; articles whose content has changed can still be reevaluated. Keyword rules continue to apply to the current feed output.
+
+To deliberately reevaluate existing articles, select the filter and use **Clean filter results**. This clears its saved decisions across every feed and tag using it, so subsequent feed generation may make AI calls for older retained articles as well. Deleting an article also removes its saved decisions; if fetched again, it is evaluated using the current filter settings.
+
 ### Tag Management
 Through the tag system you can:
 - Organize multiple related RSS sources together
