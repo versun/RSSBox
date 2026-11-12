@@ -262,7 +262,8 @@ def _summarize_entry(
 
         # Clean up
         del prompt, response
-        del text_chunks[chunk_idx]
+        # Release the processed text without shifting the remaining chunks.
+        text_chunks[chunk_idx] = ""
 
     # Finalize summary
     final_summary = "\n\n".join(accumulated_summaries)
