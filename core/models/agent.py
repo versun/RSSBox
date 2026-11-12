@@ -294,7 +294,6 @@ class OpenAIAgent(Agent):
         client = self._init()
         tokens = 0
         result_text = ""
-        log_updated = False
 
         try:
             if user_prompt:
@@ -410,6 +409,7 @@ class OpenAIAgent(Agent):
                 res.choices
                 and res.choices[0].finish_reason == "stop"
                 and res.choices[0].message.content
+                and res.choices[0].message.content.strip()
             ):
                 result_text = res.choices[0].message.content
                 logger.debug(f"[{self.name}]: {result_text[:50]}...")
@@ -421,18 +421,17 @@ class OpenAIAgent(Agent):
                         finish_reason = res.choices[0].finish_reason
                     except Exception:
                         finish_reason = None
-                logger.warning(
-                    f"[{self.name}]: Failed to complete request:[{finish_reason or 'unknown'}]"
+                raise RuntimeError(
+                    f"No complete text response (finish_reason={finish_reason or 'unknown'})"
                 )
 
             tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
         except Exception as e:
             self.log = f"{timezone.now()}: {str(e)}"
-            log_updated = True
             logger.error(f"{self.name}: {e}")
-
-        if not _is_chunk and log_updated:
-            self.save(update_fields=["log"])
+            if not _is_chunk:
+                self.save(update_fields=["log"])
+            raise
 
         return {"text": result_text, "tokens": tokens}
 

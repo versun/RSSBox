@@ -627,9 +627,7 @@ class TasksOptimizedTestCase(TestCase):
 
         result = summarize_feed(self.feed)
 
-        # 由于所有entries都有ai_summary，函数会返回False
-        # 这是函数的实际行为：没有需要处理的条目时返回False
-        self.assertFalse(result)
+        self.assertTrue(result)  # No pending entries is a successful no-op.
         # 验证entry的ai_summary没有被改变
         entry.refresh_from_db()
         self.assertEqual(entry.ai_summary, "Already summarized")
@@ -918,6 +916,7 @@ class TasksOptimizedTestCase(TestCase):
         self._create_test_entry(feed=self.feed)
         self._create_test_entry(feed=feed2)
 
+        mock_translate_feed.side_effect = lambda feed, **kwargs: setattr(feed, "translation_status", True)
         feeds = [self.feed, feed2]
         handle_feeds_translation(feeds, "title")
 
@@ -942,6 +941,7 @@ class TasksOptimizedTestCase(TestCase):
         self._create_test_entry(feed=self.feed)
         self._create_test_entry(feed=feed2)
 
+        mock_summarize_feed.return_value = True
         feeds = [self.feed, feed2]
         handle_feeds_summary(feeds)
 
@@ -1026,19 +1026,17 @@ class TasksOptimizedTestCase(TestCase):
             result = summarize_feed(self.feed)
 
             # 验证错误被处理
-            self.assertTrue(result)
+            self.assertFalse(result)
             entry.refresh_from_db()
-            self.assertIn("Processing failed", str(entry.ai_summary))
+            self.assertIsNone(entry.ai_summary)
 
     def testauto_retry_all_failures(self):
         """测试自动重试全部失败的情况"""
         mock_func = Mock()
         mock_func.side_effect = Exception("Persistent error")
 
-        result = auto_retry(mock_func, max_retries=3, text="test")
-
-        # 应该返回空字典
-        self.assertEqual(result, {})
+        with self.assertRaisesRegex(Exception, "Persistent error"):
+            auto_retry(mock_func, max_retries=3, text="test")
         self.assertEqual(mock_func.call_count, 3)
 
     def test_fetch_article_content_parse_error(self):

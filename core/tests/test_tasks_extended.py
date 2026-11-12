@@ -417,7 +417,8 @@ class TasksExtendedTestCase(TestCase):
             entry.refresh_from_db()
             self.assertIsNotNone(entry.ai_summary)
 
-    def test_summarize_feed_with_critical_error_in_finally(self):
+    @patch("core.tasks.summarize_feeds.auto_retry", return_value={"text": "Summary", "tokens": 10})
+    def test_summarize_feed_with_critical_error_in_finally(self, mock_retry):
         """测试finally块中的错误处理 - 覆盖第646行"""
         self.feed.summarizer = self.agent
         self.feed.save()
@@ -441,9 +442,8 @@ class TasksExtendedTestCase(TestCase):
         def always_fail(**kwargs):
             raise Exception("Always fails")
 
-        result = auto_retry(always_fail, max_retries=3, text="test")
-
-        self.assertEqual(result, {})  # 应该返回空字典
+        with self.assertRaisesRegex(Exception, "Always fails"):
+            auto_retry(always_fail, max_retries=3, text="test")
 
     def testauto_retry_memory_cleanup(self):
         """测试重试函数的内存清理 - 覆盖第201行"""
