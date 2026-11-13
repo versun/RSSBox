@@ -490,8 +490,13 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
 
         cmd.update_multiple_feeds([self.mock_feed1])
 
-        mock_logger.warning.assert_called_once_with(
+        mock_logger.warning.assert_any_call(
             "A feed update task resulted in an exception: Task failed"
+        )
+        # The failed task must also surface in the aggregate warning so the
+        # CLI does not report a clean success.
+        mock_logger.warning.assert_any_call(
+            "Feed update finished with %s failed feed(s): %s", 1, ["Feed 1"]
         )
 
     @patch("core.management.commands.feed_updater.task_manager")

@@ -1,9 +1,23 @@
 import logging
 import time
 
+from django.db import DatabaseError
 from openai import APIStatusError
 
 logger = logging.getLogger(__name__)
+
+
+class PersistError(Exception):
+    """A completed AI call could not be saved, so the pipeline must stop.
+
+    The result was paid for but never persisted; continuing would burn more
+    quota on results that also cannot be saved.
+    """
+
+
+# Errors that mean later AI results cannot be persisted either; the pipeline
+# should stop instead of paying for more calls.
+PERSISTENCE_ERRORS = (DatabaseError, PersistError)
 
 
 def auto_retry(
@@ -24,6 +38,10 @@ def auto_retry(
             return result
         except Exception as e:
             logger.error(f"Attempt {attempt + 1} failed: {e!s}")
+            # Persistence failures cannot succeed on retry while the database
+            # is down; stop immediately instead of paying for more AI calls.
+            if isinstance(e, PERSISTENCE_ERRORS):
+                raise
             if isinstance(e, APIStatusError) and (
                 e.status_code < 500 and e.status_code not in (408, 409, 429)
             ):

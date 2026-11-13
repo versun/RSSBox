@@ -78,12 +78,23 @@ class Command(BaseCommand):
             lock_file.flush()
 
             try:
-                update_feeds_for_frequency(simple_update_frequency=target_frequency)
+                ok = update_feeds_for_frequency(
+                    simple_update_frequency=target_frequency
+                )
+                if ok is False:
+                    self.stderr.write(
+                        self.style.WARNING(
+                            f"{current_time}: Finished with failed feeds for frequency: {target_frequency}"
+                        )
+                    )
+                    sys.exit(2)
                 self.stdout.write(
                     self.style.SUCCESS(
                         f"{current_time}: Successfully updated feeds for frequency: {target_frequency}"
                     )
                 )
+            except SystemExit:
+                raise
             except Exception as e:
                 logger.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
                 self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
@@ -131,11 +142,16 @@ def update_single_feed(feed: Feed):
         close_old_connections()
 
 
-def update_multiple_feeds(feeds: list):
-    """并行更新多个Feed"""
+def update_multiple_feeds(feeds: list) -> bool:
+    """并行更新多个Feed
+
+    Returns True when every submitted feed updated without an AI-pipeline
+    failure; False when at least one feed's update_single_feed returned
+    False or raised.
+    """
     if not feeds:
         logger.info("No feeds to update.")
-        return
+        return True
     try:
         futures = []
         try:
@@ -159,11 +175,26 @@ def update_multiple_feeds(feeds: list):
             # wait(timeout=...) does not stop running threads. Drain every
             # submitted task before returning to Command.handle, which owns
             # the frequency lock. Also cover a partial submission failure.
-            for future in futures:
+            #
+            # A False result (or a raised exception) means that feed's AI
+            # pipeline failed even though its fetch may have succeeded; make
+            # the failures visible instead of letting the CLI report success.
+            failed = []
+            for feed, future in zip(feeds, futures):
                 try:
-                    future.result()
+                    if future.result() is False:
+                        failed.append(feed.name or feed.slug)
                 except Exception as e:
-                    logger.warning(f"A feed update task resulted in an exception: {e}")
+                    failed.append(feed.name or feed.slug)
+                    logger.warning(
+                        f"A feed update task resulted in an exception: {e}"
+                    )
+            if failed:
+                logger.warning(
+                    "Feed update finished with %s failed feed(s): %s",
+                    len(failed),
+                    failed,
+                )
 
         # 所有任务完成后执行缓存操作
         # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
@@ -193,8 +224,10 @@ def update_multiple_feeds(feeds: list):
             except Exception as e:
                 logger.error(f"Failed to cache tag {tag.slug}: {str(e)}")
 
+        return not failed
     except Exception as e:
         logger.exception("Command update_multiple_feeds failed: %s", str(e))
+        return False
 
 
 def update_feeds_for_frequency(simple_update_frequency: str):
@@ -221,14 +254,15 @@ def update_feeds_for_frequency(simple_update_frequency: str):
         # output to stdout
         # print(log)
 
-        update_multiple_feeds(feeds_list)
+        return update_multiple_feeds(feeds_list)
 
     except KeyError:
         logger.error(f"Invalid frequency: {simple_update_frequency}")
+        return False
     except Exception as e:
         log = f"{current_time}: Command update_feeds_for_frequency {simple_update_frequency}: {str(e)}"
         logger.exception(log)
-        # print(log)
+        return False
 
 
 # if __name__ == "__main__":

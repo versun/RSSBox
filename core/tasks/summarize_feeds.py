@@ -5,7 +5,7 @@ from django.db.models import F
 
 from core.models import Feed, Entry, Agent
 from utils import text_handler
-from core.tasks.utils import auto_retry
+from core.tasks.utils import PERSISTENCE_ERRORS, PersistError, auto_retry
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,17 @@ def summarize_feed(
     Generate content summary with memory optimizations.
     """
     summarizer = summarizer or feed.summarizer
-    assert 0 <= feed.summary_detail <= 1, "summary_detail must be between 0 and 1"
+    summary_detail = feed.summary_detail
+    if summary_detail is None or not 0 <= summary_detail <= 1:
+        # Legacy rows can carry NULL or out-of-range values; a bare assert
+        # or TypeError here would fail every summary for this feed. Clamp
+        # into range instead of crashing.
+        logger.warning(
+            "Invalid summary_detail %r for feed %s; clamping to 0..1",
+            summary_detail,
+            feed.feed_url,
+        )
+        summary_detail = min(1.0, max(0.0, summary_detail or 0.0))
     completed = True
     entries = None
 
@@ -110,7 +120,7 @@ def summarize_feed(
                     max_context_tokens=max_context_tokens,
                     chunk_delimiter=chunk_delimiter,
                     max_chunks_per_entry=max_chunks_per_entry,
-                    summary_detail=feed.summary_detail,
+                    summary_detail=summary_detail,
                     user_prompt=feed.additional_prompt,
                 )
 
@@ -121,6 +131,15 @@ def summarize_feed(
                     f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
                 )
 
+            except PERSISTENCE_ERRORS as e:
+                # The summary was generated but could not be saved; further
+                # entries would fail the same way, so stop paying for more.
+                logger.error(
+                    f"Aborting summary for feed {feed.feed_url} at entry {entry.original_title}: {e}"
+                )
+                completed = False
+                feed.log += f"{timezone.now()} Persistence failure, summary aborted at entry {entry.pk}: {e}<br>"
+                break
             except Exception as e:
                 logger.error(
                     f"Error summarizing entry {entry.original_title}: {str(e)}"
@@ -162,6 +181,13 @@ def _summarize_entry(
     # Skip empty content
     if not content_text.strip():
         return "[No content available]", 0
+
+    # Clamp chunk sizes so an undetected/zeroed agent limit cannot divide
+    # by zero or produce unbounded chunks; sane defaults keep the pipeline
+    # running while the model's real limit is being detected.
+    min_chunk_size = max(1, int(min_chunk_size or 300))
+    max_chunk_size = max(min_chunk_size, int(max_chunk_size or 1500))
+    max_context_tokens = max_context_tokens or 3000
 
     # Calculate chunking parameters
     token_count = text_handler.get_token_count(content_text)
@@ -258,10 +284,17 @@ def _summarize_entry(
 
 def _save_progress(entries_to_save, feed, total_tokens):
     """Commit completed summaries and their usage together."""
-    with transaction.atomic():
-        if entries_to_save:
-            Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
-        if total_tokens > 0:
-            Feed.objects.filter(pk=feed.pk).update(total_tokens=F("total_tokens") + total_tokens)
+    try:
+        with transaction.atomic():
+            if entries_to_save:
+                Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+            if total_tokens > 0:
+                Feed.objects.filter(pk=feed.pk).update(total_tokens=F("total_tokens") + total_tokens)
+    except PERSISTENCE_ERRORS:
+        raise
+    except Exception as save_error:
+        raise PersistError(
+            f"Could not persist summaries: {save_error}"
+        ) from save_error
     if total_tokens > 0:
         feed.total_tokens += total_tokens

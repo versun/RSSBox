@@ -319,10 +319,11 @@ class FilterExtendedTestCase(TestCase):
             mock_filter.assert_not_called()
             self.assertEqual(result.count(), 1)
 
-        # Test AI filter with no agent
+        # AI filter with no agent fails open like an AI failure: entries
+        # stay visible instead of being hidden behind an unconfigured agent.
         filter_no_agent = Filter.objects.create(
             name="No Agent Filter", filter_method=Filter.AI_ONLY, agent=None
         )
         result_queryset, tokens = filter_no_agent.apply_ai_filter(Entry.objects.all())
-        self.assertEqual(result_queryset.count(), 0)
+        self.assertEqual(result_queryset.count(), Entry.objects.count())
         self.assertEqual(tokens, 0)
