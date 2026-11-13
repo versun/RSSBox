@@ -74,6 +74,15 @@ class Feed(models.Model):
         help_text=_("Fetch original article from the website."),
     )
 
+    fetch_youtube_transcript = models.BooleanField(
+        _("Use YouTube captions"), default=False,
+        help_text=_("Use captions for YouTube content translation and summaries. Missing captions stay pending."),
+    )
+    youtube_transcript_fallback = models.BooleanField(
+        _("Enable yt-dlp caption fallback"), default=False,
+        help_text=_("Try yt-dlp for caption extraction failures, but not IP blocks or missing captions."),
+    )
+
     TRANSLATION_DISPLAY_CHOICES = [
         (0, _("Only Translation")),
         (1, _("Translation | Original")),

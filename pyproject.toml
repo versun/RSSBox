@@ -30,6 +30,8 @@ dependencies = [
     "httpx>=0.28.1",
     "django-autoslug>=1.9.9",
     "coverage>=7.10.6",
+    "youtube-transcript-api>=1.2.5,<2",
+    "yt-dlp>=2026.10.26",
 ]
 
 [tool.uv]

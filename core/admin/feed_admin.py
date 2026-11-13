@@ -72,6 +72,8 @@ class FeedAdmin(admin.ModelAdmin):
                     "simple_update_frequency",
                     "tags",
                     "fetch_article",
+                    "fetch_youtube_transcript",
+                    "youtube_transcript_fallback",
                     "show_log",
                 ),
                 # "description": "内容源的基本识别信息和限制设置"
@@ -169,6 +171,8 @@ class FeedAdmin(admin.ModelAdmin):
                 "translator_option",  # 需要用新翻译器重新翻译
                 "summarizer",  # 需要用新引擎重新生成摘要
                 "additional_prompt",
+                "fetch_youtube_transcript",
+                "youtube_transcript_fallback",
             ]
         )
         feed_url_changed = "feed_url" in form.changed_data
@@ -193,6 +197,8 @@ class FeedAdmin(admin.ModelAdmin):
             obj.entries.update(
                 translated_content=None, translated_title=None, ai_summary=None
             )
+        if "fetch_youtube_transcript" in form.changed_data:
+            obj.entries.update(translated_content=None, ai_summary=None)
         if feed_url_changed:
             obj.entries.all().delete()
 

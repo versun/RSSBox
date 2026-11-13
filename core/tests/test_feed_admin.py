@@ -690,6 +690,8 @@ class FeedAdminIntegrationTest(TestCase):
                         "simple_update_frequency",
                         "tags",
                         "fetch_article",
+                        "fetch_youtube_transcript",
+                        "youtube_transcript_fallback",
                         "show_log",
                     )
                 },

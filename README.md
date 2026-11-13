@@ -98,3 +98,7 @@
 ## Star历史图
 
 [![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
+
+### YouTube 订阅
+
+支持使用缓存字幕翻译视频内容和生成摘要，可按订阅启用 yt-dlp 备用提取方式。详见 [YouTube 字幕配置与重试说明（英文）](docs/youtube-captions.md)。

@@ -107,3 +107,7 @@ Thank you for your participation and support!
 ## Star History Chart
 
 [![Star History Chart](https://api.star-history.com/svg?repos=versun/rssbox&type=Date)](https://star-history.com/#versun/rssbox&Date)
+
+### YouTube feeds
+
+Use cached captions for content translation and summaries, with an optional yt-dlp fallback. See [YouTube caption setup and retry behavior](docs/youtube-captions.md).

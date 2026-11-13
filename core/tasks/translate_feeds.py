@@ -10,6 +10,7 @@ from core.models import Feed, Entry, Agent
 from utils import text_handler
 from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, get_fetch_user_agent
 from core.tasks.utils import auto_retry
+from core.tasks.youtube_transcripts import processing_content, uses_youtube_transcript
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
             # Process content translation
             if target_field == "content" and feed.translate_content:
-                if feed.fetch_article:
+                youtube_content = uses_youtube_transcript(entry, feed)
+                if feed.fetch_article and not youtube_content:
                     article_content = _fetch_article_content(entry.link)
                     if article_content and article_content != entry.original_content:
                         entry.original_content = article_content
@@ -103,12 +105,13 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     # Clean up article content after use
                     del article_content
 
-                if entry.original_content and not entry.translated_content:
+                if (entry.original_content or youtube_content) and not entry.translated_content:
                     metrics = _translate_entry_content(
                         entry=entry,
                         target_language=feed.target_language,
                         engine=feed.translator,
                         user_prompt=feed.additional_prompt,
+                        content=processing_content(entry, feed),
                     )
                     entry_tokens += metrics["tokens"]
                     entry_characters += metrics["characters"]
@@ -116,7 +119,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
             if entry_needs_save:
                 fields = [f"translated_{target_field}"]
-                if target_field == "content" and feed.fetch_article:
+                if target_field == "content" and feed.fetch_article and not youtube_content:
                     fields.append("original_content")
                 with transaction.atomic():
                     entry.save(update_fields=fields)
@@ -185,6 +188,7 @@ def _translate_entry_content(
     target_language: str,
     engine: Agent,
     user_prompt: str = None,
+    content: str = None,
 ) -> dict:
     """Translate entry content with memory optimization."""
     total_tokens = 0
@@ -195,7 +199,7 @@ def _translate_entry_content(
         return {"tokens": 0, "characters": 0}
 
     # Parse HTML with explicit cleanup
-    soup = BeautifulSoup(entry.original_content, "lxml")
+    soup = BeautifulSoup(entry.original_content if content is None else content, "lxml")
 
     # Add notranslate class to elements that shouldn't be translated
     for element in soup.find_all(string=True):

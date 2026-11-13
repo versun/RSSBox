@@ -6,6 +6,7 @@ from django.db.models import F
 from core.models import Feed, Entry, Agent
 from utils import text_handler
 from core.tasks.utils import auto_retry
+from core.tasks.youtube_transcripts import processing_content
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,8 @@ def summarize_feed(
                     f"[{idx + 1}/{total_entries}] Processing: {entry.original_title}"
                 )
 
+                # Only ai_summary is saved below; preserve the original RSS body in the DB.
+                entry.original_content = processing_content(entry, feed)
                 # Use the extracted function for single entry processing
                 summary, entry_tokens = _summarize_entry(
                     entry=entry,

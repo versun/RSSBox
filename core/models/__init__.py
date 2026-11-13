@@ -10,3 +10,4 @@ from core.models.agent import (
 )
 from core.models.tag import Tag
 from core.models.digest import Digest
+from core.models.youtube_transcript import YouTubeTranscript
