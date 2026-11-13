@@ -98,6 +98,16 @@ class Feed(models.Model):
         null=True,
         editable=False,
     )
+    translation_started_at = models.DateTimeField(
+        _("Translation Started At"),
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=_(
+            "Set whenever translation_status enters the in-progress (None) "
+            "state, so a crashed run can be told apart from a live one."
+        ),
+    )
 
     translator_content_type = models.ForeignKey(
         ContentType,

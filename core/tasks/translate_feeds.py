@@ -26,7 +26,10 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
                 continue
 
             feed.translation_status = None
-            feed.save(update_fields=["translation_status"])
+            feed.translation_started_at = timezone.now()
+            feed.save(
+                update_fields=["translation_status", "translation_started_at"]
+            )
             logger.info(
                 "Start translate %s of feed %s to %s",
                 target_field,
@@ -35,6 +38,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             )
 
             saved = translate_feed(feed, target_field=target_field)
+            feed.translation_started_at = None
             if feed.translation_status or saved:
                 # Bump on partial success too: last_translate drives the
                 # translated feed's ETag/Last-Modified, so readers must see
@@ -47,6 +51,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
         except Exception as e:
             logger.error(f"Error in translate_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
+            feed.translation_started_at = None
             feed.log += f"{timezone.now()} {str(e)} <br>"
         finally:
             # Explicitly clean up reference
@@ -56,6 +61,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
         feeds,
         fields=[
             "translation_status",
+            "translation_started_at",
             "log",
             "last_translate",
         ],

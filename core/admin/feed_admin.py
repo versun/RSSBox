@@ -185,6 +185,7 @@ class FeedAdmin(admin.ModelAdmin):
         # 需要触发任务的处理流程
         obj.fetch_status = None
         obj.translation_status = None
+        obj.translation_started_at = timezone.now()
 
         super().save_model(request, obj, form, change)
 

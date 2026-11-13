@@ -22,6 +22,28 @@ def cache_timeout_seconds(update_frequency_minutes):
     return update_frequency_minutes * 60
 
 
+def _is_translation_stale(feed) -> bool:
+    """True when translation_status is None but the run that set it is long
+    gone — the process crashed or was killed before it could write back a
+    result, leaving the feed stuck in a "translating" limbo.
+
+    The threshold is twice the feed's own update_frequency, floored at
+    10 minutes so a very frequent feed still gets a reasonable grace period.
+    """
+    if feed.translation_status is not None:
+        return False
+    started = feed.translation_started_at
+    if not started:
+        # No timestamp means the row predates this column or was set by an
+        # older code path; treat any None-status older than the threshold as
+        # stale via the feed's last completed translation/fetch instead.
+        started = feed.last_translate or feed.last_fetch
+        if not started:
+            return True
+    grace = max(10 * 60, feed.update_frequency * 60 * 2)
+    return (timezone.now() - started).total_seconds() > grace
+
+
 def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     logger.debug(
         f"Start cache_rss for {feed_slug} with type {feed_type} and format {format}"
@@ -32,11 +54,26 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     feed = Feed.objects.get(slug=feed_slug)
     # 如果请求翻译版本，检查翻译状态  
     if feed_type == "t" and (feed.translate_title or feed.translate_content or feed.summary):  
-        if feed.translation_status is None:  
-            # 翻译正在进行中，不更新缓存  
-            logger.debug(f"Translation in progress for {feed_slug}, using old cache if available")  
-            existing_cache = cache.get(cache_key)  
-            return existing_cache  # 返回旧缓存或 None  
+        if feed.translation_status is None:
+            if _is_translation_stale(feed):
+                # The "in progress" marker outlived its run: a crash or kill
+                # prevented the write-back. Reset it so readers get the feed
+                # (with whatever partial results exist) instead of an error,
+                # and so the next scheduled run picks the feed up again.
+                logger.warning(
+                    "Translation for %s appears stuck (status=None since %s); "
+                    "resetting to failed and generating feed with available content",
+                    feed_slug,
+                    feed.translation_started_at,
+                )
+                feed.translation_status = False
+                feed.save(update_fields=["translation_status"])
+            else:
+                # Translation genuinely in progress, keep the old cache.
+                logger.debug(
+                    f"Translation in progress for {feed_slug}, using old cache if available"
+                )
+                return cache.get(cache_key)
         elif feed.translation_status is False:  
             # 翻译失败，记录警告但仍然生成 feed（包含原文）  
             logger.warning(f"Translation failed for {feed_slug}, generating feed with original content")

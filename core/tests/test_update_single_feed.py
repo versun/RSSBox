@@ -44,6 +44,12 @@ class UpdateSingleFeedTests(TestCase):
     ):
         """When no internal task raises, should return True and call helpers."""
         feed = self._create_feed_with_options(translate_title=True, summary=True)
+        mock_translate.side_effect = lambda feeds, target_field: setattr(
+            feeds[0], "translation_status", True
+        )
+        mock_summary.side_effect = lambda feeds: setattr(
+            feeds[0], "translation_status", True
+        )
 
         result = cmd.update_single_feed(feed)
 
