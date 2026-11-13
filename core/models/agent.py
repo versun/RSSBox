@@ -303,7 +303,7 @@ class OpenAIAgent(Agent):
 
         try:
             if user_prompt:
-                system_prompt += f"\n\n{user_prompt}"
+                system_prompt = (system_prompt or "") + f"\n\n{user_prompt}"
 
             if self.max_tokens == 0:
                 task_manager.submit_task(
@@ -352,15 +352,37 @@ class OpenAIAgent(Agent):
                         f"{MAX_CHUNKS_PER_COMPLETION}; refusing to call the provider"
                     )
 
+                # Chunk-level retry: each chunk gets one retry before the
+                # whole text is failed, so one flaky call does not replay
+                # every already-completed chunk at outer retry layers.
                 translated_chunks = []
                 for chunk in chunks:
-                    # user_prompt 已追加到 system_prompt，递归时不要重复追加
-                    result = self.completions(
-                        text=chunk,
-                        system_prompt=system_prompt,
-                        _chunk_depth=_chunk_depth + 1,
-                        **kwargs,
-                    )
+                    result = None
+                    for chunk_attempt in range(2):
+                        try:
+                            # user_prompt 已追加到 system_prompt，递归时不要重复追加
+                            result = self.completions(
+                                text=chunk,
+                                system_prompt=system_prompt,
+                                _chunk_depth=_chunk_depth + 1,
+                                **kwargs,
+                            )
+                            break
+                        except Exception as chunk_error:
+                            # Tokens from the failed attempt are already
+                            # merged into result["tokens"] inside the
+                            # recursive call, but a call that raised never
+                            # returns its usage. Re-fetch the attempt cost
+                            # attached by the inner call when available.
+                            tokens += getattr(chunk_error, "tokens_used", 0)
+                            if chunk_attempt == 1:
+                                raise
+                            logger.warning(
+                                "Chunk %s/%s failed (%s); retrying once",
+                                len(translated_chunks) + 1,
+                                len(chunks),
+                                chunk_error,
+                            )
                     translated_chunks.append(result["text"])
                     tokens += result["tokens"]
 
@@ -425,6 +447,10 @@ class OpenAIAgent(Agent):
 
             tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
         except Exception as e:
+            # Attach the spent usage so the caller can account for the failed
+            # attempt instead of losing the tokens it already paid for.
+            if tokens:
+                e.tokens_used = tokens
             # 分块调用的异常交给最外层统一记录，避免每层递归重复记录
             if _chunk_depth == 0:
                 self.log = f"{timezone.now()}: {str(e)}"
@@ -482,7 +508,7 @@ class OpenAIAgent(Agent):
             **kwargs,
         )
 
-        if results["text"] and "Passed" in results["text"]:
+        if results["text"] and "passed" in results["text"].lower():
             logger.info(">>> Filter Passed")
             passed = True
             tokens = results["tokens"]

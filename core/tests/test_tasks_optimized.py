@@ -578,16 +578,34 @@ class TasksOptimizedTestCase(TestCase):
 
     # ==================== 覆盖异常处理的边界情况 ====================
 
-    def test_summarize_feed_assertion_error(self):
-        """测试摘要函数的断言错误"""
-        # 设置无效的summary_detail
-        self.feed.summary_detail = 1.5  # 超出范围
+    def test_summarize_feed_invalid_summary_detail_is_clamped(self):
+        """Out-of-range or NULL summary_detail is clamped, not asserted."""
+        self.feed.summarizer = self.agent
+        self.feed.summary_detail = 1.5  # out of range
         self.feed.save()
 
         entry = self._create_test_entry()
 
-        with self.assertRaises(AssertionError):
-            summarize_feed(self.feed)
+        with patch("core.tasks.summarize_feeds.auto_retry") as mock_retry:
+            mock_retry.return_value = {"text": "Summary", "tokens": 10}
+            result = summarize_feed(self.feed)
+
+        self.assertTrue(result)
+        entry.refresh_from_db()
+        self.assertEqual(entry.ai_summary, "Summary")
+
+        # NULL summary_detail must not crash either
+        self.feed.summary_detail = None
+        self.feed.save()
+        entry.ai_summary = None
+        entry.save()
+        with patch("core.tasks.summarize_feeds.auto_retry") as mock_retry:
+            mock_retry.return_value = {"text": "Summary2", "tokens": 5}
+            result = summarize_feed(self.feed)
+
+        self.assertTrue(result)
+        entry.refresh_from_db()
+        self.assertEqual(entry.ai_summary, "Summary2")
 
     # ==================== 覆盖内存管理的边界情况 ====================
 

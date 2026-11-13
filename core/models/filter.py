@@ -155,7 +155,8 @@ class Filter(models.Model):
                 )
             filter_results = self.agent.filter(
                 text=json.dumps(json_data, ensure_ascii=False),
-                system_prompt=self.filter_prompt,
+                # filter_prompt is nullable; the agent expects a string.
+                system_prompt=self.filter_prompt or settings.default_filter_prompt,
             )
             passed = filter_results["passed"]
             tokens = filter_results["tokens"]
@@ -177,7 +178,9 @@ class Filter(models.Model):
         :return: 过滤后的查询集
         """
         if not self.agent_id:
-            return queryset.none(), 0
+            # No agent configured: fail open like an AI failure instead of
+            # silently hiding every entry behind an unconfigured filter.
+            return queryset, 0
 
         passed_ids = []
         tokens = 0
@@ -210,8 +213,12 @@ class Filter(models.Model):
             queryset, tokens = self.apply_ai_filter(queryset)
 
         if tokens > 0:
+            # Persist only the counter so a concurrent admin edit of e.g. the
+            # prompt or method is not clobbered by a full-object save.
+            Filter.objects.filter(pk=self.pk).update(
+                total_tokens=models.F("total_tokens") + tokens
+            )
             self.total_tokens += tokens
-            self.save()
 
         return queryset
 

@@ -156,6 +156,9 @@ Summary: {article["summary"]}
                     logger.warning(f"Failed to digest article")
                 self.digest.total_tokens += result.get("tokens", 0)
 
+            if not digests_list:
+                raise RuntimeError("All digest chunks failed to produce content")
+
             if len(digests_list) > 1:
                 logger.info(
                     f"Final digest has {len(digests_list)} digests, need to merge to one digest"
@@ -167,6 +170,7 @@ Summary: {article["summary"]}
                     digest_name=self.digest.name,
                     date=now.strftime("%Y-%m-%d"),
                 )
+                self.digest.total_tokens += result.get("tokens", 0)
                 if result.get("text"):
                     logger.info(f"Merged digest")
                     final_digest = result["text"]
@@ -174,6 +178,9 @@ Summary: {article["summary"]}
                     logger.warning(f"Failed to merge digest")
             else:
                 final_digest = digests_list[0]
+
+            if not final_digest.strip():
+                raise RuntimeError("Digest merge produced empty content")
 
             for placeholder, real_url in url_mapping.items():
                 placeholder = f"({placeholder})"
@@ -447,14 +454,15 @@ def _ensure_entries_have_summaries(digest: Digest):
         f"Found {len(entries_without_summary)} entries without AI summaries. Generating summaries..."
     )
 
-    # Process each entry directly - no need to group by feed
-    entries_to_save = []
-    total_tokens = 0
+    # Save progress after EVERY entry (not in batches): a crash must not
+    # lose already-paid summaries, and tokens belong to whichever agent
+    # actually produced them (feed's summarizer or digest's fallback).
     failed_entry_ids = []
-    BATCH_SIZE = 5  # Memory-efficient batch size
-    use_digest_summarizer = False
+    feed_token_totals = {}  # feed_id -> tokens paid via that feed's summarizer
+    digest_token_total = 0  # tokens paid via the digest's fallback summarizer
 
     for idx, entry in enumerate(entries_without_summary):
+        used_digest_summarizer = False
         try:
             # Determine which summarizer to use
             if entry.feed.summarizer:
@@ -466,7 +474,7 @@ def _ensure_entries_have_summaries(digest: Digest):
                 summarizer = digest.summarizer
                 target_language = digest.target_language
                 summary_detail = 0.0  # Default detail level for digest fallback
-                use_digest_summarizer = True
+                used_digest_summarizer = True
                 logger.info(
                     f"Using digest summarizer for entry '{entry.original_title}' "
                     f"from feed '{entry.feed.name}' that doesn't have its own summarizer"
@@ -491,30 +499,26 @@ def _ensure_entries_have_summaries(digest: Digest):
                 max_chunk_size=summarizer.max_size(),
                 summarize_recursively=True,
                 max_context_chunks=4,
-                max_context_tokens=summarizer.max_tokens,
+                max_context_tokens=summarizer.max_tokens or 0,
                 chunk_delimiter=".",
                 max_chunks_per_entry=20,
                 summary_detail=summary_detail,
             )
 
             entry.ai_summary = summary
-            total_tokens += entry_tokens
-            entries_to_save.append(entry)
+            # Per-entry checkpoint: persist the summary immediately so a
+            # later failure cannot roll back work that was already paid for.
+            entry.save(update_fields=["ai_summary"])
+            if used_digest_summarizer:
+                digest_token_total += entry_tokens
+            else:
+                feed_token_totals[entry.feed_id] = (
+                    feed_token_totals.get(entry.feed_id, 0) + entry_tokens
+                )
 
             logger.info(
                 f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
             )
-
-            # Periodically save progress with smaller batch size
-            if len(entries_to_save) >= BATCH_SIZE:
-                _save_progress_batch(
-                    entries_to_save, digest, total_tokens, use_digest_summarizer
-                )
-                total_tokens = 0
-                entries_to_save = []
-
-                # Force garbage collection
-                gc.collect()
 
         except Exception as e:
             logger.error(
@@ -526,22 +530,18 @@ def _ensure_entries_have_summaries(digest: Digest):
             # Leave ai_summary empty so the entry is retried next time.
             failed_entry_ids.append(entry.pk)
 
-    if entries_to_save:
-        _save_progress_batch(
-            entries_to_save, digest, total_tokens, use_digest_summarizer
+    gc.collect()
+
+    # Flush accumulated token usage once; results are already checkpointed.
+    from django.db.models import F
+    from core.models.feed import Feed
+
+    for feed_id, tokens in feed_token_totals.items():
+        Feed.objects.filter(pk=feed_id).update(
+            total_tokens=F("total_tokens") + tokens
         )
+    if digest_token_total:
+        digest.total_tokens += digest_token_total
+        digest.save(update_fields=["total_tokens"])
 
     return failed_entry_ids
-
-
-def _save_progress_batch(entries_to_save, digest, total_tokens, use_digest_summarizer):
-    """Save progress with memory cleanup."""
-    if entries_to_save:
-        from core.models.entry import Entry
-
-        Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
-        del entries_to_save
-
-    if total_tokens > 0 and use_digest_summarizer:
-        digest.total_tokens += total_tokens
-        digest.save()

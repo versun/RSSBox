@@ -9,7 +9,7 @@ import newspaper
 from core.models import Feed, Entry, Agent
 from utils import text_handler
 from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, get_fetch_user_agent
-from core.tasks.utils import auto_retry
+from core.tasks.utils import PERSISTENCE_ERRORS, PersistError, auto_retry
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
         try:
             logger.debug("Processing entry %s", entry.pk)
             if not feed.translator:
-                raise Exception("Translate Engine Not Set")
+                raise PersistError("Translate Engine Not Set")
 
             entry_needs_save = False
 
@@ -100,6 +100,11 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     if article_content and article_content != entry.original_content:
                         entry.original_content = article_content
                         entry_needs_save = True
+                        if entry.translated_content:
+                            # The stored translation belongs to the old
+                            # source text; drop it so the new source gets
+                            # translated instead of serving a stale pair.
+                            entry.translated_content = None
                     # Clean up article content after use
                     del article_content
 
@@ -115,20 +120,37 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     entry_needs_save = True
 
             if entry_needs_save:
-                fields = [f"translated_{target_field}"]
+                fields = [f"translated_{target_field}", "updated"]
                 if target_field == "content" and feed.fetch_article:
                     fields.append("original_content")
-                with transaction.atomic():
-                    entry.save(update_fields=fields)
-                    if entry_tokens or entry_characters:
-                        Feed.objects.filter(pk=feed.pk).update(
-                            total_tokens=F("total_tokens") + entry_tokens,
-                            total_characters=F("total_characters") + entry_characters,
-                        )
+                entry.updated = timezone.now()
+                try:
+                    with transaction.atomic():
+                        entry.save(update_fields=fields)
+                        if entry_tokens or entry_characters:
+                            Feed.objects.filter(pk=feed.pk).update(
+                                total_tokens=F("total_tokens") + entry_tokens,
+                                total_characters=F("total_characters") + entry_characters,
+                            )
+                except PERSISTENCE_ERRORS:
+                    raise
+                except Exception as save_error:
+                    raise PersistError(
+                        f"Could not persist translation for entry {entry.pk}: {save_error}"
+                    ) from save_error
                 feed.total_tokens += entry_tokens
                 feed.total_characters += entry_characters
                 total_tokens += entry_tokens
                 total_characters += entry_characters
+        except PERSISTENCE_ERRORS as e:
+            # The paid result could not be saved; further entries would hit
+            # the same wall, so stop this feed instead of paying for more.
+            logger.error(
+                f"Aborting translation for feed {feed.name} at entry {entry.link}: {e}"
+            )
+            feed.log += f"{timezone.now()} Persistence failure, translation aborted at entry {entry.pk}: {e}<br>"
+            feed.translation_status = False
+            break
         except Exception as e:
             logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (

@@ -184,7 +184,14 @@ class UpdateLockLifetimeTests(SimpleTestCase):
                 thread.join(timeout=5)
 
             self.assertFalse(thread.is_alive())
-            self.assertEqual(errors, [])
+            if worker_error or submission_error:
+                # A failed worker surfaces as exit code 2 so the CLI does not
+                # report success on a pipeline failure.
+                self.assertEqual(len(errors), 1)
+                self.assertIsInstance(errors[0], SystemExit)
+                self.assertEqual(errors[0].code, 2)
+            else:
+                self.assertEqual(errors, [])
             with original_open(lock_path, "a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             if not submission_error:

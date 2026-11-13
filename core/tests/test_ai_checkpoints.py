@@ -13,6 +13,7 @@ from core.models import Entry, Feed
 from core.models.agent import OpenAIAgent
 from core.tasks.summarize_feeds import _save_progress, handle_feeds_summary
 from core.tasks.translate_feeds import handle_feeds_translation, translate_feed
+from core.tasks.utils import PersistError
 
 
 class CheckpointTransactionTests(TestCase):
@@ -57,7 +58,9 @@ class CheckpointTransactionTests(TestCase):
                 provider.assert_not_called()
                 self.assert_no_writes(queries)
 
-    def test_article_fetch_still_saves_changed_source_for_completed_translation(self):
+    def test_article_fetch_replaces_stale_translation_for_changed_source(self):
+        """A fetched article that differs from the stored source invalidates
+        the old translation instead of pairing the new source with stale text."""
         feed, entry = self.translation_fixture(fetch_article=True)
         entry.translated_content = "Saved translation"
         entry.save()
@@ -66,16 +69,17 @@ class CheckpointTransactionTests(TestCase):
                 "core.tasks.translate_feeds._fetch_article_content",
                 return_value="Updated source",
             ),
-            patch.object(OpenAIAgent, "translate") as provider,
+            patch.object(
+                OpenAIAgent,
+                "translate",
+                return_value={"text": "New translation", "tokens": 7, "characters": 11},
+            ) as provider,
         ):
             translate_feed(feed, target_field="content")
             entry.refresh_from_db()
             self.assertEqual(entry.original_content, "Updated source")
-            self.assertEqual(entry.translated_content, "Saved translation")
-            with CaptureQueriesContext(connection) as queries:
-                translate_feed(feed, target_field="content")
-            self.assert_no_writes(queries)
-            provider.assert_not_called()
+            self.assertEqual(entry.translated_content, "New translation")
+            provider.assert_called_once()
 
     def test_counter_failure_rolls_back_translation(self):
         feed, entry = self.translation_fixture()
@@ -132,7 +136,7 @@ class CheckpointTransactionTests(TestCase):
         entry.ai_summary = "Completed"
         with patch.object(Feed.objects, "filter") as query:
             query.return_value.update.side_effect = RuntimeError("Database unavailable")
-            with self.assertRaisesRegex(RuntimeError, "Database unavailable"):
+            with self.assertRaisesRegex(PersistError, "Could not persist summaries"):
                 _save_progress([entry], feed, 7)
         entry.refresh_from_db()
         feed.refresh_from_db()

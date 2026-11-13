@@ -344,7 +344,7 @@ class UpdateMultipleFeedsTests(SimpleTestCase):
         feeds = [self.mock_feed1]
         cmd.update_multiple_feeds(feeds)
 
-        mock_logger.warning.assert_called_once_with(
+        mock_logger.warning.assert_any_call(
             "A feed update task resulted in an exception: Task failed"
         )
 
