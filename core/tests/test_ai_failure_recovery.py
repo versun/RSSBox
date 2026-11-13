@@ -102,6 +102,16 @@ class AIFailureRecoveryTests(TestCase):
                 self.assertIsNone(entry.ai_summary)
                 self.assertFalse(self.feed.translation_status)
 
+    def test_none_content_summary_does_not_fail_the_feed(self):
+        entry = self.entry()
+        Entry.objects.filter(pk=entry.pk).update(original_content=None)
+        handle_feeds_summary([self.feed])
+        entry.refresh_from_db()
+        self.feed.refresh_from_db()
+        self.assertEqual(entry.ai_summary, "[No content available]")
+        self.assertTrue(self.feed.translation_status)
+        self.request.assert_not_called()
+
     def test_summary_failure_is_not_hidden_by_later_success(self):
         failed, good = self.entry(0), self.entry(1)
         self.request.side_effect = [self.timeout()] * 3 + [self.response()]

@@ -2,8 +2,14 @@ from django.test import TestCase
 from django.core.cache import cache
 from unittest.mock import patch
 
-from ..models import Feed, Tag
-from ..cache import cache_rss, cache_tag
+from ..models import Digest, Feed, OpenAIAgent, Tag
+from ..cache import (
+    DEFAULT_CACHE_TIMEOUT_MINUTES,
+    cache_digest,
+    cache_rss,
+    cache_tag,
+    cache_timeout_seconds,
+)
 
 
 class CacheRssTest(TestCase):
@@ -62,9 +68,9 @@ class CacheRssTest(TestCase):
         result = cache_rss("test-feed-zero-freq", "t", "xml")
 
         self.assertEqual(result, mock_atom_content)
-        # Feed模型会将0调整为5
+        # Feed模型会将0调整为5分钟，缓存超时必须是 5 * 60 秒
         cache_key = "cache_rss_test-feed-zero-freq_t_xml"
-        mock_cache.set.assert_called_once_with(cache_key, mock_atom_content, 5)
+        mock_cache.set.assert_called_once_with(cache_key, mock_atom_content, 300)
 
     @patch("core.cache.generate_atom_feed")
     def test_cache_rss_different_parameters(self, mock_generate_atom_feed):
@@ -76,6 +82,82 @@ class CacheRssTest(TestCase):
 
         cache_key = "cache_rss_test-feed-slug_o_json"
         self.assertEqual(cache.get(cache_key), mock_atom_content)
+
+
+class CacheTimeoutUnitsTest(TestCase):
+    """update_frequency is stored in minutes; cache timeouts are in seconds."""
+
+    def test_helper_converts_minutes_to_seconds(self):
+        self.assertEqual(cache_timeout_seconds(5), 5 * 60)
+        self.assertEqual(cache_timeout_seconds(30), 30 * 60)
+        self.assertEqual(cache_timeout_seconds(1440), 1440 * 60)
+
+    def test_helper_falls_back_for_invalid_values(self):
+        one_day = DEFAULT_CACHE_TIMEOUT_MINUTES * 60
+        for value in (None, 0, -10):
+            with self.subTest(value=value):
+                self.assertEqual(cache_timeout_seconds(value), one_day)
+
+    @patch("core.cache.cache")
+    @patch("core.cache.generate_atom_feed", return_value="<feed />")
+    def test_cache_rss_uses_minute_frequency_as_seconds(self, _, mock_cache):
+        for minutes in (5, 1440):
+            with self.subTest(minutes=minutes):
+                mock_cache.reset_mock()
+                feed = Feed.objects.create(
+                    feed_url=f"https://example.com/{minutes}.xml",
+                    slug=f"feed-{minutes}",
+                    update_frequency=minutes,
+                )
+                cache_rss(feed.slug, "t", "xml")
+                mock_cache.set.assert_called_once_with(
+                    f"cache_rss_{feed.slug}_t_xml", "<feed />", minutes * 60
+                )
+
+    @patch("core.cache.cache")
+    @patch("core.cache.merge_feeds_into_one_atom")
+    def test_cache_tag_uses_slowest_feed_in_seconds(
+        self, mock_merge_feeds, mock_cache
+    ):
+        tag = Tag.objects.create(name="cadence")
+        fast = Feed.objects.create(
+            name="Fast",
+            feed_url="https://example.com/fast.xml",
+            slug="fast-feed",
+            update_frequency=5,
+        )
+        slow = Feed.objects.create(
+            name="Slow",
+            feed_url="https://example.com/slow.xml",
+            slug="slow-feed",
+            update_frequency=1440,
+        )
+        fast.tags.add(tag)
+        slow.tags.add(tag)
+        mock_merge_feeds.return_value = "<feed />"
+
+        cache_tag(tag.slug, "t", "xml")
+
+        mock_cache.set.assert_called_once_with(
+            f"cache_tag_{tag.slug}_t_xml", "<feed />", 1440 * 60
+        )
+
+    @patch("core.cache.cache")
+    @patch("core.cache.generate_atom_feed")
+    def test_cache_digest_uses_digest_feed_frequency(
+        self, mock_generate_atom_feed, mock_cache
+    ):
+        agent = OpenAIAgent.objects.create(name="Digest agent", api_key="test")
+        digest = Digest.objects.create(name="Daily digest", summarizer=agent)
+        digest_feed = digest.get_digest_feed()
+        self.assertEqual(digest_feed.update_frequency, 1440)
+        mock_generate_atom_feed.return_value = "<feed />"
+
+        cache_digest(digest.slug, "xml")
+
+        mock_cache.set.assert_called_once_with(
+            f"cache_digest_{digest.slug}_xml", "<feed />", 1440 * 60
+        )
 
 
 class CacheTagTest(TestCase):

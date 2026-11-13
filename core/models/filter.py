@@ -1,5 +1,6 @@
 import logging
 from django.db import models
+from django.core.cache import cache
 from django.utils.translation import gettext_lazy as _
 from tagulous.models import TagField
 from utils import text_handler
@@ -7,6 +8,10 @@ import json
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+# How long a failed/pending AI filter decision is trusted before retrying.
+# Prevents every request (or every cache miss) from calling the provider again.
+AI_FILTER_RETRY_SECONDS = 300
 
 
 class Filter(models.Model):
@@ -121,59 +126,74 @@ class Filter(models.Model):
             # 排除模式：隐藏包含任何关键词的内容
             return queryset.exclude(query).distinct()
 
+    def _evaluate_with_ai(self, entry, result):
+        """Ask the AI about one entry; on failure keep the previous decision.
+
+        A short-lived marker per FilterResult version suppresses further provider
+        calls while an evaluation is running or after it failed, so feed cache
+        misses cannot trigger a retry storm. A successful save bumps
+        last_updated, so the marker never needs to be deleted.
+        """
+        marker = f"ai_filter_retry_{result.pk}_{result.last_updated.timestamp()}"
+        if not cache.add(marker, 1, timeout=AI_FILTER_RETRY_SECONDS):
+            return result.passed, 0
+
+        try:
+            # 缺失字段按空字符串处理，单个坏条目不能拖垮整个 feed
+            json_data = {}
+            if self.filter_original_title:
+                json_data["original_title"] = entry.original_title or ""
+            if self.filter_original_content:
+                json_data["original_content"] = text_handler.clean_content(
+                    entry.original_content
+                )
+            if self.filter_translated_title:
+                json_data["translated_title"] = entry.translated_title or ""
+            if self.filter_translated_content:
+                json_data["translated_content"] = text_handler.clean_content(
+                    entry.translated_content
+                )
+            filter_results = self.agent.filter(
+                text=json.dumps(json_data, ensure_ascii=False),
+                system_prompt=self.filter_prompt,
+            )
+            passed = filter_results["passed"]
+            tokens = filter_results["tokens"]
+        except Exception as exc:
+            logger.warning(
+                "AI filter %s failed for entry %s; keeping previous decision %s: %s",
+                self.pk, entry.pk, result.passed, exc,
+            )
+            return result.passed, 0
+
+        result.passed = passed
+        result.save(update_fields=["passed", "last_updated"])
+        return passed, tokens
+
     def apply_ai_filter(self, queryset):
         """
         应用AI过滤器到查询集，使用AI代理处理内容
         :param queryset: 要过滤的查询集
         :return: 过滤后的查询集
         """
+        if not self.agent_id:
+            return queryset.none(), 0
+
         passed_ids = []
         tokens = 0
         for entry in queryset:
             # 尝试获取缓存结果
-            result, created = FilterResult.objects.get_or_create(
-                filter=self,
-                entry=entry,
-            )
+            result, _ = FilterResult.objects.get_or_create(filter=self, entry=entry)
+            passed = result.passed
 
-            # 检查是否需要重新评估
-            if created or self.needs_re_evaluation(result, entry):
-                # 准备要发送给AI的内容
-                json_data = {}
-                if self.filter_original_title:
-                    json_data["original_title"] = entry.original_title
-                if self.filter_original_content:
-                    json_data["original_content"] = text_handler.clean_content(
-                        entry.original_content
-                    )
-                if self.filter_translated_title:
-                    json_data["translated_title"] = entry.translated_title
-                if self.filter_translated_content:
-                    json_data["translated_content"] = text_handler.clean_content(
-                        entry.translated_content
-                    )
+            # 新建的结果 passed 为 None，同样会触发评估
+            if self.needs_re_evaluation(result, entry):
+                passed, used_tokens = self._evaluate_with_ai(entry, result)
+                tokens += used_tokens
 
-                text_str = json.dumps(json_data, ensure_ascii=False)
-                passed = None
-                if self.agent:
-                    try:
-                        filter_results = self.agent.filter(
-                            text=text_str, system_prompt=self.filter_prompt
-                        )
-                        passed = filter_results["passed"]
-                        tokens += filter_results["tokens"]
-                    except Exception as exc:
-                        passed = None
-                        logger.warning(
-                            "AI filter %s failed for entry %s; leaving it pending: %s",
-                            self.pk, entry.pk, exc,
-                        )
-                result.passed = passed
-                result.save()
-            else:
-                passed = result.passed
-
-            if passed:
+            # Undecided entries (evaluation pending or failed) fail open;
+            # only an explicit AI rejection hides an entry.
+            if passed is not False:
                 passed_ids.append(entry.id)
 
         # 过滤出通过的项目
@@ -186,7 +206,7 @@ class Filter(models.Model):
             queryset = self.apply_keywords_filter(queryset)
 
         # 检查是否需要AI过滤
-        if self.filter_method in [self.AI_ONLY, self.BOTH] and self.agent:
+        if self.filter_method in [self.AI_ONLY, self.BOTH] and self.agent_id:
             queryset, tokens = self.apply_ai_filter(queryset)
 
         if tokens > 0:
@@ -196,14 +216,10 @@ class Filter(models.Model):
         return queryset
 
     def needs_re_evaluation(self, result, entry):
-        """检查缓存是否失效"""
-        # 1. 如果从未评估过
-        if result.passed is None:
-            return True
-
-        # 2. 检查条目内容是否更新
-        if entry.updated and entry.updated > result.last_updated:
-            return True
+        """未评估过，或条目内容在上次评估后更新过"""
+        return result.passed is None or bool(
+            entry.updated and entry.updated > result.last_updated
+        )
 
     def clear_ai_filter_cache_results(self):
         """

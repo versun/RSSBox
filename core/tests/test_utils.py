@@ -2,6 +2,7 @@ from unittest import mock
 from django.test import SimpleTestCase
 
 from utils.text_handler import (
+    clean_content,
     set_translation_display,
     chunk_on_delimiter,
     adaptive_chunking,
@@ -11,6 +12,10 @@ from core.tasks.task_manager import TaskManager
 
 class TextHandlerTests(SimpleTestCase):
     """Tests for helper functions in utils.text_handler."""
+
+    def test_clean_content_handles_missing_values(self):
+        self.assertEqual(clean_content(None), "")
+        self.assertEqual(clean_content("<p>Hello</p>").strip(), "Hello")
 
     def test_set_translation_display_variants(self):
         cases = [

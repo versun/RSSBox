@@ -12,6 +12,15 @@ from .models import Feed
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CACHE_TIMEOUT_MINUTES = 1440  # 1 day
+
+
+def cache_timeout_seconds(update_frequency_minutes):
+    """update_frequency is stored in minutes; cache.set expects seconds."""
+    if not update_frequency_minutes or update_frequency_minutes < 0:
+        update_frequency_minutes = DEFAULT_CACHE_TIMEOUT_MINUTES
+    return update_frequency_minutes * 60
+
 
 def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     logger.debug(
@@ -37,7 +46,7 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
         return None
 
     # 缓存
-    cache.set(cache_key, atom_feed, feed.update_frequency or 86400)  # default to 1 day
+    cache.set(cache_key, atom_feed, cache_timeout_seconds(feed.update_frequency))
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
 
@@ -55,8 +64,8 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
         return None
 
     # 缓存
-    max_frequency = max_frequency_feed.update_frequency if max_frequency_feed else 86400
-    cache.set(cache_key, atom_feed, max_frequency)
+    max_frequency = max_frequency_feed.update_frequency if max_frequency_feed else None
+    cache.set(cache_key, atom_feed, cache_timeout_seconds(max_frequency))
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
 
@@ -74,7 +83,7 @@ def cache_digest(slug: str, format: str = "xml"):
     if not atom_feed:
         return None
 
-    ttl = digest_feed.update_frequency or 86400
+    ttl = cache_timeout_seconds(digest_feed.update_frequency)
     cache.set(cache_key, atom_feed, ttl)
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
