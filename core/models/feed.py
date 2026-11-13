@@ -232,6 +232,10 @@ class Feed(models.Model):
     @property
     def filtered_entries(self):
         queryset = self.entries.all()
-        for filter_obj in self.filters.all():
+        filters = list(self.filters.all())
+        if any(f.filter_method in (f.AI_ONLY, f.BOTH) and f.agent_id for f in filters):
+            recent_ids = queryset.order_by("-pubdate", "-pk").values("pk")[:max(0, self.max_posts)]
+            queryset = queryset.filter(pk__in=recent_ids)
+        for filter_obj in filters:
             queryset = filter_obj.apply_filter(queryset)
         return queryset
