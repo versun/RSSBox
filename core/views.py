@@ -3,7 +3,6 @@ from django.utils.http import content_disposition_header
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
 from django.utils import timezone
-from django.core.cache import cache
 from django.views.decorators.http import condition
 from .models import Feed, Tag, Digest
 from django.shortcuts import redirect, get_object_or_404
@@ -15,54 +14,75 @@ from feed2json import feed2json
 import mistune
 
 from .cache import cache_rss, cache_tag, cache_digest
+from core.models.filter import cache_version
 
 logger = logging.getLogger(__name__)
 
 
 def _get_modified(request, feed_slug, feed_type="t", **kwargs):
     try:
+        feed = Feed.objects.get(slug=feed_slug)
         if feed_type == "t":
-            modified = Feed.objects.get(slug=feed_slug).last_translate
+            modified = feed.last_translate
         else:
-            modified = Feed.objects.get(slug=feed_slug).last_fetch
+            modified = feed.last_fetch
     except Feed.DoesNotExist:
         logger.warning(
             "Translated feed not found, Maybe still in progress, Please confirm it's exist: %s",
             feed_slug,
         )
-        modified = None
-    return modified
+        return None
+    # Filter-result clears / batch reassignments change what the feed
+    # outputs without touching last_translate or last_fetch. The cache
+    # version captures those; mixing it into Last-Modified keeps the
+    # validator honest instead of serving 304 for changed content.
+    return _mix_version_into_stamp(modified, "rss", feed.pk)
+
+
+def _mix_version_into_stamp(stamp, scope, pk):
+    """Add the invalidation version (seconds) onto a timestamp validator."""
+    version = cache_version(scope, pk)
+    if not version:
+        return stamp
+    base = stamp or timezone.datetime(2000, 1, 1, tzinfo=timezone.UTC)
+    return base + timezone.timedelta(seconds=version)
 
 
 def _get_etag(request, feed_slug, feed_type="t", **kwargs):
     try:
+        feed = Feed.objects.get(slug=feed_slug)
+        version = cache_version("rss", feed.pk)
         if feed_type == "t":
-            last_translate = Feed.objects.get(slug=feed_slug).last_translate
-            etag = last_translate.isoformat() if last_translate else None
+            base = feed.last_translate.isoformat() if feed.last_translate else ""
         else:
-            etag = Feed.objects.get(slug=feed_slug).etag
+            base = feed.etag or ""
+        if not base and not version:
+            return None
+        return f"{base}-v{version}"
     except Feed.DoesNotExist:
         logger.warning(
             "Feed not fetched yet, Please update it first: %s",
             feed_slug,
         )
-        etag = None
-    return etag
+        return None
 
 
 def _make_response(atom_feed, filename, format="xml"):
+    if not atom_feed:
+        # XML and JSON agree on 404: a 200 body that just contains
+        # "<error>" can get cached by clients/CDNs as a valid feed.
+        if format == "json":
+            return JsonResponse({"error": "No feed data available"}, status=404)
+        return HttpResponse(
+            "No feed data available", status=404, content_type="text/plain"
+        )
     if format == "json":
         # 如果需要返回 JSON 格式
-        if not atom_feed:
-            return JsonResponse({"error": "No feed data available"}, status=404)
         feed_json = feed2json(atom_feed)
         response = JsonResponse(feed_json)
     else:
         # 使用生成器函数实现流式传输
         def stream_content():
-            if not atom_feed:
-                yield b"<error>No feed data available</error>"
-                return
             chunk_size = 4096  # 每次发送4KB
             for i in range(0, len(atom_feed), chunk_size):
                 yield atom_feed[i : i + chunk_size]
@@ -150,14 +170,9 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
     # Sanitize the feed_slug to prevent path traversal attacks
     feed_slug = smart_str(feed_slug)
     try:
-        cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
-        content = cache.get(cache_key)
-        if content is None:
-            logger.debug(f"Cache MISS for key: {cache_key}")
-            content = cache_rss(feed_slug, feed_type, format)
-        else:
-            logger.debug(f"Cache HIT for key: {cache_key}")
-
+        # cache_rss does its own get-or-generate on the versioned key;
+        # a pre-read here would only ever hit a pre-versioning stale key.
+        content = cache_rss(feed_slug, feed_type, format)
         return _make_response(content, feed_slug, format)
     except Exception as e:
         logger.warning(f"Feed not found {feed_slug}: {str(e)}")
@@ -173,13 +188,7 @@ def tag(request, tag: str, feed_type="t", format="xml"):
         return HttpResponse(status=404)
 
     try:
-        cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
-        content = cache.get(cache_key)
-        if content is None:
-            logger.debug(f"Cache MISS for key: {cache_key}")
-            content = cache_tag(tag, feed_type, format)
-        else:
-            logger.debug(f"Cache HIT for key: {cache_key}")
+        content = cache_tag(tag, feed_type, format)
         return _make_response(content, tag, format)
     except Exception as e:
         logger.warning("tag not found: %s / %s", tag, str(e))
@@ -302,14 +311,7 @@ def digest(request, slug, format="xml"):
     """Return digest as ATOM/JSON feed, with caching."""
     slug = smart_str(slug)
     try:
-        cache_key = f"cache_digest_{slug}_{format}"
-        content = cache.get(cache_key)
-        if content is None:
-            logger.debug(f"Cache MISS for key: {cache_key}")
-            content = cache_digest(slug, format)
-        else:
-            logger.debug(f"Cache HIT for key: {cache_key}")
-
+        content = cache_digest(slug, format)
         return _make_response(content, slug, format)
     except Exception as e:
         logger.warning(f"Digest not found {slug}: {str(e)}")

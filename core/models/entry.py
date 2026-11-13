@@ -25,3 +25,15 @@ class Entry(models.Model):
     class Meta:
         verbose_name = _("Entry")
         verbose_name_plural = _("Entries")
+        indexes = [
+            # Every display/AI pipeline window is the latest max_posts by
+            # pubdate per feed; without this index the sort scans the whole
+            # per-feed history.
+            models.Index(
+                fields=["feed", "-pubdate"], name="entry_feed_pubdate_idx"
+            ),
+            # Fetch dedupe is a per-(feed, guid) lookup on every run.
+            models.Index(
+                fields=["feed", "guid"], name="entry_feed_guid_idx"
+            ),
+        ]

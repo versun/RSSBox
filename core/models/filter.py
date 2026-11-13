@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # Prevents every request (or every cache miss) from calling the provider again.
 AI_FILTER_RETRY_SECONDS = 300
 
+# Prefix for the per-(scope, key) feed/tag output invalidation counters.
+_CACHE_VERSIONS_KEY = "rssbox_cache_version"
+
 
 class Filter(models.Model):
     INCLUDE = True
@@ -235,6 +238,45 @@ class Filter(models.Model):
         """
         FilterResult.objects.filter(filter=self).delete()
         logger.debug(f"Cleared cache for filter {self.name}")
+        # Deleting decisions changes what filtered feeds/tags output; orphan
+        # the rendered caches so they are regenerated on the next request
+        # instead of waiting out their TTL (up to a day/week).
+        for pk in self.feeds.values_list("pk", flat=True):
+            bump_cache_version("rss", pk)
+        for pk in self.tags.values_list("pk", flat=True):
+            bump_cache_version("tag", pk)
+
+
+def _cache_version_key(scope: str, key) -> str:
+    return f"{_CACHE_VERSIONS_KEY}:{scope}:{key}"
+
+
+def cache_version(scope: str, key) -> int:
+    """Current invalidation version for e.g. scope='rss', key=feed.pk."""
+    try:
+        return int(cache.get(_cache_version_key(scope, key)) or 0)
+    except Exception:
+        return 0
+
+
+def bump_cache_version(scope: str, key) -> None:
+    """Invalidate every ``cache_<scope>_<key>_*`` entry, across processes.
+
+    One counter per scope:key bumped with the backend's atomic ``incr``
+    (Redis INCR, locmem lock), so concurrent bumps by the web and CLI
+    processes cannot overwrite each other the way a read-modify-write
+    on a shared dict would.
+    """
+    vkey = _cache_version_key(scope, key)
+    try:
+        if not cache.add(vkey, 1, timeout=None):
+            cache.incr(vkey)
+    except Exception:
+        logger.warning(
+            "Could not bump cache invalidation version for %s:%s",
+            scope,
+            key,
+        )
 
 
 class FilterResult(models.Model):

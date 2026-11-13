@@ -14,6 +14,7 @@ from core.tasks.summarize_feeds import handle_feeds_summary
 from django.db import close_old_connections
 from core.tasks.task_manager import task_manager
 from core.cache import cache_rss, cache_tag
+from core.models.filter import bump_cache_version
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
@@ -99,21 +100,82 @@ class Command(BaseCommand):
                 sys.exit(1)
 
 
+def _feed_lock_path(feed) -> str:
+    """Filesystem path of the per-feed update lock.
+
+    ``feed.pk`` may be a Mock/None in tests; fall back to slug then name.
+    """
+    try:
+        ident = feed.pk or feed.slug or feed.name
+    except Exception:
+        ident = id(feed)
+    return f"/tmp/rssbox_feed_update_{ident}.lock"
+
+
+def _try_acquire_feed_lock(feed):
+    """A non-blocking per-feed flock, or None when another process holds it.
+
+    The frequency flock in Command.handle only serializes CLI runs of one
+    frequency group; an admin-triggered update (from the web process) or a
+    different frequency group can still process the same feed concurrently
+    — duplicated AI billing and last-writer clobbering. Holding a per-feed
+    lock for the whole pipeline fixes that; it is kernel-released on
+    close/exit so it can never go stale.
+
+    A feed object that cannot be locked (a bare Mock in unit tests, or a
+    filesystem that rejects the path) degrades to an always-acquired null
+    lock rather than breaking the update.
+    """
+    lock_path = _feed_lock_path(feed)
+    try:
+        lock_file = open(lock_path, "a")
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_file.close()
+        return None
+    except Exception:
+        logger.debug(
+            "Could not take per-feed update lock %s; proceeding unlocked",
+            lock_path,
+        )
+        return _NullFeedLock()
+    return lock_file
+
+
+class _NullFeedLock:
+    """Context object returned when no real lock can be taken."""
+
+    def close(self):
+        pass
+
+
 def update_single_feed(feed: Feed):
     """在后台线程中执行feed更新"""
     try:
         # 确保在新线程中创建新的数据库连接
         close_old_connections()
 
+        feed_lock = _try_acquire_feed_lock(feed)
+        if feed_lock is None:
+            # The competing run is already doing (or just did) the same
+            # work, so skipping is safe — and it is not a failure: the feed
+            # still gets its update, just from the holder.
+            logger.info(
+                f"Skipping feed update for {feed.name}: another process "
+                "is already updating this feed"
+            )
+            return True
+
         try:
             logger.info(f"Starting feed update: {feed.name}")
 
             handle_single_feed_fetch(feed)
+            # A stale status (False or a leftover None) must not poison the
+            # current run's bookkeeping; derive success only from the steps
+            # that actually ran this time.
             completed = True
             # task_manager.update_progress(feed_id, 50)
             # 执行更新操作
-            # A None status left behind by a crashed run must not count as
-            # success: only a True result marks the step completed.
             if feed.translate_title:
                 handle_feeds_translation([feed], target_field="title")
                 completed = (feed.translation_status is True) and completed
@@ -128,6 +190,15 @@ def update_single_feed(feed: Feed):
                 feed.translation_status = completed
                 feed.save(update_fields=["translation_status"])
 
+            # Entries changed underneath any previously rendered output;
+            # bump so readers regenerate instead of waiting out the TTL.
+            # update_multiple_feeds also bumps before its explicit regen,
+            # which is fine — versions are cheap counters.
+            if isinstance(getattr(feed, "pk", None), int):
+                bump_cache_version("rss", feed.pk)
+                for tag_pk in feed.tags.values_list("pk", flat=True):
+                    bump_cache_version("tag", tag_pk)
+
             logger.info(f"Completed feed update: {feed.name}")
 
             return completed
@@ -137,6 +208,8 @@ def update_single_feed(feed: Feed):
         except Exception as e:
             logger.exception(f"Error updating feed ID {feed.name}: {str(e)}")
             return False
+        finally:
+            feed_lock.close()
     finally:
         # 确保关闭数据库连接
         close_old_connections()
@@ -209,6 +282,15 @@ def update_multiple_feeds(feeds: list) -> bool:
 
         # 所有任务完成后执行缓存操作
         # Note: 'feeds' is a list materialized from an iterator, so it's safe to iterate again.
+        # The versions must be bumped BEFORE regenerating: a reader between
+        # the AI write and a later bump could otherwise repopulate the old
+        # key and keep serving stale entries until its TTL.
+        for feed in feeds:
+            if not isinstance(getattr(feed, "pk", None), int):
+                continue
+            bump_cache_version("rss", feed.pk)
+            for tag_pk in feed.tags.values_list("pk", flat=True):
+                bump_cache_version("tag", tag_pk)
         for feed in feeds:
             try:
                 cache_rss(feed.slug, feed_type="o", format="xml")

@@ -96,8 +96,9 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
         return 0
     feed.translation_status = True
 
-    # 只处理前 feed.max_posts 条 entries
-    entries = feed.entries.order_by("-pubdate")[: feed.max_posts].iterator(
+    # 只处理前 feed.max_posts 条 entries; -id ties break equal pubdates
+    # the same way cleanup_entries picks its keep-set.
+    entries = feed.entries.order_by("-pubdate", "-id")[: feed.max_posts].iterator(
         chunk_size=50
     )
 
@@ -138,6 +139,10 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                         entry.original_content = article_content
                         entry_needs_save = True
                         source_changed = True
+                        # A new source invalidates any prior derived text
+                        # left over from an earlier version.
+                        entry.translated_title = None
+                        entry.ai_summary = None
                     # Clean up article content after use
                     del article_content
 
@@ -158,9 +163,13 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                     fields.append("original_content")
                 if source_changed:
                     # Only a changed source counts as an update; translating
-                    # must not overwrite the publisher's timestamp.
+                    # must not overwrite the publisher's timestamp. The
+                    # bumped ``updated`` is also what lets the AI filter
+                    # re-evaluate this entry against its new content.
                     entry.updated = timezone.now()
-                    fields.append("updated")
+                    fields.extend(
+                        ["updated", "translated_title", "ai_summary"]
+                    )
                 try:
                     with transaction.atomic():
                         entry.save(update_fields=fields)

@@ -79,14 +79,6 @@ def handle_single_feed_fetch(feed: Feed):
         feed.save()
 
 
-def handle_feeds_fetch(feeds: list):
-    """
-    Fetch feeds and update entries with memory optimization.
-    """
-    for feed in feeds:
-        handle_single_feed_fetch(feed)
-
-
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
         return None
@@ -270,10 +262,29 @@ def _prepare_entry_data(entry_data, feed):
 
 
 def _process_feed_entries(feed, entries):
-    """Process feed entries"""
+    """Create new entries and refresh existing ones when the publisher
+    re-serves an item.
+
+    New rows are deduped by guid (batch-local `seen_guids` plus
+    `ignore_conflicts`) since the table has no (feed, guid) constraint.
+    Existing rows are updated via bulk_update so a bumped ``updated``
+    timestamp reaches Filter.needs_re_evaluation and lets stale AI
+    decisions get re-evaluated. When the re-served source actually
+    changed, the derived translations/summaries are cleared too so a
+    stale pair is never rendered next to the new source.
+    """
     BATCH_SIZE = 50
     entries_to_create = []
-    existing_entries = dict(Entry.objects.filter(feed=feed).values_list("guid", "id"))
+    entries_to_update = []
+    # Track pk/updated plus the source fields we refresh; comparing old
+    # vs new lets us only wipe derived text when the content really did
+    # change, so an identical re-serve doesn't cost a re-translation.
+    existing_entries = {
+        guid: (pk, updated, original_title, original_content)
+        for guid, pk, updated, original_title, original_content in Entry.objects.filter(
+            feed=feed
+        ).values_list("guid", "pk", "updated", "original_title", "original_content")
+    }
 
     # Sort entries by publication date (newest first)
     sorted_entries = sorted(
@@ -284,19 +295,72 @@ def _process_feed_entries(feed, entries):
         reverse=True,
     )[: feed.max_posts]
 
+    seen_guids = set(existing_entries)
+
     for entry_data in sorted_entries:
         entry_values = _prepare_entry_data(entry_data, feed)
         if not entry_values:
             continue
 
-        # Create new entry if needed
-        if entry_values["guid"] not in existing_entries:
+        guid = entry_values["guid"]
+        if guid not in seen_guids:
+            seen_guids.add(guid)
             entries_to_create.append(Entry(feed=feed, **entry_values))
+        elif guid in existing_entries:
+            pk, _old_updated, old_title, old_content = existing_entries[guid]
+            # A publisher that stops serving <updated> should not erase
+            # the timestamp we already have: needs_re_evaluation depends
+            # on it and None permanently disables re-evaluation.
+            refreshed_updated = entry_values["updated"] or _old_updated
+            refreshed = Entry(
+                pk=pk,
+                feed=feed,
+                guid=guid,
+                link=entry_values["link"],
+                author=entry_values["author"],
+                pubdate=entry_values["pubdate"],
+                updated=refreshed_updated,
+                original_title=entry_values["original_title"],
+                original_content=entry_values["original_content"],
+                original_summary=entry_values["original_summary"],
+                enclosures_xml=entry_values["enclosures_xml"],
+            )
+            if (
+                entry_values["original_title"] != old_title
+                or entry_values["original_content"] != old_content
+            ):
+                # Source really changed: derived translation/summary is
+                # stale and must be regenerated, not rendered next to
+                # the new source. Unchanged re-serves keep their paid
+                # AI output by leaving those fields out of the update.
+                refreshed.translated_title = None
+                refreshed.translated_content = None
+                refreshed.ai_summary = None
+                entries_to_update.append((refreshed, True))
+            else:
+                entries_to_update.append((refreshed, False))
 
-            if len(entries_to_create) >= BATCH_SIZE:
-                Entry.objects.bulk_create(entries_to_create)
-                entries_to_create = []
+        if len(entries_to_create) >= BATCH_SIZE:
+            Entry.objects.bulk_create(entries_to_create, ignore_conflicts=True)
+            entries_to_create = []
 
-    # Create remaining entries
     if entries_to_create:
-        Entry.objects.bulk_create(entries_to_create)
+        Entry.objects.bulk_create(entries_to_create, ignore_conflicts=True)
+
+    source_fields = [
+        "link",
+        "author",
+        "pubdate",
+        "updated",
+        "original_title",
+        "original_content",
+        "original_summary",
+        "enclosures_xml",
+    ]
+    derived_fields = ["translated_title", "translated_content", "ai_summary"]
+    changed = [e for e, src_changed in entries_to_update if src_changed]
+    unchanged = [e for e, src_changed in entries_to_update if not src_changed]
+    if unchanged:
+        Entry.objects.bulk_update(unchanged, fields=source_fields)
+    if changed:
+        Entry.objects.bulk_update(changed, fields=source_fields + derived_fields)

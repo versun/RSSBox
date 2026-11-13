@@ -10,7 +10,6 @@ from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
 from core.tasks.fetch_feeds import (
     FALLBACK_USER_AGENT,
-    handle_feeds_fetch,
     handle_single_feed_fetch,
 )
 from core.tasks.translate_feeds import (
@@ -444,11 +443,6 @@ class TasksOptimizedTestCase(TestCase):
         mockauto_retry.assert_not_called()
 
     # ==================== 覆盖feed处理函数的边界情况 ====================
-
-    def test_handle_feeds_fetch_empty_list(self):
-        """测试空feed列表的处理"""
-        handle_feeds_fetch([])
-        # 应该正常完成，不抛出异常
 
     def test_handle_feeds_translation_empty_list(self):
         """测试空feed列表的翻译处理"""

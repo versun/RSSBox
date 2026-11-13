@@ -63,9 +63,15 @@ def cleanup_feed_entries(feed: Feed):
         if total_entries <= feed.max_posts:
             return
 
-        # Get IDs of entries to keep (latest max_posts entries)
+        # Get IDs of entries to keep: the same window display, summary and
+        # translation use (-pubdate). Keeping by -id instead could delete
+        # still-pending entries that are newer by pubdate (e.g. a back-
+        # filled item with a recent date but low id). -id is only the
+        # deterministic tie-breaker.
         keep_ids = list(
-            feed.entries.order_by("-id").values_list("id", flat=True)[: feed.max_posts]
+            feed.entries.order_by("-pubdate", "-id").values_list("id", flat=True)[
+                : feed.max_posts
+            ]
         )
 
         # Delete older entries
