@@ -1272,9 +1272,8 @@ class OpenAIAgentModelTest(TestCase):
             text="Test text", system_prompt="Filter this:"
         )
         self.assertFalse(result_blocked["passed"])
-        self.assertEqual(
-            result_blocked["tokens"], 0
-        )  # Tokens should be 0 if not passed
+        # A blocked decision was still paid for
+        self.assertEqual(result_blocked["tokens"], 25)
 
 
 class OpenAIAgentAdvancedTest(TestCase):

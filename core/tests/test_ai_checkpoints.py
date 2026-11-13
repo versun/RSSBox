@@ -59,11 +59,11 @@ class CheckpointTransactionTests(TestCase):
                 self.assert_no_writes(queries)
 
     def test_article_fetch_replaces_stale_translation_for_changed_source(self):
-        """A fetched article that differs from the stored source invalidates
-        the old translation instead of pairing the new source with stale text."""
+        """A fetched article that differs from the stored source replaces
+        original_content for entries that still lack a translation. Once a
+        translation exists the pair is kept: pages carry dynamic markup, so
+        refetching would pay for a full re-translation on every run."""
         feed, entry = self.translation_fixture(fetch_article=True)
-        entry.translated_content = "Saved translation"
-        entry.save()
         with (
             patch(
                 "core.tasks.translate_feeds._fetch_article_content",
@@ -80,6 +80,21 @@ class CheckpointTransactionTests(TestCase):
             self.assertEqual(entry.original_content, "Updated source")
             self.assertEqual(entry.translated_content, "New translation")
             provider.assert_called_once()
+
+        # Second run: the completed pair is served as is, no refetch/AI call.
+        with (
+            patch(
+                "core.tasks.translate_feeds._fetch_article_content",
+                return_value="Third version",
+            ) as fetcher,
+            patch.object(OpenAIAgent, "translate") as provider,
+        ):
+            translate_feed(feed, target_field="content")
+            fetcher.assert_not_called()
+            provider.assert_not_called()
+            entry.refresh_from_db()
+            self.assertEqual(entry.original_content, "Updated source")
+            self.assertEqual(entry.translated_content, "New translation")
 
     def test_counter_failure_rolls_back_translation(self):
         feed, entry = self.translation_fixture()

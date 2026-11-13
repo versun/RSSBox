@@ -93,8 +93,6 @@ class Command(BaseCommand):
                         f"{current_time}: Successfully updated feeds for frequency: {target_frequency}"
                     )
                 )
-            except SystemExit:
-                raise
             except Exception as e:
                 logger.exception(f"Command update_feeds_for_frequency failed: {str(e)}")
                 self.stderr.write(self.style.ERROR(f"Error: {str(e)}"))
@@ -156,7 +154,7 @@ def update_multiple_feeds(feeds: list) -> bool:
     try:
         futures = []  # list of (feed, future); a submission error counts as failed
         try:
-            submission_errors = []
+            submit_error = None
             for feed in feeds:
                 try:
                     future = task_manager.submit_task(
@@ -164,15 +162,15 @@ def update_multiple_feeds(feeds: list) -> bool:
                     )
                     futures.append((feed, future))
                 except Exception as e:
-                    submission_errors.append(e)
+                    submit_error = e
                     failed.append(feed.name or feed.slug)
                     logger.warning(
                         f"Failed to submit update task for {feed.name or feed.slug}: {e}"
                     )
             # If every submission failed, this is a systemic failure (e.g.
             # the pool is shut down), not a per-feed problem; fail the batch.
-            if submission_errors and not futures:
-                raise submission_errors[0]
+            if not futures:
+                raise submit_error
 
             _, not_done = wait([f for _, f in futures], timeout=1800)
             if not_done:

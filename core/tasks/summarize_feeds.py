@@ -72,17 +72,9 @@ def summarize_feed(
     Generate content summary with memory optimizations.
     """
     summarizer = summarizer or feed.summarizer
-    summary_detail = feed.summary_detail
-    if summary_detail is None or not 0 <= summary_detail <= 1:
-        # Legacy rows can carry NULL or out-of-range values; a bare assert
-        # or TypeError here would fail every summary for this feed. Clamp
-        # into range instead of crashing.
-        logger.warning(
-            "Invalid summary_detail %r for feed %s; clamping to 0..1",
-            summary_detail,
-            feed.feed_url,
-        )
-        summary_detail = min(1.0, max(0.0, summary_detail or 0.0))
+    # Legacy rows can carry NULL or out-of-range values; clamp instead of
+    # failing every summary for this feed.
+    summary_detail = min(1.0, max(0.0, feed.summary_detail or 0.0))
     completed = True
     entries = None
 
@@ -264,14 +256,19 @@ def _summarize_entry(
         )
 
         # Summarize with retry
-        response = auto_retry(
-            summarizer.summarize,
-            max_retries=3,
-            require_text=True,
-            text=prompt,
-            target_language=target_language,
-            user_prompt=user_prompt,
-        )
+        try:
+            response = auto_retry(
+                summarizer.summarize,
+                max_retries=3,
+                require_text=True,
+                text=prompt,
+                target_language=target_language,
+                user_prompt=user_prompt,
+            )
+        except Exception as e:
+            # Earlier chunks were already paid for; let the caller bill them.
+            e.tokens_used = total_tokens + getattr(e, "tokens_used", 0)
+            raise
 
         chunk_summary = response.get("text", "")
         accumulated_summaries.append(chunk_summary)
@@ -298,8 +295,10 @@ def _save_progress(entries_to_save, feed, total_tokens):
             if total_tokens > 0:
                 Feed.objects.filter(pk=feed.pk).update(total_tokens=F("total_tokens") + total_tokens)
     except Exception as save_error:
-        raise PersistError(
-            f"Could not persist summaries: {save_error}"
-        ) from save_error
+        # Nothing was committed, so the paid usage rides on the error and
+        # the caller bills it via record_spent_tokens().
+        error = PersistError(f"Could not persist summaries: {save_error}")
+        error.tokens_used = total_tokens
+        raise error from save_error
     if total_tokens > 0:
         feed.total_tokens += total_tokens

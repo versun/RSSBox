@@ -14,6 +14,7 @@ import deepl
 import json
 from urllib import request, parse
 from core.tasks.task_manager import task_manager
+from core.tasks.utils import auto_retry
 
 logger = logging.getLogger(__name__)
 
@@ -358,34 +359,21 @@ class OpenAIAgent(Agent):
                 # that already succeeded (which would pay for them again).
                 translated_chunks = []
                 for chunk in chunks:
-                    result = None
-                    last_error = None
-                    for chunk_attempt in range(2):
-                        try:
-                            # user_prompt 已追加到 system_prompt，递归时不要重复追加
-                            result = self.completions(
-                                text=chunk,
-                                system_prompt=system_prompt,
-                                _chunk_depth=_chunk_depth + 1,
-                                **kwargs,
-                            )
-                            break
-                        except Exception as chunk_error:
-                            last_error = chunk_error
-                            # A call that raised never returns its usage; the
-                            # inner call attaches what it already paid for.
-                            tokens += getattr(chunk_error, "tokens_used", 0)
-                            if chunk_attempt == 1:
-                                break
-                            logger.warning(
-                                "Chunk %s/%s failed (%s); retrying once",
-                                len(translated_chunks) + 1,
-                                len(chunks),
-                                chunk_error,
-                            )
-                    if result is None:
-                        last_error.is_chunked_failure = True
-                        raise last_error
+                    try:
+                        # user_prompt 已追加到 system_prompt，递归时不要重复追加
+                        result = auto_retry(
+                            self.completions,
+                            max_retries=2,
+                            text=chunk,
+                            system_prompt=system_prompt,
+                            _chunk_depth=_chunk_depth + 1,
+                            **kwargs,
+                        )
+                    except Exception as chunk_error:
+                        # auto_retry attaches what the failed attempts paid for
+                        tokens += getattr(chunk_error, "tokens_used", 0)
+                        chunk_error.is_chunked_failure = True
+                        raise
                     translated_chunks.append(result["text"])
                     tokens += result["tokens"]
 
@@ -428,6 +416,8 @@ class OpenAIAgent(Agent):
                 messages=messages,
                 **call_kwargs,
             )
+            # 先记录用量：即使响应不完整，这次调用也已计费
+            tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
             if (
                 res.choices
                 and res.choices[0].finish_reason == "stop"
@@ -447,8 +437,6 @@ class OpenAIAgent(Agent):
                 raise RuntimeError(
                     f"No complete text response (finish_reason={finish_reason or 'unknown'})"
                 )
-
-            tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
         except Exception as e:
             # Attach the spent usage so the caller can account for the failed
             # attempt instead of losing the tokens it already paid for.
@@ -503,23 +491,16 @@ class OpenAIAgent(Agent):
 
     def filter(self, text: str, system_prompt: str, **kwargs) -> dict:
         logger.info(f">>> Start Filter: {text[:50]}...")
-        passed = False
-        tokens = 0
         results = self.completions(
             text,
             system_prompt=system_prompt + settings.output_format_for_filter_prompt,
             **kwargs,
         )
 
-        if results["text"] and "passed" in results["text"].lower():
-            logger.info(">>> Filter Passed")
-            passed = True
-            tokens = results["tokens"]
-        else:
-            logger.info(">>> Filter Blocked")
-            passed = False
-
-        return {"passed": passed, "tokens": tokens}
+        passed = "passed" in (results["text"] or "").lower()
+        logger.info(">>> Filter Passed" if passed else ">>> Filter Blocked")
+        # 无论通过与否，这次调用都已计费
+        return {"passed": passed, "tokens": results.get("tokens", 0)}
 
 
 class DeepLAgent(Agent):

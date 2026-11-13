@@ -134,7 +134,9 @@ class AIFailureRecoveryTests(TestCase):
         self.assertEqual(good.translated_title, "A useful result")
         self.assertFalse(self.feed.translation_status)
         self.assertNotIn("Translate Completed", self.feed.log)
-        self.assertIsNone(self.feed.last_translate)
+        # Partial success still bumps last_translate so the saved entry is
+        # visible through the ETag/Last-Modified of the translated feed.
+        self.assertIsNotNone(self.feed.last_translate)
 
     def test_empty_translation_is_a_failure(self):
         entry = self.entry()
