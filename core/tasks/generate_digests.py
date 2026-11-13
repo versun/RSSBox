@@ -1,5 +1,5 @@
 import logging
-from django.db.models import F
+from django.db import transaction
 from django.utils import timezone
 
 from core.models.digest import Digest
@@ -8,7 +8,7 @@ from core.models.feed import Feed
 from utils.text_handler import get_token_count
 from config import settings
 from core.cache import cache_digest
-from core.tasks.utils import PERSISTENCE_ERRORS
+from core.tasks.utils import PERSISTENCE_ERRORS, add_tokens, record_spent_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +225,8 @@ Summary: {article["summary"]}
             }
         except Exception as e:
             logger.error(f"Digest generation failed for {self.digest.name}: {e}")
+            # A failed digester call may still have paid for chunks/attempts.
+            self.digest.total_tokens += getattr(e, "tokens_used", 0)
             local_now = timezone.localtime(now)
             self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation failed for {self.digest.name}: {e}\n"
             # Mark status as failed
@@ -456,43 +458,39 @@ def _ensure_entries_have_summaries(digest: Digest):
         f"Found {len(entries_without_summary)} entries without AI summaries. Generating summaries..."
     )
 
-    # Save progress after EVERY entry (not in batches): a crash must not
-    # lose already-paid summaries, and tokens belong to whichever agent
-    # actually produced them (feed's summarizer or digest's fallback).
+    # Checkpoint after EVERY entry: a crash must not lose already-paid
+    # summaries, and tokens belong to whichever agent actually produced them
+    # (feed's summarizer or digest's fallback).
     failed_entry_ids = []
-    feed_token_totals = {}  # feed_id -> tokens paid via that feed's summarizer
-    digest_token_total = 0  # tokens paid via the digest's fallback summarizer
 
     for idx, entry in enumerate(entries_without_summary):
-        used_digest_summarizer = False
-        try:
-            # Determine which summarizer to use
-            if entry.feed.summarizer:
-                summarizer = entry.feed.summarizer
-                target_language = entry.feed.target_language
-                summary_detail = entry.feed.summary_detail or 0.0
-            elif digest.summarizer:
-                # Use digest's summarizer as fallback
-                summarizer = digest.summarizer
-                target_language = digest.target_language
-                summary_detail = 0.0  # Default detail level for digest fallback
-                used_digest_summarizer = True
-                logger.info(
-                    f"Using digest summarizer for entry '{entry.original_title}' "
-                    f"from feed '{entry.feed.name}' that doesn't have its own summarizer"
-                )
-            else:
-                logger.warning(
-                    f"Entry '{entry.original_title}' from feed '{entry.feed.name}' "
-                    f"has no summarizer and digest has no fallback summarizer"
-                )
-                continue
-
+        # Determine which summarizer to use
+        if entry.feed.summarizer:
+            summarizer = entry.feed.summarizer
+            target_language = entry.feed.target_language
+            summary_detail = entry.feed.summary_detail or 0.0
+            token_owner = entry.feed
+        elif digest.summarizer:
+            # Use digest's summarizer as fallback
+            summarizer = digest.summarizer
+            target_language = digest.target_language
+            summary_detail = 0.0  # Default detail level for digest fallback
+            token_owner = digest
             logger.info(
-                f"[{idx + 1}/{len(entries_without_summary)}] Processing: {entry.original_title}"
+                f"Using digest summarizer for entry '{entry.original_title}' "
+                f"from feed '{entry.feed.name}' that doesn't have its own summarizer"
             )
+        else:
+            logger.warning(
+                f"Entry '{entry.original_title}' from feed '{entry.feed.name}' "
+                f"has no summarizer and digest has no fallback summarizer"
+            )
+            continue
 
-            # Generate summary for this entry directly
+        logger.info(
+            f"[{idx + 1}/{len(entries_without_summary)}] Processing: {entry.original_title}"
+        )
+        try:
             summary, entry_tokens = _summarize_entry(
                 entry=entry,
                 summarizer=summarizer,
@@ -508,24 +506,23 @@ def _ensure_entries_have_summaries(digest: Digest):
             )
 
             entry.ai_summary = summary
-            # Per-entry checkpoint: persist the summary immediately so a
-            # later failure cannot roll back work that was already paid for.
-            entry.save(update_fields=["ai_summary"])
-            if used_digest_summarizer:
-                digest_token_total += entry_tokens
-            else:
-                feed_token_totals[entry.feed_id] = (
-                    feed_token_totals.get(entry.feed_id, 0) + entry_tokens
-                )
+            try:
+                with transaction.atomic():
+                    entry.save(update_fields=["ai_summary"])
+                    add_tokens(token_owner, entry_tokens)
+            except PERSISTENCE_ERRORS as save_error:
+                # Nothing was committed; carry the paid usage so the handler
+                # below can still bill it.
+                save_error.tokens_used = entry_tokens
+                raise
 
             logger.info(
                 f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
             )
-
         except PERSISTENCE_ERRORS as e:
             # The summary was generated but could not be saved; further
             # entries would fail the same way, so stop paying for more.
-            _record_digest_spent(digest, entry, used_digest_summarizer, e)
+            record_spent_tokens(token_owner, e)
             logger.error(
                 f"Aborting digest summaries at entry '{entry.original_title}': {e}"
             )
@@ -535,7 +532,7 @@ def _ensure_entries_have_summaries(digest: Digest):
             failed_entry_ids.append(entry.pk)
             break
         except Exception as e:
-            _record_digest_spent(digest, entry, used_digest_summarizer, e)
+            record_spent_tokens(token_owner, e)
             logger.error(
                 f"Error generating summary for entry '{entry.original_title}': {e}"
             )
@@ -546,33 +543,4 @@ def _ensure_entries_have_summaries(digest: Digest):
             failed_entry_ids.append(entry.pk)
 
     gc.collect()
-
-    # Flush accumulated token usage once; results are already checkpointed.
-    for feed_id, tokens in feed_token_totals.items():
-        Feed.objects.filter(pk=feed_id).update(
-            total_tokens=F("total_tokens") + tokens
-        )
-    if digest_token_total:
-        digest.total_tokens += digest_token_total
-        digest.save(update_fields=["total_tokens"])
-
     return failed_entry_ids
-
-
-def _record_digest_spent(digest, entry, used_digest_summarizer, error):
-    """Bill a failed summary attempt's spent usage to the right owner."""
-    spent = getattr(error, "tokens_used", 0)
-    if not spent:
-        return
-    try:
-        if used_digest_summarizer:
-            Digest.objects.filter(pk=digest.pk).update(
-                total_tokens=F("total_tokens") + spent
-            )
-            digest.total_tokens += spent
-        else:
-            Feed.objects.filter(pk=entry.feed_id).update(
-                total_tokens=F("total_tokens") + spent
-            )
-    except Exception:
-        logger.warning("Could not record spent digest tokens for entry %s", entry.pk)

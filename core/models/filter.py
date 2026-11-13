@@ -165,7 +165,8 @@ class Filter(models.Model):
                 "AI filter %s failed for entry %s; keeping previous decision %s: %s",
                 self.pk, entry.pk, result.passed, exc,
             )
-            return result.passed, 0
+            # A failed call (e.g. truncated reply) may still have been billed.
+            return result.passed, getattr(exc, "tokens_used", 0)
 
         result.passed = passed
         result.save(update_fields=["passed", "last_updated"])
@@ -208,8 +209,8 @@ class Filter(models.Model):
         if self.filter_method in [self.KEYWORD_ONLY, self.BOTH]:
             queryset = self.apply_keywords_filter(queryset)
 
-        # 检查是否需要AI过滤
-        if self.filter_method in [self.AI_ONLY, self.BOTH] and self.agent_id:
+        # 检查是否需要AI过滤（未配置 agent 时 apply_ai_filter 直接放行）
+        if self.filter_method in [self.AI_ONLY, self.BOTH]:
             queryset, tokens = self.apply_ai_filter(queryset)
 
         if tokens > 0:

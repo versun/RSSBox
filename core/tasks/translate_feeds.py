@@ -34,9 +34,13 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
                 feed.target_language,
             )
 
-            translate_feed(feed, target_field=target_field)
-            if feed.translation_status:
+            saved = translate_feed(feed, target_field=target_field)
+            if feed.translation_status or saved:
+                # Bump on partial success too: last_translate drives the
+                # translated feed's ETag/Last-Modified, so readers must see
+                # the entries that did get translated.
                 feed.last_translate = timezone.now()
+            if feed.translation_status:
                 feed.log += f"{timezone.now()} Translate Completed <br>"
             else:
                 feed.log += f"{timezone.now()} Translation incomplete; failed entries remain pending <br>"
@@ -60,11 +64,30 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
     del feeds
 
 
-def translate_feed(feed: Feed, target_field: str = "title"):
-    """Translate and summarize feed entries with memory optimizations."""
+def _entry_was_deleted(entry_pk, save_error) -> bool:
+    """True only if the save failed because the row is gone (e.g. deleted by
+    a concurrent admin "reprocess"); a query failure means the DB itself is
+    unhealthy, in which case the feed should still abort."""
+    # Django raises this when an update_fields save matches 0 rows.
+    if "did not affect any rows" in str(save_error):
+        return True
+    try:
+        return not Entry.objects.filter(pk=entry_pk).exists()
+    except Exception:
+        return False
+
+
+def translate_feed(feed: Feed, target_field: str = "title") -> int:
+    """Translate feed entries; return how many entries were saved."""
     logger.info("Translating feed: %s", feed.target_language)
     total_tokens = 0
     total_characters = 0
+    saved_entries = 0
+    if not feed.translator:
+        logger.error("Translate Engine Not Set for feed %s", feed.name)
+        feed.log += f"{timezone.now()} Translate Engine Not Set<br>"
+        feed.translation_status = False
+        return 0
     feed.translation_status = True
 
     # 只处理前 feed.max_posts 条 entries
@@ -77,10 +100,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
         entry_characters = 0
         try:
             logger.debug("Processing entry %s", entry.pk)
-            if not feed.translator:
-                raise PersistError("Translate Engine Not Set")
-
             entry_needs_save = False
+            source_changed = False
 
             # Process title translation
             if (
@@ -100,16 +121,17 @@ def translate_feed(feed: Feed, target_field: str = "title"):
 
             # Process content translation
             if target_field == "content" and feed.translate_content:
-                if feed.fetch_article:
+                # Only fetch while the entry still needs a translation. Once
+                # an original/translation pair exists it is kept as is:
+                # refetching would either serve a stale pair or, for pages
+                # with dynamic markup, pay for a full re-translation on
+                # every run.
+                if feed.fetch_article and not entry.translated_content:
                     article_content = _fetch_article_content(entry.link)
                     if article_content and article_content != entry.original_content:
                         entry.original_content = article_content
                         entry_needs_save = True
-                        if entry.translated_content:
-                            # The stored translation belongs to the old
-                            # source text; drop it so the new source gets
-                            # translated instead of serving a stale pair.
-                            entry.translated_content = None
+                        source_changed = True
                     # Clean up article content after use
                     del article_content
 
@@ -125,10 +147,14 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                     entry_needs_save = True
 
             if entry_needs_save:
-                fields = [f"translated_{target_field}", "updated"]
+                fields = [f"translated_{target_field}"]
                 if target_field == "content" and feed.fetch_article:
                     fields.append("original_content")
-                entry.updated = timezone.now()
+                if source_changed:
+                    # Only a changed source counts as an update; translating
+                    # must not overwrite the publisher's timestamp.
+                    entry.updated = timezone.now()
+                    fields.append("updated")
                 try:
                     with transaction.atomic():
                         entry.save(update_fields=fields)
@@ -138,15 +164,34 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                                 total_characters=F("total_characters") + entry_characters,
                             )
                 except Exception as save_error:
-                    # PersistError is a PERSISTENCE_ERRORS member, so the
-                    # outer handler aborts the feed on any save failure.
-                    raise PersistError(
+                    if _entry_was_deleted(entry.pk, save_error):
+                        # The row vanished mid-run; the DB is fine, so bill
+                        # the paid call and move on to the next entry.
+                        if entry_tokens or entry_characters:
+                            Feed.objects.filter(pk=feed.pk).update(
+                                total_tokens=F("total_tokens") + entry_tokens,
+                                total_characters=F("total_characters")
+                                + entry_characters,
+                            )
+                            feed.total_tokens += entry_tokens
+                            feed.total_characters += entry_characters
+                        logger.warning(
+                            "Entry %s was deleted during translation; skipping",
+                            entry.pk,
+                        )
+                        continue
+                    # Any other save failure aborts the feed (see handler
+                    # below); the paid usage rides on the error for billing.
+                    error = PersistError(
                         f"Could not persist translation for entry {entry.pk}: {save_error}"
-                    ) from save_error
+                    )
+                    error.tokens_used = entry_tokens
+                    raise error from save_error
                 feed.total_tokens += entry_tokens
                 feed.total_characters += entry_characters
                 total_tokens += entry_tokens
                 total_characters += entry_characters
+                saved_entries += 1
         except PERSISTENCE_ERRORS as e:
             # The paid result could not be saved; further entries would hit
             # the same wall, so stop this feed instead of paying for more.
@@ -173,6 +218,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     )
     # Clean up large variables
     del entries, total_tokens, total_characters
+    return saved_entries
 
 
 def _translate_entry_title(

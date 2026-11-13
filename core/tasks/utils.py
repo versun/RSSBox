@@ -2,6 +2,7 @@ import logging
 import time
 
 from django.db import DatabaseError
+from django.db.models import F
 from openai import APIStatusError
 
 logger = logging.getLogger(__name__)
@@ -21,46 +22,63 @@ PERSISTENCE_ERRORS = (DatabaseError, PersistError)
 
 
 def _should_not_retry(error: Exception) -> bool:
-    """Errors for which another attempt would re-do paid work.
+    """Errors for which another attempt cannot help or would re-do paid work.
 
     * Persistence failures: the database is down, a retry cannot succeed.
     * Chunked-completion failures: the call already split its input and
       retried each chunk; retrying the whole text replays the chunks that
       already succeeded and pays for them again.
+    * Client errors other than timeout/conflict/rate limit.
     """
-    return isinstance(error, PERSISTENCE_ERRORS) or getattr(
+    if isinstance(error, PERSISTENCE_ERRORS) or getattr(
         error, "is_chunked_failure", False
+    ):
+        return True
+    return isinstance(error, APIStatusError) and (
+        error.status_code < 500 and error.status_code not in (408, 409, 429)
+    )
+
+
+def _has_text(result) -> bool:
+    return (
+        isinstance(result, dict)
+        and isinstance(result.get("text"), str)
+        and bool(result["text"].strip())
     )
 
 
 def auto_retry(
     func: callable, max_retries: int = 3, require_text=False, **kwargs
 ) -> dict:
-    """Try at most max_retries times, propagating failure to the caller."""
+    """Try at most max_retries times, propagating failure to the caller.
+
+    Usage paid by failed attempts is not lost: it is added to the successful
+    result's ``tokens``, or attached to the final error as ``tokens_used``.
+    """
     if max_retries < 1:
         raise ValueError("max_retries must be at least 1")
+    spent = 0
     for attempt in range(max_retries):
         try:
             result = func(**kwargs)
-            if require_text and (
-                not isinstance(result, dict)
-                or not isinstance(result.get("text"), str)
-                or not result["text"].strip()
-            ):
-                raise RuntimeError("Translation or summary returned no text")
-            return result
         except Exception as e:
-            logger.error(f"Attempt {attempt + 1} failed: {e!s}")
-            # Failures that would re-do already-paid work are not retried.
-            if _should_not_retry(e):
-                raise
-            if isinstance(e, APIStatusError) and (
-                e.status_code < 500 and e.status_code not in (408, 409, 429)
-            ):
-                raise
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(0.5 * (2**attempt))
+            error = e
+            spent += getattr(e, "tokens_used", 0)
+        else:
+            if not require_text or _has_text(result):
+                if spent:
+                    result["tokens"] = result.get("tokens", 0) + spent
+                return result
+            if isinstance(result, dict):
+                spent += result.get("tokens", 0)
+            error = RuntimeError("Translation or summary returned no text")
+
+        if spent:
+            error.tokens_used = spent
+        logger.error(f"Attempt {attempt + 1} failed: {error!s}")
+        if _should_not_retry(error) or attempt == max_retries - 1:
+            raise error
+        time.sleep(0.5 * (2**attempt))
 
 
 def extract_content_from_entry(entry_data):
@@ -72,24 +90,26 @@ def extract_content_from_entry(entry_data):
     return entry_data.get("summary", "")
 
 
-def record_spent_tokens(feed, error) -> None:
+def add_tokens(obj, tokens: int) -> None:
+    """Atomically add ``tokens`` to ``obj.total_tokens`` (Feed, Digest, ...)."""
+    if not tokens:
+        return
+    type(obj).objects.filter(pk=obj.pk).update(
+        total_tokens=F("total_tokens") + tokens
+    )
+    obj.total_tokens += tokens
+
+
+def record_spent_tokens(obj, error) -> None:
     """Bill the usage a failed AI call already paid for, if it reported it.
 
-    ``completions()`` attaches the spent usage to the raised exception as
-    ``tokens_used``; persist it so failed attempts are not lost from the
-    feed's token accounting. Any failure here must not mask the original
+    ``completions()``/``auto_retry()`` attach the spent usage to the raised
+    exception as ``tokens_used``. Any failure here must not mask the original
     pipeline error.
     """
-    spent = getattr(error, "tokens_used", 0)
-    if not spent:
-        return
     try:
-        from django.db.models import F
-        from core.models.feed import Feed
-
-        Feed.objects.filter(pk=feed.pk).update(
-            total_tokens=F("total_tokens") + spent
-        )
-        feed.total_tokens += spent
+        add_tokens(obj, getattr(error, "tokens_used", 0))
     except Exception:
-        logger.warning("Could not record spent tokens for feed %s", feed.pk)
+        logger.warning(
+            "Could not record spent tokens for %s %s", type(obj).__name__, obj.pk
+        )

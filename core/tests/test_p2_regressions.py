@@ -54,12 +54,6 @@ class DigestMergeAccountingTests(TestCase):
         )
         self.digest.tags.add(self.tag)
 
-    def _generator(self, chunks, responses):
-        """Build a DigestGenerator with a mocked summarizer returning responses."""
-        gen = DigestGenerator(self.digest)
-        gen.prepare_articles()
-        return gen
-
     def test_merge_tokens_are_counted(self):
         """The merge call's tokens must be added to digest.total_tokens."""
         responses = [
@@ -405,7 +399,11 @@ class StaleTranslationTests(TestCase):
             translated_content="old translation",
         )
 
-    def test_changed_source_clears_translation_and_retranslates(self):
+    def test_changed_source_is_picked_up_when_untranslated(self):
+        """Only an entry that still lacks a translation triggers a fetch;
+        a changed source then replaces original_content and bumps updated."""
+        self.entry.translated_content = None
+        self.entry.save(update_fields=["translated_content"])
         old_updated = self.entry.updated
         with (
             patch(
@@ -434,13 +432,191 @@ class StaleTranslationTests(TestCase):
                 "core.tasks.translate_feeds._fetch_article_content",
                 return_value="old source",
             ),
-            patch.object(OpenAIAgent, "translate") as provider,
+            patch.object(OpenAIAgent, "translate", autospec=True) as provider,
         ):
             translate_feed(self.feed, target_field="content")
 
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.translated_content, "old translation")
         provider.assert_not_called()
+
+    def test_translated_entry_is_not_refetched(self):
+        """A completed original/translation pair is kept as is; fetch_article
+        must not be fetched again just to find cosmetic page changes."""
+        with (
+            patch(
+                "core.tasks.translate_feeds._fetch_article_content"
+            ) as fetcher,
+            patch.object(OpenAIAgent, "translate", autospec=True) as provider,
+        ):
+            translate_feed(self.feed, target_field="content")
+
+        fetcher.assert_not_called()
+        provider.assert_not_called()
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.translated_content, "old translation")
+
+
+class TimestampPreservationTests(TestCase):
+    """Translating must not clobber the publisher's ``updated`` timestamp."""
+
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="T agent", api_key="key"
+        )
+        self.old_stamp = timezone.now() - timedelta(days=10)
+
+    def _entry(self, feed, **kwargs):
+        entry = Entry.objects.create(feed=feed, link="https://example.com/e",
+                                     original_title="Title", **kwargs)
+        # ``updated`` is auto_now; backdate it to the source's real stamp.
+        Entry.objects.filter(pk=entry.pk).update(updated=self.old_stamp)
+        entry.refresh_from_db()
+        return entry
+
+    def test_title_translation_keeps_source_timestamp(self):
+        feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        entry = self._entry(feed)
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            return_value={"text": "译文", "tokens": 3, "characters": 3},
+        ):
+            translate_feed(feed, target_field="title")
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.translated_title, "译文")
+        self.assertEqual(entry.updated, self.old_stamp)
+
+    def test_content_translation_keeps_source_timestamp(self):
+        feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_content=True,
+        )
+        entry = self._entry(feed, original_content="body")
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            return_value={"text": "正文译文", "tokens": 3, "characters": 3},
+        ):
+            translate_feed(feed, target_field="content")
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.translated_content, "正文译文")
+        self.assertEqual(entry.updated, self.old_stamp)
+
+
+class DeletedEntryHandlingTests(TestCase):
+    """An entry deleted mid-run is a per-entry skip, not a feed abort."""
+
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="T agent", api_key="key"
+        )
+        self.feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        self.e1 = Entry.objects.create(
+            feed=self.feed, link="https://example.com/1", original_title="A1"
+        )
+        self.e2 = Entry.objects.create(
+            feed=self.feed, link="https://example.com/2", original_title="A2"
+        )
+
+    def test_entry_deleted_during_save_skips_to_next_entry(self):
+        from django.db import DatabaseError
+
+        tokens_before = self.feed.total_tokens
+        e1_pk = self.e1.pk
+
+        real_save = Entry.save
+
+        def dispatch(self_entry, **kwargs):
+            # What a concurrent admin "reprocess" looks like from this
+            # connection: the update_fields save matches 0 rows.
+            if self_entry.pk == e1_pk:
+                raise DatabaseError(
+                    "Save with update_fields did not affect any rows."
+                )
+            return real_save(self_entry, **kwargs)
+
+        with (
+            patch.object(
+                OpenAIAgent,
+                "translate",
+                return_value={"text": "t", "tokens": 5, "characters": 1},
+            ) as provider,
+            patch.object(Entry, "save", dispatch),
+        ):
+            saved = translate_feed(self.feed, target_field="title")
+
+        self.assertEqual(provider.call_count, 2)
+        self.assertEqual(saved, 1)
+        self.assertTrue(self.feed.translation_status)
+        # The paid call for the deleted entry is still billed.
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.total_tokens, tokens_before + 10)
+        self.e2.refresh_from_db()
+        self.assertEqual(self.e2.translated_title, "t")
+
+    def test_deleted_entry_does_not_fail_the_feed(self):
+        Entry.objects.filter(pk=self.e1.pk).delete()
+
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            return_value={"text": "t", "tokens": 5, "characters": 1},
+        ):
+            translate_feed(self.feed, target_field="title")
+
+        self.assertTrue(self.feed.translation_status)
+
+
+class PersistErrorBillingTests(TestCase):
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="Agent", api_key="key"
+        )
+        self.feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        Entry.objects.create(
+            feed=self.feed, link="https://example.com/1", original_title="A1"
+        )
+
+    def test_persist_error_bills_the_paid_translation(self):
+        """When the save fails for a real DB reason, the tokens that were
+        already paid still land on feed.total_tokens."""
+        from django.db import DatabaseError
+
+        with (
+            patch.object(
+                OpenAIAgent,
+                "translate",
+                return_value={"text": "t", "tokens": 7, "characters": 1},
+            ),
+            patch.object(
+                Entry, "save", side_effect=DatabaseError("disk full")
+            ),
+        ):
+            translate_feed(self.feed, target_field="title")
+
+        self.assertFalse(self.feed.translation_status)
+        self.feed.refresh_from_db()
+        self.assertEqual(self.feed.total_tokens, 7)
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +655,7 @@ class FilterFallbackTests(TestCase):
             ai.call_args.kwargs["system_prompt"], __import__("config.settings", fromlist=["default_filter_prompt"]).default_filter_prompt
         )
 
-    def test_blocked_result_does_not_count_tokens(self):
+    def test_blocked_result_still_counts_tokens(self):
         rule = Filter.objects.create(
             name="r2",
             agent=self.agent,
@@ -685,7 +861,8 @@ class CLIFailurePropagationTests(TestCase):
         self.assertEqual(ctx.exception.code, 2)
 
     def test_command_exits_0_on_clean_success(self):
-        command = cmd.Command(stdout=io.StringIO(), stderr=io.StringIO())
+        stdout = io.StringIO()
+        command = cmd.Command(stdout=stdout, stderr=io.StringIO())
         with (
             patch("core.management.commands.feed_updater.fcntl"),
             patch("core.management.commands.feed_updater.open"),
@@ -694,4 +871,103 @@ class CLIFailurePropagationTests(TestCase):
             ),
         ):
             command.handle(frequency="hourly")
-        # No SystemExit -> returned normally.
+        self.assertIn("Successfully", stdout.getvalue())
+
+
+# ---------------------------------------------------------------------------
+# Review round: partial-success timestamps and filter-failure billing
+# ---------------------------------------------------------------------------
+
+
+class LastTranslateTests(TestCase):
+    """last_translate drives the translated feed's ETag/Last-Modified, so it
+    must advance on partial success too."""
+
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="Agent", api_key="key"
+        )
+        self.feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        Entry.objects.create(
+            feed=self.feed, link="https://example.com/1", original_title="A1"
+        )
+        Entry.objects.create(
+            feed=self.feed, link="https://example.com/2", original_title="A2"
+        )
+
+    def test_partial_success_still_bumps_last_translate(self):
+        outcomes = iter(
+            [
+                {"text": "t", "tokens": 1, "characters": 1},
+                RuntimeError("provider down"),
+            ]
+        )
+
+        def fake_translate(**kwargs):
+            outcome = next(outcomes)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        with patch.object(
+            OpenAIAgent, "translate", side_effect=fake_translate
+        ):
+            from core.tasks.translate_feeds import handle_feeds_translation
+
+            handle_feeds_translation([self.feed], target_field="title")
+
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+        self.assertIsNotNone(self.feed.last_translate)
+
+    def test_failed_run_without_saves_keeps_last_translate_null(self):
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            side_effect=RuntimeError("provider down"),
+        ):
+            from core.tasks.translate_feeds import handle_feeds_translation
+
+            handle_feeds_translation([self.feed], target_field="title")
+
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+        self.assertIsNone(self.feed.last_translate)
+
+
+class FilterFailureBillingTests(TestCase):
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="F agent", api_key="key"
+        )
+        self.entry = Entry.objects.create(
+            feed=Feed.objects.create(
+                name="F", feed_url="https://example.com/f.xml"
+            ),
+            link="https://example.com/e",
+            original_title="T",
+            pubdate=timezone.now(),
+        )
+
+    def test_failed_filter_call_still_counts_spent_tokens(self):
+        """A truncated/failed completion already reported tokens_used; those
+        tokens must land on Filter.total_tokens even though the call failed."""
+        rule = Filter.objects.create(
+            name="r",
+            agent=self.agent,
+            filter_method=Filter.AI_ONLY,
+            filter_prompt="p",
+        )
+        error = RuntimeError("truncated response")
+        error.tokens_used = 4
+
+        with patch.object(OpenAIAgent, "filter", side_effect=error):
+            rule.apply_filter(Entry.objects.all())
+
+        rule.refresh_from_db()
+        self.assertEqual(rule.total_tokens, 4)
