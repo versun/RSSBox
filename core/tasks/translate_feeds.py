@@ -1,5 +1,7 @@
 import logging
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import F
 from bs4 import BeautifulSoup
 import mistune
 import newspaper
@@ -19,7 +21,7 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
                 continue
 
             feed.translation_status = None
-            feed.save()
+            feed.save(update_fields=["translation_status"])
             logger.info(
                 "Start translate %s of feed %s to %s",
                 target_field,
@@ -46,8 +48,6 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
         fields=[
             "translation_status",
             "log",
-            "total_tokens",
-            "total_characters",
             "last_translate",
         ],
     )
@@ -60,8 +60,6 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     logger.info("Translating feed: %s", feed.target_language)
     total_tokens = 0
     total_characters = 0
-    entries_to_save = []
-    BATCH_SIZE = 30  # Reduced batch size for memory efficiency
     feed.translation_status = True
 
     # 只处理前 feed.max_posts 条 entries
@@ -70,6 +68,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     )
 
     for entry in entries:
+        entry_tokens = 0
+        entry_characters = 0
         try:
             logger.debug("Processing entry %s", entry.pk)
             if not feed.translator:
@@ -78,56 +78,57 @@ def translate_feed(feed: Feed, target_field: str = "title"):
             entry_needs_save = False
 
             # Process title translation
-            if target_field == "title" and feed.translate_title:
+            if (
+                target_field == "title"
+                and feed.translate_title
+                and not entry.translated_title
+            ):
                 metrics = _translate_entry_title(
                     entry=entry,
                     target_language=feed.target_language,
                     engine=feed.translator,
                     user_prompt=feed.additional_prompt,
                 )
-                total_tokens += metrics["tokens"]
-                total_characters += metrics["characters"]
+                entry_tokens += metrics["tokens"]
+                entry_characters += metrics["characters"]
                 entry_needs_save = True
 
             # Process content translation
             if target_field == "content" and feed.translate_content:
                 if feed.fetch_article:
                     article_content = _fetch_article_content(entry.link)
-                    if article_content:
+                    if article_content and article_content != entry.original_content:
                         entry.original_content = article_content
                         entry_needs_save = True
-                        # Clean up article content after use
-                        del article_content
+                    # Clean up article content after use
+                    del article_content
 
-                if entry.original_content:
+                if entry.original_content and not entry.translated_content:
                     metrics = _translate_entry_content(
                         entry=entry,
                         target_language=feed.target_language,
                         engine=feed.translator,
                         user_prompt=feed.additional_prompt,
                     )
-                    total_tokens += metrics["tokens"]
-                    total_characters += metrics["characters"]
+                    entry_tokens += metrics["tokens"]
+                    entry_characters += metrics["characters"]
                     entry_needs_save = True
 
             if entry_needs_save:
-                entries_to_save.append(entry)
-
-            # Batch update with smaller size
-            if len(entries_to_save) >= BATCH_SIZE:
-                Entry.objects.bulk_update(
-                    entries_to_save,
-                    fields=[
-                        "translated_title",
-                        "translated_content",
-                        "original_content",
-                    ],
-                )
-                entries_to_save = []
-                # Force garbage collection
-                import gc
-
-                gc.collect()
+                fields = [f"translated_{target_field}"]
+                if target_field == "content" and feed.fetch_article:
+                    fields.append("original_content")
+                with transaction.atomic():
+                    entry.save(update_fields=fields)
+                    if entry_tokens or entry_characters:
+                        Feed.objects.filter(pk=feed.pk).update(
+                            total_tokens=F("total_tokens") + entry_tokens,
+                            total_characters=F("total_characters") + entry_characters,
+                        )
+                feed.total_tokens += entry_tokens
+                feed.total_characters += entry_characters
+                total_tokens += entry_tokens
+                total_characters += entry_characters
         except Exception as e:
             logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
@@ -137,18 +138,6 @@ def translate_feed(feed: Feed, target_field: str = "title"):
         finally:
             # Explicitly clean up entry reference
             del entry
-
-    # Save remaining entries
-    if entries_to_save:
-        Entry.objects.bulk_update(
-            entries_to_save,
-            fields=["translated_title", "translated_content", "original_content"],
-        )
-        del entries_to_save
-
-    # Update feed stats
-    feed.total_tokens += total_tokens
-    feed.total_characters += total_characters
 
     logger.info(
         f"Translation completed. Tokens: {total_tokens}, Chars: {total_characters}"

@@ -1,5 +1,7 @@
 import logging
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import F
 
 from core.models import Feed, Entry, Agent
 from utils import text_handler
@@ -15,7 +17,7 @@ def handle_feeds_summary(feeds: list):
                 continue
 
             feed.translation_status = None
-            feed.save()
+            feed.save(update_fields=["translation_status"])
             logger.info(
                 "Start summary feed %s to %s", feed.feed_url, feed.target_language
             )
@@ -44,7 +46,7 @@ def handle_feeds_summary(feeds: list):
             del feed
 
     Feed.objects.bulk_update(
-        feeds, fields=["translation_status", "log", "total_tokens", "total_characters"]
+        feeds, fields=["translation_status", "log"]
     )
     # Clear the list after processing
     del feeds
@@ -66,9 +68,6 @@ def summarize_feed(
     """
     summarizer = summarizer or feed.summarizer
     assert 0 <= feed.summary_detail <= 1, "summary_detail must be between 0 and 1"
-    entries_to_save = []
-    total_tokens = 0
-    BATCH_SIZE = 5  # Reduced batch size for memory efficiency
     completed = True
     entries = None
 
@@ -116,23 +115,11 @@ def summarize_feed(
                 )
 
                 entry.ai_summary = summary
-                total_tokens += entry_tokens
-                entries_to_save.append(entry)
+                _save_progress([entry], feed, entry_tokens)
 
                 logger.info(
                     f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
                 )
-
-                # Periodically save progress with smaller batch size
-                if len(entries_to_save) >= BATCH_SIZE:
-                    _save_progress(entries_to_save, feed, total_tokens)
-                    total_tokens = 0
-                    entries_to_save = []
-
-                    # Force garbage collection
-                    import gc
-
-                    gc.collect()
 
             except Exception as e:
                 logger.error(
@@ -145,14 +132,7 @@ def summarize_feed(
         feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
         completed = False
     finally:
-        if not summarizer:
-            _save_progress(entries_to_save, feed, total_tokens)
-        else:
-            _save_progress(entries_to_save, feed, 0)
         logger.info(f"Completed summary process for feed: {feed.feed_url}")
-
-        # Clean up large references
-        del entries, entries_to_save
     return completed
 
 
@@ -279,11 +259,11 @@ def _summarize_entry(
 
 
 def _save_progress(entries_to_save, feed, total_tokens):
-    """Save progress with memory cleanup."""
-    if entries_to_save:
-        Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
-        del entries_to_save
-
+    """Commit completed summaries and their usage together."""
+    with transaction.atomic():
+        if entries_to_save:
+            Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
+        if total_tokens > 0:
+            Feed.objects.filter(pk=feed.pk).update(total_tokens=F("total_tokens") + total_tokens)
     if total_tokens > 0:
         feed.total_tokens += total_tokens
-        feed.save()
