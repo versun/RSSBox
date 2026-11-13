@@ -1,4 +1,5 @@
 import logging
+import math
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from config import settings
@@ -15,6 +16,11 @@ from urllib import request, parse
 from core.tasks.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
+
+# Hard stops for recursive chunk completion, in case a chunk still exceeds the
+# input budget after splitting.
+MAX_CHUNK_RECURSION_DEPTH = 3
+MAX_CHUNKS_PER_COMPLETION = 100
 
 
 class Agent(models.Model):
@@ -288,7 +294,7 @@ class OpenAIAgent(Agent):
         text: str,
         system_prompt: str = None,
         user_prompt: str = None,
-        _is_chunk: bool = False,  # 内部参数，用于标记是否为分块调用
+        _chunk_depth: int = 0,  # 内部参数：分块递归深度，>0 表示分块调用
         **kwargs,
     ) -> dict:
         client = self._init()
@@ -299,33 +305,6 @@ class OpenAIAgent(Agent):
             if user_prompt:
                 system_prompt += f"\n\n{user_prompt}"
 
-            # 应用速率限制
-            self._wait_for_rate_limit()
-            
-            if self.merge_system_prompt:
-                merged_content = f"{system_prompt}\n\n{text}"
-                messages = [
-                    {"role": "user", "content": merged_content}
-                ]
-                # 当合并 system prompt 时，system_prompt_tokens 为 0（因为已包含在 merged_content 中）
-                system_prompt_tokens = 0
-                input_tokens = get_token_count(merged_content)
-            else:
-                messages = [
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user", 
-                        "content": text
-                    }
-                ]
-                # 计算系统提示的token占用
-                system_prompt_tokens = get_token_count(system_prompt)
-                input_tokens = get_token_count(system_prompt) + get_token_count(text)
-            
-            # 获取最大可用token数（保留buffer）
             if self.max_tokens == 0:
                 task_manager.submit_task(
                     f"detect_model_limit_{self.model}_{self.id}",
@@ -336,51 +315,70 @@ class OpenAIAgent(Agent):
                     "max_tokens is not set, Please wait for the model limit detection to complete"
                 )
 
-            # 计算最大可用token数
-            # 当 merge_system_prompt=True 时，system_prompt 已包含在 merged_content 中，所以只需要考虑 text 的 token
-            if self.merge_system_prompt:
-                # 合并模式下，需要从总限制中减去 system_prompt 的 token（因为它会占用输入空间）
-                system_prompt_token_cost = get_token_count(system_prompt)
-                max_usable_tokens = (
-                    self.max_tokens - system_prompt_token_cost - 100
-                )  # 100 token buffer
-            else:
-                max_usable_tokens = (
-                    self.max_tokens - system_prompt_tokens - 100
-                )  # 100 token buffer
-            
-            # 检查文本长度是否需要分块
-            if get_token_count(text) > max_usable_tokens:
-                logger.info(
-                    f"Text too large ({get_token_count(text)} tokens), chunking..."
+            # 无论是否合并，system_prompt 都占用输入空间（保留 100 token buffer）
+            prompt_tokens = get_token_count(system_prompt)
+            text_token_count = get_token_count(text)
+            max_usable_tokens = self.max_tokens - prompt_tokens - 100
+            if max_usable_tokens <= 0:
+                raise ValueError(
+                    f"No usable input tokens left (max_tokens={self.max_tokens}, "
+                    f"prompt_tokens={prompt_tokens}, buffer=100); "
+                    "increase max_tokens or shorten the prompt"
                 )
 
-                # 使用自适应分块
+            # 检查文本长度是否需要分块
+            if text_token_count > max_usable_tokens:
+                if _chunk_depth >= MAX_CHUNK_RECURSION_DEPTH:
+                    raise RuntimeError(
+                        "Chunk recursion depth exceeded "
+                        f"({MAX_CHUNK_RECURSION_DEPTH}); refusing to split further"
+                    )
+
+                logger.info(
+                    f"Text too large ({text_token_count} tokens), chunking..."
+                )
+
+                # min_chunk_size 不能超过可用预算，否则分块结果仍会超过预算
                 chunks = adaptive_chunking(
                     text,
-                    target_chunks=max(1, int(len(text) / max_usable_tokens)),
-                    min_chunk_size=500,
+                    target_chunks=math.ceil(text_token_count / max_usable_tokens),
+                    min_chunk_size=min(500, max_usable_tokens),
                     max_chunk_size=max_usable_tokens,
                 )
 
-                # 分块翻译
+                if len(chunks) > MAX_CHUNKS_PER_COMPLETION:
+                    raise RuntimeError(
+                        f"Text produced {len(chunks)} chunks, above the limit of "
+                        f"{MAX_CHUNKS_PER_COMPLETION}; refusing to call the provider"
+                    )
+
                 translated_chunks = []
                 for chunk in chunks:
+                    # user_prompt 已追加到 system_prompt，递归时不要重复追加
                     result = self.completions(
                         text=chunk,
                         system_prompt=system_prompt,
-                        user_prompt=user_prompt,
-                        _is_chunk=True,  # 标记为分块调用
+                        _chunk_depth=_chunk_depth + 1,
                         **kwargs,
                     )
                     translated_chunks.append(result["text"])
                     tokens += result["tokens"]
 
-                result_text = " ".join(translated_chunks)
-                return {"text": result_text, "tokens": tokens}
+                return {"text": " ".join(translated_chunks), "tokens": tokens}
+
+            if self.merge_system_prompt:
+                messages = [{"role": "user", "content": f"{system_prompt}\n\n{text}"}]
+            else:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text},
+                ]
+            input_tokens = prompt_tokens + text_token_count
+
+            # 只在真正请求服务商前占用速率配额
+            self._wait_for_rate_limit()
 
             # 计算合理的输出token限制
-            # input_tokens 已经在上面根据 merge_system_prompt 的情况正确计算了，直接使用
             # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
             output_token_limit = int(max(4096, (self.max_tokens - input_tokens) * 0.8))
 
@@ -427,9 +425,10 @@ class OpenAIAgent(Agent):
 
             tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
         except Exception as e:
-            self.log = f"{timezone.now()}: {str(e)}"
-            logger.error(f"{self.name}: {e}")
-            if not _is_chunk:
+            # 分块调用的异常交给最外层统一记录，避免每层递归重复记录
+            if _chunk_depth == 0:
+                self.log = f"{timezone.now()}: {str(e)}"
+                logger.error(f"{self.name}: {e}")
                 self.save(update_fields=["log"])
             raise
 

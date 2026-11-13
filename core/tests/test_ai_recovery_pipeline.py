@@ -93,7 +93,11 @@ class AIRecoveryPipelineTests(TestCase):
                     self.rule.results.all().delete()
                     request.reset_mock(side_effect=True)
                     request.side_effect = complete
-                    self.assertEqual(self.atom_titles(path), ["Good"])
+                    # A failed AI evaluation fails open: the undecided entry is
+                    # still shown instead of being hidden.
+                    self.assertCountEqual(
+                        self.atom_titles(path), ["Pending", "Good"]
+                    )
                     self.assertEqual(request.call_count, 2)
                     self.assertIsNone(
                         self.rule.results.get(entry=self.entries[0]).passed
@@ -105,12 +109,14 @@ class AIRecoveryPipelineTests(TestCase):
                     self.assertCountEqual(self.atom_titles(path), ["Pending", "Good"])
                     request.assert_called_once()
 
-    def test_all_filter_failures_produce_a_valid_empty_feed(self):
+    def test_all_filter_failures_produce_a_valid_feed_with_entries(self):
         with patch.object(OpenAIAgent, "filter", side_effect=self.timeout()):
-            self.assertEqual(self.atom_titles("/rss/recovery"), [])
+            self.assertCountEqual(
+                self.atom_titles("/rss/recovery"), ["Pending", "Good"]
+            )
         self.assertEqual(self.rule.results.filter(passed__isnull=True).count(), 2)
 
-    def test_failed_reevaluation_leaves_old_decision_pending(self):
+    def test_failed_reevaluation_keeps_old_decision(self):
         result = FilterResult.objects.create(
             filter=self.rule, entry=self.entries[0], passed=True
         )
@@ -118,13 +124,13 @@ class AIRecoveryPipelineTests(TestCase):
             updated=result.last_updated + timedelta(seconds=1)
         )
         with patch.object(OpenAIAgent, "filter", side_effect=self.timeout()):
-            self.assertFalse(
+            self.assertTrue(
                 self.rule.apply_filter(
                     Entry.objects.filter(pk=self.entries[0].pk)
                 ).exists()
             )
         result.refresh_from_db()
-        self.assertIsNone(result.passed)
+        self.assertTrue(result.passed)
 
     @patch("core.management.commands.feed_updater.close_old_connections")
     @patch("core.management.commands.feed_updater.handle_single_feed_fetch")

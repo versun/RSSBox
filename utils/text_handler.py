@@ -6,8 +6,11 @@ import tiktoken
 import html2text
 
 
-def clean_content(content: str) -> str:
-    """convert html to markdown without useless tags"""
+def clean_content(content: str | None) -> str:
+    """convert html to markdown without useless tags; None becomes "" """
+    if content is None:
+        return ""
+
     h = html2text.HTML2Text()
     h.decode_errors = "ignore"
     h.ignore_links = True

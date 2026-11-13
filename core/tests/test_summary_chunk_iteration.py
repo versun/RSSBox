@@ -36,6 +36,9 @@ class SummaryChunkIterationTests(SimpleTestCase):
                             summary_detail=1,
                         )
                     prompts = [call.kwargs["text"] for call in agent.summarize.call_args_list]
+                    # The context window size must not leak in as an output limit.
+                    for call in agent.summarize.call_args_list:
+                        self.assertNotIn("max_tokens", call.kwargs)
                     processed = [prompt.split("Current text to summarize:\n\n")[-1] for prompt in prompts]
                     self.assertEqual(processed, chunks)
                     self.assertEqual(summary, "\n\n".join(summaries))

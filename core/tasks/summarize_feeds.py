@@ -206,13 +206,13 @@ def _summarize_entry(
 
     # Process chunks with context management
     accumulated_summaries = []
-    context_token_count = 0
     total_tokens = 0
 
     for chunk_idx, chunk in enumerate(text_chunks):
         # Prepare context
         context_parts = []
         if summarize_recursively and accumulated_summaries:
+            context_token_count = 0
             context_candidates = accumulated_summaries[-max_context_chunks:]
 
             for summary in reversed(context_candidates):
@@ -237,14 +237,12 @@ def _summarize_entry(
             require_text=True,
             text=prompt,
             target_language=target_language,
-            max_tokens=max_context_tokens,
             user_prompt=user_prompt,
         )
 
         chunk_summary = response.get("text", "")
         accumulated_summaries.append(chunk_summary)
         total_tokens += response.get("tokens", 0)
-        context_token_count = text_handler.get_token_count(chunk_summary)
 
         # Clean up
         del prompt, response

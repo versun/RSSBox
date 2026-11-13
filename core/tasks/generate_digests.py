@@ -116,13 +116,17 @@ Summary: {article["summary"]}
 
             # 2) Ensure all entries have AI summaries before generating digest
             now = timezone.now()
-            _ensure_entries_have_summaries(self.digest)
+            failed_entry_ids = _ensure_entries_have_summaries(self.digest)
+            if failed_entry_ids:
+                # Never publish a digest built on missing summaries.
+                raise RuntimeError(f"Summaries failed for entries {failed_entry_ids}")
 
             self.prepare_articles()
 
             if not self.articles:
                 local_now = timezone.localtime(now)
                 self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} No articles were found within the specified range.\n"
+                self.digest.status = False
                 return {"success": False, "error": "No articles were found within the specified range."}
 
             # Build prompt - 分离文章内容、系统提示和URL映射
@@ -152,8 +156,6 @@ Summary: {article["summary"]}
                     logger.warning(f"Failed to digest article")
                 self.digest.total_tokens += result.get("tokens", 0)
 
-            # Only for test
-            digests_list += digests_list
             if len(digests_list) > 1:
                 logger.info(
                     f"Final digest has {len(digests_list)} digests, need to merge to one digest"
@@ -416,9 +418,11 @@ def _ensure_entries_have_summaries(digest: Digest):
 
     Args:
         digest: The Digest instance
+
+    Returns:
+        list[int]: IDs of entries whose summary failed (left as ai_summary=None).
     """
     from core.tasks.summarize_feeds import _summarize_entry
-    from core.models.entry import Entry
     import gc
 
     # Get articles for digest within the specified days_range
@@ -426,18 +430,18 @@ def _ensure_entries_have_summaries(digest: Digest):
 
     if not all_articles:
         logger.info(f"No articles found for digest '{digest.name}'")
-        return
+        return []
 
     # Filter entries that need summaries - prioritize existing ai_summary
     entries_without_summary = [
         entry
         for entry in all_articles
-        if not entry.ai_summary or entry.ai_summary.strip() == ""
+        if not (entry.ai_summary or "").strip()
     ]
 
     if not entries_without_summary:
         logger.info(f"All entries for digest '{digest.name}' already have AI summaries")
-        return
+        return []
 
     logger.info(
         f"Found {len(entries_without_summary)} entries without AI summaries. Generating summaries..."
@@ -446,6 +450,7 @@ def _ensure_entries_have_summaries(digest: Digest):
     # Process each entry directly - no need to group by feed
     entries_to_save = []
     total_tokens = 0
+    failed_entry_ids = []
     BATCH_SIZE = 5  # Memory-efficient batch size
     use_digest_summarizer = False
 
@@ -518,15 +523,15 @@ def _ensure_entries_have_summaries(digest: Digest):
             digest.log += (
                 f"Error generating summary for entry '{entry.original_title}': {e}\n"
             )
-            digest.status = False
-            digest.save()
-            entry.ai_summary = f"[Summary failed: {str(e)}]"
-            entries_to_save.append(entry)
+            # Leave ai_summary empty so the entry is retried next time.
+            failed_entry_ids.append(entry.pk)
 
     if entries_to_save:
         _save_progress_batch(
             entries_to_save, digest, total_tokens, use_digest_summarizer
         )
+
+    return failed_entry_ids
 
 
 def _save_progress_batch(entries_to_save, digest, total_tokens, use_digest_summarizer):

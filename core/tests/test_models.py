@@ -2332,7 +2332,7 @@ class AgentBaseClassTest(TestCase):
     def test_completions_save_not_called_for_chunks(
         self, mock_openai, mock_get_token_count, mock_wait
     ):
-        """Test completions doesn't save when _is_chunk=True."""
+        """Test completions doesn't save the error log for chunk calls."""
         # Create an OpenAI agent instead of TestAgent since TestAgent doesn't have completions method
         from core.models.agent import OpenAIAgent
 
@@ -2346,25 +2346,21 @@ class AgentBaseClassTest(TestCase):
         mock_get_token_count.return_value = 10
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
-
-        mock_completion = MagicMock()
-        mock_completion.choices = [
-            MagicMock(message=MagicMock(content="Response"), finish_reason="stop")
-        ]
-        mock_completion.usage = MagicMock(total_tokens=50)
-        mock_client.with_options().chat.completions.create.return_value = (
-            mock_completion
+        mock_client.with_options().chat.completions.create.side_effect = (
+            RuntimeError("provider down")
         )
 
-        # Mock save method to track calls
+        # Only the outermost call (depth 0) persists the error log
         with patch.object(openai_agent, "save") as mock_save:
-            result = openai_agent.completions(
-                "test text",
-                system_prompt="system",
-                _is_chunk=True,  # This should prevent save() call
-            )
-
+            with self.assertRaises(RuntimeError):
+                openai_agent.completions(
+                    "test text", system_prompt="system", _chunk_depth=1
+                )
             mock_save.assert_not_called()
+
+            with self.assertRaises(RuntimeError):
+                openai_agent.completions("test text", system_prompt="system")
+            mock_save.assert_called_once_with(update_fields=["log"])
 
     def test_min_size_with_max_characters(self):
         """Test min_size method when agent has max_characters attribute."""
