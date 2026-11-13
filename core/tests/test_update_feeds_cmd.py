@@ -125,6 +125,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test feed update with title translation enabled."""
         self.mock_feed.translate_title = True
+        mock_translation.side_effect = lambda feeds, target_field: setattr(
+            feeds[0], "translation_status", True
+        )
 
         result = cmd.update_single_feed(self.mock_feed)
 
@@ -141,6 +144,9 @@ class UpdateSingleFeedTests(SimpleTestCase):
     ):
         """Test feed update with content translation enabled."""
         self.mock_feed.translate_content = True
+        mock_translation.side_effect = lambda feeds, target_field: setattr(
+            feeds[0], "translation_status", True
+        )
 
         result = cmd.update_single_feed(self.mock_feed)
 
@@ -162,6 +168,12 @@ class UpdateSingleFeedTests(SimpleTestCase):
         self.mock_feed.translate_title = True
         self.mock_feed.translate_content = True
         self.mock_feed.summary = True
+        mock_translation.side_effect = lambda feeds, target_field: setattr(
+            feeds[0], "translation_status", True
+        )
+        mock_summary.side_effect = lambda feeds: setattr(
+            feeds[0], "translation_status", True
+        )
 
         result = cmd.update_single_feed(self.mock_feed)
 

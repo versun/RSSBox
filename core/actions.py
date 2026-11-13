@@ -172,6 +172,7 @@ def feed_force_update(modeladmin, request, queryset):
         for instance in queryset:
             instance.fetch_status = None
             instance.translation_status = None
+            instance.translation_started_at = timezone.now()
             instance.save()
 
     feeds = list(queryset)

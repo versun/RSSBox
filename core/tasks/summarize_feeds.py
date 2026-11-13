@@ -22,7 +22,10 @@ def handle_feeds_summary(feeds: list):
                 continue
 
             feed.translation_status = None
-            feed.save(update_fields=["translation_status"])
+            feed.translation_started_at = timezone.now()
+            feed.save(
+                update_fields=["translation_status", "translation_started_at"]
+            )
             logger.info(
                 "Start summary feed %s to %s", feed.feed_url, feed.target_language
             )
@@ -40,18 +43,20 @@ def handle_feeds_summary(feeds: list):
                 max_context_tokens=max_context_tokens,
             )
             feed.translation_status = completed
+            feed.translation_started_at = None
             message = "Summary Completed" if completed else "Summary incomplete; failed entries remain pending"
             feed.log += f"{timezone.now()} {message} <br>"
         except Exception as e:
             logger.error(f"Error in summarize_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
+            feed.translation_started_at = None
             feed.log += f"{timezone.now()} {str(e)}<br>"
         finally:
             # Explicitly clean up reference
             del feed
 
     Feed.objects.bulk_update(
-        feeds, fields=["translation_status", "log"]
+        feeds, fields=["translation_status", "translation_started_at", "log"]
     )
     # Clear the list after processing
     del feeds

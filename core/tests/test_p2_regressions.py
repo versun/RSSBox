@@ -971,3 +971,148 @@ class FilterFailureBillingTests(TestCase):
 
         rule.refresh_from_db()
         self.assertEqual(rule.total_tokens, 4)
+
+
+# ---------------------------------------------------------------------------
+# Plan B: translation_started_at — stale "in progress" detection
+# ---------------------------------------------------------------------------
+
+
+class StaleTranslationStatusTests(TestCase):
+    """A translation_status=None that outlives its run (crash/kill) must not
+    leave the feed serving an error forever."""
+
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="Agent", api_key="key"
+        )
+        self.feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        Entry.objects.create(
+            feed=self.feed, link="https://example.com/1", original_title="A1"
+        )
+
+    def _run_cache(self):
+        from core.cache import cache_rss
+
+        with patch("core.cache.generate_atom_feed", return_value="ATOM"):
+            return cache_rss(self.feed.slug, feed_type="t", format="xml")
+
+    def test_fresh_in_progress_status_returns_old_cache(self):
+        """A recently started run still short-circuits to the cache."""
+        Feed.objects.filter(pk=self.feed.pk).update(
+            translation_status=None,
+            translation_started_at=timezone.now(),
+        )
+        with patch("core.cache.generate_atom_feed") as gen:
+            result = self._run_cache()
+        gen.assert_not_called()
+        self.assertIsNone(result)
+        # Status stays None — the run may still be alive.
+        self.feed.refresh_from_db()
+        self.assertIsNone(self.feed.translation_status)
+
+    def test_stale_in_progress_status_resets_and_generates(self):
+        """A None status older than the grace period is treated as a crashed
+        run: it resets to False and generates the feed with what exists."""
+        stale_time = timezone.now() - timedelta(hours=3)
+        Feed.objects.filter(pk=self.feed.pk).update(
+            translation_status=None,
+            translation_started_at=stale_time,
+            last_translate=stale_time,
+        )
+        result = self._run_cache()
+        self.assertEqual(result, "ATOM")
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+
+    def test_stale_status_without_timestamp_uses_last_translate(self):
+        """Rows predating the column (started_at NULL) fall back to
+        last_translate as the activity timestamp."""
+        Feed.objects.filter(pk=self.feed.pk).update(
+            translation_status=None,
+            translation_started_at=None,
+            last_translate=timezone.now() - timedelta(hours=3),
+        )
+        result = self._run_cache()
+        self.assertEqual(result, "ATOM")
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+
+    def test_none_status_with_no_timestamps_is_stale(self):
+        Feed.objects.filter(pk=self.feed.pk).update(
+            translation_status=None,
+            translation_started_at=None,
+            last_translate=None,
+            last_fetch=None,
+        )
+        result = self._run_cache()
+        self.assertEqual(result, "ATOM")
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+
+
+class TranslationStartedAtLifecycleTests(TestCase):
+    """started_at is stamped on entry into the in-progress state and cleared
+    when the run finishes, whatever the outcome."""
+
+    def setUp(self):
+        self.agent = OpenAIAgent.objects.create(
+            name="Agent", api_key="key"
+        )
+        self.feed = Feed.objects.create(
+            name="F",
+            feed_url="https://example.com/f.xml",
+            translator=self.agent,
+            translate_title=True,
+        )
+        Entry.objects.create(
+            feed=self.feed, link="https://example.com/1", original_title="A1"
+        )
+
+    def test_successful_run_stamps_then_clears_started_at(self):
+        from core.tasks.translate_feeds import handle_feeds_translation
+
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            return_value={"text": "t", "tokens": 1, "characters": 1},
+        ):
+            handle_feeds_translation([self.feed], target_field="title")
+
+        self.feed.refresh_from_db()
+        self.assertTrue(self.feed.translation_status)
+        self.assertIsNone(self.feed.translation_started_at)
+
+    def test_failed_run_clears_started_at(self):
+        from core.tasks.translate_feeds import handle_feeds_translation
+
+        with patch.object(
+            OpenAIAgent,
+            "translate",
+            side_effect=RuntimeError("provider down"),
+        ):
+            handle_feeds_translation([self.feed], target_field="title")
+
+        self.feed.refresh_from_db()
+        self.assertFalse(self.feed.translation_status)
+        self.assertIsNone(self.feed.translation_started_at)
+
+    def test_update_single_feed_does_not_count_stale_none_as_success(self):
+        """is True replaces is not False: a None status (crashed prior run)
+        must make the feed update report failure, not silently pass."""
+        self.feed.translation_status = None
+        with (
+            patch.object(cmd, "handle_single_feed_fetch"),
+            patch.object(
+                cmd,
+                "handle_feeds_translation",
+                side_effect=lambda feeds, target_field: None,
+            ),
+        ):
+            result = cmd.update_single_feed(self.feed)
+        self.assertFalse(result)
