@@ -20,6 +20,19 @@ class PersistError(Exception):
 PERSISTENCE_ERRORS = (DatabaseError, PersistError)
 
 
+def _should_not_retry(error: Exception) -> bool:
+    """Errors for which another attempt would re-do paid work.
+
+    * Persistence failures: the database is down, a retry cannot succeed.
+    * Chunked-completion failures: the call already split its input and
+      retried each chunk; retrying the whole text replays the chunks that
+      already succeeded and pays for them again.
+    """
+    return isinstance(error, PERSISTENCE_ERRORS) or getattr(
+        error, "is_chunked_failure", False
+    )
+
+
 def auto_retry(
     func: callable, max_retries: int = 3, require_text=False, **kwargs
 ) -> dict:
@@ -38,9 +51,8 @@ def auto_retry(
             return result
         except Exception as e:
             logger.error(f"Attempt {attempt + 1} failed: {e!s}")
-            # Persistence failures cannot succeed on retry while the database
-            # is down; stop immediately instead of paying for more AI calls.
-            if isinstance(e, PERSISTENCE_ERRORS):
+            # Failures that would re-do already-paid work are not retried.
+            if _should_not_retry(e):
                 raise
             if isinstance(e, APIStatusError) and (
                 e.status_code < 500 and e.status_code not in (408, 409, 429)
@@ -58,3 +70,26 @@ def extract_content_from_entry(entry_data):
             if content_item.value:
                 return content_item.value
     return entry_data.get("summary", "")
+
+
+def record_spent_tokens(feed, error) -> None:
+    """Bill the usage a failed AI call already paid for, if it reported it.
+
+    ``completions()`` attaches the spent usage to the raised exception as
+    ``tokens_used``; persist it so failed attempts are not lost from the
+    feed's token accounting. Any failure here must not mask the original
+    pipeline error.
+    """
+    spent = getattr(error, "tokens_used", 0)
+    if not spent:
+        return
+    try:
+        from django.db.models import F
+        from core.models.feed import Feed
+
+        Feed.objects.filter(pk=feed.pk).update(
+            total_tokens=F("total_tokens") + spent
+        )
+        feed.total_tokens += spent
+    except Exception:
+        logger.warning("Could not record spent tokens for feed %s", feed.pk)

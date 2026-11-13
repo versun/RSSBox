@@ -353,11 +353,13 @@ class OpenAIAgent(Agent):
                     )
 
                 # Chunk-level retry: each chunk gets one retry before the
-                # whole text is failed, so one flaky call does not replay
-                # every already-completed chunk at outer retry layers.
+                # whole text is failed. If a chunk still fails, the failure
+                # is marked so the outer retry does NOT replay every chunk
+                # that already succeeded (which would pay for them again).
                 translated_chunks = []
                 for chunk in chunks:
                     result = None
+                    last_error = None
                     for chunk_attempt in range(2):
                         try:
                             # user_prompt 已追加到 system_prompt，递归时不要重复追加
@@ -369,20 +371,21 @@ class OpenAIAgent(Agent):
                             )
                             break
                         except Exception as chunk_error:
-                            # Tokens from the failed attempt are already
-                            # merged into result["tokens"] inside the
-                            # recursive call, but a call that raised never
-                            # returns its usage. Re-fetch the attempt cost
-                            # attached by the inner call when available.
+                            last_error = chunk_error
+                            # A call that raised never returns its usage; the
+                            # inner call attaches what it already paid for.
                             tokens += getattr(chunk_error, "tokens_used", 0)
                             if chunk_attempt == 1:
-                                raise
+                                break
                             logger.warning(
                                 "Chunk %s/%s failed (%s); retrying once",
                                 len(translated_chunks) + 1,
                                 len(chunks),
                                 chunk_error,
                             )
+                    if result is None:
+                        last_error.is_chunked_failure = True
+                        raise last_error
                     translated_chunks.append(result["text"])
                     tokens += result["tokens"]
 
