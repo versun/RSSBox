@@ -152,20 +152,32 @@ def update_multiple_feeds(feeds: list) -> bool:
     if not feeds:
         logger.info("No feeds to update.")
         return True
+    failed = []
     try:
-        futures = []
+        futures = []  # list of (feed, future); a submission error counts as failed
         try:
+            submission_errors = []
             for feed in feeds:
-                futures.append(
-                    task_manager.submit_task(
+                try:
+                    future = task_manager.submit_task(
                         f"update_feed_{feed.slug}", update_single_feed, feed
                     )
-                )
+                    futures.append((feed, future))
+                except Exception as e:
+                    submission_errors.append(e)
+                    failed.append(feed.name or feed.slug)
+                    logger.warning(
+                        f"Failed to submit update task for {feed.name or feed.slug}: {e}"
+                    )
+            # If every submission failed, this is a systemic failure (e.g.
+            # the pool is shut down), not a per-feed problem; fail the batch.
+            if submission_errors and not futures:
+                raise submission_errors[0]
 
-            _, not_done = wait(futures, timeout=1800)
+            _, not_done = wait([f for _, f in futures], timeout=1800)
             if not_done:
                 stuck = [
-                    f.name or f.slug for f, fut in zip(feeds, futures) if fut in not_done
+                    f.name or f.slug for f, fut in futures if fut in not_done
                 ]
                 logger.warning(
                     f"Feed update timed out; {len(not_done)} tasks did not complete: "
@@ -179,8 +191,7 @@ def update_multiple_feeds(feeds: list) -> bool:
             # A False result (or a raised exception) means that feed's AI
             # pipeline failed even though its fetch may have succeeded; make
             # the failures visible instead of letting the CLI report success.
-            failed = []
-            for feed, future in zip(feeds, futures):
+            for feed, future in futures:
                 try:
                     if future.result() is False:
                         failed.append(feed.name or feed.slug)

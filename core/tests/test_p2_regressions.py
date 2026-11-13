@@ -310,6 +310,22 @@ class ChunkRetryTests(TestCase):
         self.assertEqual(call_texts.count("chunk one"), 1)
         self.assertEqual(call_texts.count("chunk two"), 2)
 
+    def test_chunked_failure_is_not_retried_by_auto_retry(self):
+        """auto_retry must not replay a chunked completion: that would pay
+        for the already-succeeded chunks again."""
+        calls = []
+
+        def chunked_fail(**kwargs):
+            calls.append(1)
+            err = RuntimeError("chunk failed twice")
+            err.is_chunked_failure = True
+            raise err
+
+        with self.assertRaises(RuntimeError):
+            auto_retry(chunked_fail, max_retries=3, text="x")
+
+        self.assertEqual(len(calls), 1)
+
 
 # ---------------------------------------------------------------------------
 # P2-4: summary_detail tolerance + chunk-size clamping
@@ -583,6 +599,42 @@ class DigestSummaryAttributionTests(TestCase):
             self.assertEqual(entry.ai_summary, "summary")
         entries[3].refresh_from_db()
         self.assertIsNone(entries[3].ai_summary)
+
+    def test_persistence_failure_aborts_digest_summaries(self):
+        """A DatabaseError on the per-entry save must stop the loop instead
+        of paying for the next entry's summary."""
+        from django.db import DatabaseError
+
+        entries = [
+            Entry.objects.create(
+                feed=self.feed,
+                link=f"https://example.com/{i}",
+                original_title=f"T{i}",
+                pubdate=timezone.now() - timedelta(minutes=5),
+            )
+            for i in range(3)
+        ]
+        calls = []
+
+        def summarize(entry, **kwargs):
+            calls.append(entry.pk)
+            return "summary", 5
+
+        with (
+            patch(
+                "core.tasks.summarize_feeds._summarize_entry",
+                side_effect=summarize,
+            ),
+            patch.object(
+                Entry, "save", side_effect=DatabaseError("locked")
+            ),
+        ):
+            failed = _ensure_entries_have_summaries(self.digest)
+
+        # The first entry whose save failed aborts the loop; entries 2/3
+        # were never paid for.
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(failed, calls)
 
 
 # ---------------------------------------------------------------------------

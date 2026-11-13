@@ -9,7 +9,12 @@ import newspaper
 from core.models import Feed, Entry, Agent
 from utils import text_handler
 from core.tasks.fetch_feeds import FALLBACK_USER_AGENT, get_fetch_user_agent
-from core.tasks.utils import PERSISTENCE_ERRORS, PersistError, auto_retry
+from core.tasks.utils import (
+    PERSISTENCE_ERRORS,
+    PersistError,
+    auto_retry,
+    record_spent_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +137,9 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                                 total_tokens=F("total_tokens") + entry_tokens,
                                 total_characters=F("total_characters") + entry_characters,
                             )
-                except PERSISTENCE_ERRORS:
-                    raise
                 except Exception as save_error:
+                    # PersistError is a PERSISTENCE_ERRORS member, so the
+                    # outer handler aborts the feed on any save failure.
                     raise PersistError(
                         f"Could not persist translation for entry {entry.pk}: {save_error}"
                     ) from save_error
@@ -145,6 +150,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
         except PERSISTENCE_ERRORS as e:
             # The paid result could not be saved; further entries would hit
             # the same wall, so stop this feed instead of paying for more.
+            record_spent_tokens(feed, e)
             logger.error(
                 f"Aborting translation for feed {feed.name} at entry {entry.link}: {e}"
             )
@@ -152,6 +158,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
             feed.translation_status = False
             break
         except Exception as e:
+            record_spent_tokens(feed, e)
             logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"

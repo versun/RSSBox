@@ -1,11 +1,14 @@
 import logging
+from django.db.models import F
 from django.utils import timezone
 
 from core.models.digest import Digest
 from core.models.entry import Entry
+from core.models.feed import Feed
 from utils.text_handler import get_token_count
 from config import settings
 from core.cache import cache_digest
+from core.tasks.utils import PERSISTENCE_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +292,6 @@ def _ensure_entries_have_translated_titles(digest: Digest):
     Returns:
         dict: Mapping of entry_id to translated_title for digest use
     """
-    from core.models.feed import Feed
     from core.tasks.utils import auto_retry
 
     # Get articles for digest within the specified days_range
@@ -520,7 +522,20 @@ def _ensure_entries_have_summaries(digest: Digest):
                 f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"
             )
 
+        except PERSISTENCE_ERRORS as e:
+            # The summary was generated but could not be saved; further
+            # entries would fail the same way, so stop paying for more.
+            _record_digest_spent(digest, entry, used_digest_summarizer, e)
+            logger.error(
+                f"Aborting digest summaries at entry '{entry.original_title}': {e}"
+            )
+            digest.log += (
+                f"Persistence failure, aborted at entry '{entry.original_title}': {e}\n"
+            )
+            failed_entry_ids.append(entry.pk)
+            break
         except Exception as e:
+            _record_digest_spent(digest, entry, used_digest_summarizer, e)
             logger.error(
                 f"Error generating summary for entry '{entry.original_title}': {e}"
             )
@@ -533,9 +548,6 @@ def _ensure_entries_have_summaries(digest: Digest):
     gc.collect()
 
     # Flush accumulated token usage once; results are already checkpointed.
-    from django.db.models import F
-    from core.models.feed import Feed
-
     for feed_id, tokens in feed_token_totals.items():
         Feed.objects.filter(pk=feed_id).update(
             total_tokens=F("total_tokens") + tokens
@@ -545,3 +557,22 @@ def _ensure_entries_have_summaries(digest: Digest):
         digest.save(update_fields=["total_tokens"])
 
     return failed_entry_ids
+
+
+def _record_digest_spent(digest, entry, used_digest_summarizer, error):
+    """Bill a failed summary attempt's spent usage to the right owner."""
+    spent = getattr(error, "tokens_used", 0)
+    if not spent:
+        return
+    try:
+        if used_digest_summarizer:
+            Digest.objects.filter(pk=digest.pk).update(
+                total_tokens=F("total_tokens") + spent
+            )
+            digest.total_tokens += spent
+        else:
+            Feed.objects.filter(pk=entry.feed_id).update(
+                total_tokens=F("total_tokens") + spent
+            )
+    except Exception:
+        logger.warning("Could not record spent digest tokens for entry %s", entry.pk)

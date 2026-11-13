@@ -5,7 +5,12 @@ from django.db.models import F
 
 from core.models import Feed, Entry, Agent
 from utils import text_handler
-from core.tasks.utils import PERSISTENCE_ERRORS, PersistError, auto_retry
+from core.tasks.utils import (
+    PERSISTENCE_ERRORS,
+    PersistError,
+    auto_retry,
+    record_spent_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +139,7 @@ def summarize_feed(
             except PERSISTENCE_ERRORS as e:
                 # The summary was generated but could not be saved; further
                 # entries would fail the same way, so stop paying for more.
+                record_spent_tokens(feed, e)
                 logger.error(
                     f"Aborting summary for feed {feed.feed_url} at entry {entry.original_title}: {e}"
                 )
@@ -141,6 +147,7 @@ def summarize_feed(
                 feed.log += f"{timezone.now()} Persistence failure, summary aborted at entry {entry.pk}: {e}<br>"
                 break
             except Exception as e:
+                record_spent_tokens(feed, e)
                 logger.error(
                     f"Error summarizing entry {entry.original_title}: {str(e)}"
                 )
@@ -290,8 +297,6 @@ def _save_progress(entries_to_save, feed, total_tokens):
                 Entry.objects.bulk_update(entries_to_save, fields=["ai_summary"])
             if total_tokens > 0:
                 Feed.objects.filter(pk=feed.pk).update(total_tokens=F("total_tokens") + total_tokens)
-    except PERSISTENCE_ERRORS:
-        raise
     except Exception as save_error:
         raise PersistError(
             f"Could not persist summaries: {save_error}"
