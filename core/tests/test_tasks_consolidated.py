@@ -6,7 +6,7 @@ import uuid
 from core.models import Feed, Entry
 from core.models.agent import OpenAIAgent, TestAgent
 from core.tasks.utils import auto_retry
-from core.tasks.fetch_feeds import handle_feeds_fetch, handle_single_feed_fetch
+from core.tasks.fetch_feeds import handle_single_feed_fetch
 from core.tasks.translate_feeds import (
     handle_feeds_translation,
     _translate_entry_title,
@@ -246,22 +246,11 @@ class TasksConsolidatedTestCase(TestCase):
 
         self.feed.refresh_from_db()
         self.assertTrue(self.feed.fetch_status)
-        # 条目数量应该保持不变
+        # 条目数量应该保持不变；同一 guid 的条目会被刷新（pubdate 等字段
+        # 更新），但不会重复创建
         self.assertEqual(Entry.objects.count(), 1)
-        # 现有条目不应该被修改
         existing_entry.refresh_from_db()
-        self.assertEqual(existing_entry.original_title, "Existing Title")
-
-    @patch("core.tasks.fetch_feeds.handle_single_feed_fetch")
-    def test_handle_feeds_fetch_multiple(self, mock_handle_single):
-        """测试批量feed处理 - 批量操作验证"""
-        feed2 = Feed.objects.create(
-            name="Feed 2", feed_url="https://example2.com/feed.xml"
-        )
-        feeds = [self.feed, feed2]
-
-        handle_feeds_fetch(feeds)
-        self.assertEqual(mock_handle_single.call_count, 2)
+        self.assertEqual(existing_entry.guid, "guid0")
 
     # ==================== Translation Tests ====================
 

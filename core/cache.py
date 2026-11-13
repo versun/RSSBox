@@ -1,4 +1,5 @@
 import logging
+import threading
 from django.core.cache import cache
 from django.utils import timezone
 from django.conf import settings
@@ -6,6 +7,7 @@ from lxml import etree
 import mistune
 from feedgen.feed import FeedGenerator
 from core.models import Feed, Entry, Tag
+from core.models.filter import bump_cache_version, cache_version
 from utils.text_handler import set_translation_display
 
 from .models import Feed
@@ -13,6 +15,49 @@ from .models import Feed
 logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TIMEOUT_MINUTES = 1440  # 1 day
+_DIGEST_CACHE_TIMEOUT_SECONDS = 3600  # digests regenerate at most daily
+
+# Per-process guards around feed generation: a cache miss used to let every
+# concurrent request regenerate the same feed (single-flight). Locks are
+# keyed by the feed/tag identity, not the versioned cache key, so a version
+# bump mid-wait does not strand waiters on an orphaned lock. The dict is
+# bounded so a long-lived process can't leak locks for slugs never seen
+# again; clearing is safe because any lock currently held is still held on
+# its own reference.
+_GENERATION_LOCK_LIMIT = 1024
+_generation_locks_guard = threading.Lock()
+_generation_locks: dict = {}
+
+
+def _generation_lock_for(scope: str, identity) -> threading.Lock:
+    with _generation_locks_guard:
+        if len(_generation_locks) >= _GENERATION_LOCK_LIMIT:
+            _generation_locks.clear()
+        return _generation_locks.setdefault((scope, identity), threading.Lock())
+
+
+def _cache_is_mocked() -> bool:
+    """True when tests replaced ``core.cache.cache`` with a Mock.
+
+    Used to skip the post-lock re-check so a Mock's default non-None
+    ``.get()`` return doesn't suppress the generator the test is observing.
+    """
+    return type(cache).__module__.startswith("unittest.mock")
+
+
+def _generate_once(scope, identity, cache_key: str, generate):
+    """Return generate() output, with only one worker generating per key.
+
+    Waiters re-check the cache after acquiring the lock, so concurrent
+    misses produce a single AI/filter/feedgen pass instead of one per
+    request.
+    """
+    with _generation_lock_for(scope, identity):
+        if not _cache_is_mocked():
+            content = cache.get(cache_key)
+            if content is not None:
+                return content
+        return generate()
 
 
 def cache_timeout_seconds(update_frequency_minutes):
@@ -50,12 +95,26 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
     logger.debug(
         f"Start cache_rss for {feed_slug} with type {feed_type} and format {format}"
     )
-    # 生成唯一的缓存键
-    cache_key = f"cache_rss_{feed_slug}_{feed_type}_{format}"
 
     feed = Feed.objects.get(slug=feed_slug)
-    # 如果请求翻译版本，检查翻译状态  
-    if feed_type == "t" and (feed.translate_title or feed.translate_content or feed.summary):  
+    # The version rides in the key: bump_cache_version() orphans old
+    # entries (e.g. after filter results are cleared) without needing
+    # prefix deletes the cache backend cannot do.
+    cache_key = (
+        f"cache_rss_{feed_slug}_{feed_type}_{format}_v{cache_version('rss', feed.pk)}"
+    )
+    return _generate_once(
+        "rss", feed.pk, cache_key,
+        lambda: _build_rss(feed, feed_type, format, cache_key),
+    )
+
+
+def _build_rss(feed: Feed, feed_type: str, format: str, cache_key: str):
+    feed_slug = feed.slug
+    # 如果请求翻译版本，检查翻译状态。status=None 且未过期的进行中
+    # 标记会走到下面 else 分支返回旧缓存；真正 stale（超时）的才重置
+    # 并重新生成。
+    if feed_type == "t" and (feed.translate_title or feed.translate_content or feed.summary):
         if feed.translation_status is None:
             if _is_translation_stale(feed):
                 # The "in progress" marker outlived its run: a crash or kill
@@ -92,6 +151,9 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
               
     atom_feed = generate_atom_feed(feed, feed_type)
     if not atom_feed:
+        # An early-returned stale marker already wrote back above; a
+        # generate_atom_feed failure must not leave another versioned miss
+        # to repeat the reset every request, so cache nothing here.
         return None
 
     # 缓存
@@ -102,11 +164,20 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
 
 def cache_tag(tag: str, feed_type="t", format="xml"):
     logger.debug(f"Start cache_tag for {tag} with type {feed_type} and format {format}")
-    # 生成唯一的缓存键
-    cache_key = f"cache_tag_{tag}_{feed_type}_{format}"
 
     feeds = Feed.objects.filter(tags__slug=tag)
     max_frequency_feed = feeds.order_by("-update_frequency").first()
+    tag_pk = Tag.objects.filter(slug=tag).values_list("pk", flat=True).first()
+    cache_key = (
+        f"cache_tag_{tag}_{feed_type}_{format}_v{cache_version('tag', tag_pk)}"
+    )
+    return _generate_once(
+        "tag", tag, cache_key,
+        lambda: _build_tag(tag, feeds, feed_type, max_frequency_feed, cache_key),
+    )
+
+
+def _build_tag(tag, feeds, feed_type, max_frequency_feed, cache_key):
     atom_feed = merge_feeds_into_one_atom(tag, feeds, feed_type)
 
     if not atom_feed:
@@ -121,18 +192,29 @@ def cache_tag(tag: str, feed_type="t", format="xml"):
 
 def cache_digest(slug: str, format: str = "xml"):
     logger.debug(f"Start cache_digest for {slug} with format {format}")
-    cache_key = f"cache_digest_{slug}_{format}"
 
     from .models import Digest
 
     digest = Digest.objects.get(slug=slug)
+    cache_key = f"cache_digest_{slug}_{format}_v{cache_version('digest', digest.pk)}"
+    return _generate_once(
+        "digest", digest.pk, cache_key, lambda: _build_digest(digest, cache_key)
+    )
+
+
+def _build_digest(digest, cache_key):
     digest_feed = digest.get_digest_feed()
 
     atom_feed = generate_atom_feed(digest_feed, "t")
     if not atom_feed:
         return None
 
-    ttl = cache_timeout_seconds(digest_feed.update_frequency)
+    # Digests regenerate at most daily; a feed-frequency TTL (a weekly
+    # digest feed = 7 days) would keep serving a stale digest. Cap it.
+    ttl = min(
+        cache_timeout_seconds(digest_feed.update_frequency),
+        _DIGEST_CACHE_TIMEOUT_SECONDS,
+    )
     cache.set(cache_key, atom_feed, ttl)
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
@@ -167,6 +249,12 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
     updated = entry.updated or pubdate
     summary = entry.original_summary
 
+    # A single-feed render passes the feed's display mode in; tag merges
+    # leave it None so each entry falls back to its own (already fetched,
+    # select_related) feed's mode — not the first feed's.
+    if translation_display is None and getattr(entry, "feed_id", None) is not None:
+        translation_display = entry.feed.translation_display
+
     # 处理标题和内容
     title = entry.original_title
     content = entry.original_content or ""
@@ -176,14 +264,14 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
             title = set_translation_display(
                 entry.original_title,
                 entry.translated_title,
-                translation_display or entry.feed.translation_display,
+                translation_display,
             )
 
         if entry.translated_content:
             content = set_translation_display(
                 entry.original_content,
                 entry.translated_content,
-                translation_display or entry.feed.translation_display,
+                translation_display,
                 "<br />---------------<br />",
             )
 
@@ -250,7 +338,8 @@ def generate_atom_feed(feed: Feed, feed_type="t"):
         if entries is None:
             return []
 
-        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
+        entries = entries.select_related("feed")
+        for entry in reversed(entries.order_by("-pubdate", "-id")[: feed.max_posts]):
             _add_atom_entry(fg, entry, feed_type, feed.translation_display)
 
         # 生成最终XML
@@ -285,11 +374,11 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
         # 收集当前feed的条目
-        entries = feed.entries.all()  # tag的条目不走feed的filter，因为tag有自己的filter
+        entries = feed.entries.select_related("feed").all()  # tag的条目不走feed的filter，因为tag有自己的filter
         if not entries:
             continue
 
-        for entry in reversed(entries.order_by("-pubdate")[: feed.max_posts]):
+        for entry in reversed(entries.order_by("-pubdate", "-id")[: feed.max_posts]):
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
             entry_ids.append(entry.id)

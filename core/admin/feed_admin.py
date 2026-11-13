@@ -197,6 +197,17 @@ class FeedAdmin(admin.ModelAdmin):
         if feed_url_changed:
             obj.entries.all().delete()
 
+        # Rendered feed/tag caches change as soon as the entries' derived
+        # fields are wiped or the pipeline starts; bump now (not only
+        # after the task finishes) so a reader between the wipe and the
+        # task's own bump cannot repopulate the stale key.
+        if target_language_changed or feed_url_changed:
+            from core.models.filter import bump_cache_version
+
+            bump_cache_version("rss", obj.pk)
+            for tag_pk in obj.tags.values_list("pk", flat=True):
+                bump_cache_version("tag", tag_pk)
+
         from functools import partial
 
         transaction.on_commit(partial(self._submit_feed_update_task, obj))

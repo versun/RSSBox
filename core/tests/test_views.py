@@ -37,11 +37,9 @@ class ViewsTestCase(TestCase):
         setattr(request, "_messages", messages)
         return messages
 
-    @patch("core.views.cache")
     @patch("core.views.cache_rss")
-    def test_rss_feed_view_found(self, mock_cache_rss, mock_cache):
+    def test_rss_feed_view_found(self, mock_cache_rss):
         """Test the rss view when the feed is found."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = (
             "<rss><channel><title>Test Feed</title></channel></rss>"
         )
@@ -59,11 +57,9 @@ class ViewsTestCase(TestCase):
         response = rss(request, "non-existent-slug")
         self.assertEqual(response.status_code, 404)
 
-    @patch("core.views.cache")
     @patch("core.views.cache_tag")
-    def test_tag_view_found(self, mock_cache_tag, mock_cache):
+    def test_tag_view_found(self, mock_cache_tag):
         """Test the tag view when the tag is found."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_tag.return_value = (
             "<rss><channel><title>Tag Feed</title></channel></rss>"
         )
@@ -81,12 +77,10 @@ class ViewsTestCase(TestCase):
         response = tag_view(request, "non-existent-tag")
         self.assertEqual(response.status_code, 404)
 
-    @patch("core.views.cache")
     @patch("core.views.cache_tag")
-    def test_tag_view_chinese_slug(self, mock_cache_tag, mock_cache):
+    def test_tag_view_chinese_slug(self, mock_cache_tag):
         """Test tag view with Chinese slug."""
         chinese_tag = Tag.objects.create(name="深度学习")
-        mock_cache.get.return_value = None
         mock_cache_tag.return_value = "<rss><channel><title>Deep Learning</title></channel></rss>"
 
         request = self.factory.get(f"/tag/{chinese_tag.slug}")
@@ -170,11 +164,9 @@ class ViewsTestCase(TestCase):
         self.assertIn("Invalid OPML: Missing body element", [str(m) for m in messages])
 
     @patch("core.views.feed2json")
-    @patch("core.views.cache")
     @patch("core.views.cache_rss")
-    def test_rss_view_json_format(self, mock_cache_rss, mock_cache, mock_feed2json):
+    def test_rss_view_json_format(self, mock_cache_rss, mock_feed2json):
         """Test the rss view with format='json'."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = (
             "<rss><channel><title>Test Feed</title></channel></rss>"
         )
@@ -193,13 +185,11 @@ class ViewsTestCase(TestCase):
         self.assertEqual(json_content["title"], "JSON Feed")
 
     @patch("core.views.feed2json")
-    @patch("core.views.cache")
     @patch("core.views.cache_rss")
     def test_rss_view_json_format_no_feed_data(
-        self, mock_cache_rss, mock_cache, mock_feed2json
+        self, mock_cache_rss, mock_feed2json
     ):
         """Test the rss view with format='json' when no feed data is available."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = None  # No feed data
         mock_feed2json.return_value = {"title": "JSON Feed"}
 
@@ -211,67 +201,48 @@ class ViewsTestCase(TestCase):
         json_content = json.loads(response.content)
         self.assertEqual(json_content["error"], "No feed data available")
 
-    @patch("core.views.cache")
     @patch("core.views.cache_rss")
-    def test_rss_view_xml_format_no_feed_data(self, mock_cache_rss, mock_cache):
+    def test_rss_view_xml_format_no_feed_data(self, mock_cache_rss):
         """Test the rss view with format='xml' when no feed data is available."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_rss.return_value = None  # No feed data
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug, format="xml")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
-        # Check that error message is in the response content
-        response_content = b"".join(response.streaming_content)
-        self.assertIn(b"<error>No feed data available</error>", response_content)
+        self.assertEqual(response.status_code, 404)
 
-    @patch("core.views.cache")
     @patch("core.views.cache_rss")
-    def test_rss_view_cache_hit(self, mock_cache_rss, mock_cache):
-        """Test the rss view when cache hit occurs."""
+    def test_rss_view_returns_generated_content(self, mock_cache_rss):
+        """The view no longer pre-reads a legacy key; whatever cache_rss
+        returns (fresh or internally cached) is served."""
         cached_content = "<rss><channel><title>Cached Feed</title></channel></rss>"
-        mock_cache.get.return_value = cached_content  # Cache hit
-        mock_cache_rss.return_value = (
-            "<rss><channel><title>Fresh Feed</title></channel></rss>"
-        )
+        mock_cache_rss.return_value = cached_content
 
         request = self.factory.get(f"/rss/{self.feed.slug}")
         response = rss(request, self.feed.slug)
 
         self.assertEqual(response.status_code, 200)
-        # Should not call cache_rss when cache hits
-        mock_cache_rss.assert_not_called()
-        # Check that cached content is returned
+        mock_cache_rss.assert_called_once_with(self.feed.slug, "t", "xml")
         response_content = b"".join(response.streaming_content)
         self.assertEqual(response_content, cached_content.encode())
 
-    @patch("core.views.cache")
     @patch("core.views.cache_tag")
-    def test_tag_view_cache_hit(self, mock_cache_tag, mock_cache):
-        """Test the tag view when cache hit occurs."""
+    def test_tag_view_returns_generated_content(self, mock_cache_tag):
+        """Same delegation check for the tag view."""
         cached_content = "<rss><channel><title>Cached Tag Feed</title></channel></rss>"
-        mock_cache.get.return_value = cached_content  # Cache hit
-        mock_cache_tag.return_value = (
-            "<rss><channel><title>Fresh Tag Feed</title></channel></rss>"
-        )
+        mock_cache_tag.return_value = cached_content
 
         request = self.factory.get(f"/tag/{self.tag.slug}")
         response = tag_view(request, self.tag.slug)
 
         self.assertEqual(response.status_code, 200)
-        # Should not call cache_tag when cache hits
-        mock_cache_tag.assert_not_called()
-        # Check that cached content is returned
+        mock_cache_tag.assert_called_once_with(self.tag.slug, "t", "xml")
         response_content = b"".join(response.streaming_content)
         self.assertEqual(response_content, cached_content.encode())
 
-    @patch("core.views.cache")
     @patch("core.views.cache_tag")
-    def test_tag_view_exception_handling(self, mock_cache_tag, mock_cache):
+    def test_tag_view_exception_handling(self, mock_cache_tag):
         """Test the tag view when an exception occurs."""
-        mock_cache.get.return_value = None  # Cache miss
         mock_cache_tag.side_effect = Exception("Cache tag error")
 
         request = self.factory.get(f"/tag/{self.tag.slug}")

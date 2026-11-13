@@ -18,6 +18,7 @@ from core.models import Filter, Tag, OpenAIAgent
 from core.tasks.task_manager import task_manager
 from .management.commands.feed_updater import update_multiple_feeds
 from core.cache import cache_tag
+from core.models.filter import bump_cache_version
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,12 @@ def clean_translated_content(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
         feed.entries.all().update(translated_title=None, translated_content=None)
+        # Cleared translations change the rendered feed immediately; bump
+        # so readers don't wait out the cache TTL for the original-only
+        # output (and the tag merges that contain these entries).
+        bump_cache_version("rss", feed.pk)
+        for tag_pk in feed.tags.values_list("pk", flat=True):
+            bump_cache_version("tag", tag_pk)
     modeladmin.message_user(
         request,
         _("Successfully cleaned translated content for selected feeds."),
@@ -39,6 +46,9 @@ def clean_ai_summary(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
         feed.entries.all().update(ai_summary=None)
+        bump_cache_version("rss", feed.pk)
+        for tag_pk in feed.tags.values_list("pk", flat=True):
+            bump_cache_version("tag", tag_pk)
     modeladmin.message_user(
         request,
         _("Successfully cleaned ai summary for selected feeds."),
@@ -285,18 +295,41 @@ def feed_batch_modify(modeladmin, request, queryset):
                         if tag_values:
                             tag_ids = [int(id) for id in tag_values]  # 转换成整数列表
                             for feed in queryset:
+                                # The feeds leaving a tag change that tag's
+                                # merged feed too — bump old and new tags.
+                                old_tag_pks = set(
+                                    feed.tags.values_list("pk", flat=True)
+                                )
                                 feed.tags.set(tag_ids)  # 批量更新每个 Feed 的 tags
+                                bump_cache_version("rss", feed.pk)
+                                affected_tag_pks = old_tag_pks | set(
+                                    feed.tags.values_list("pk", flat=True)
+                                )
+                                for tag_pk in affected_tag_pks:
+                                    bump_cache_version("tag", tag_pk)
                     case "filter":
                         filter_values = post_data.getlist("filter_value")
                         if filter_values:
                             filter_ids = [int(id) for id in filter_values]
                             for obj in queryset:
                                 obj.filters.set(filter_ids)
+                                bump_cache_version("rss", obj.pk)
+                                for tag_pk in obj.tags.values_list(
+                                    "pk", flat=True
+                                ):
+                                    bump_cache_version("tag", tag_pk)
                     case _:
                         update_fields[field] = field_types.get(field, str)(value)
 
         if update_fields:
             queryset.update(**update_fields)
+            # These fields change what the rendered feeds output (display
+            # mode, post window, translation options, frequency/TTL), so
+            # the same invalidation as tag/filter reassignment applies.
+            for feed in queryset:
+                bump_cache_version("rss", feed.pk)
+                for tag_pk in feed.tags.values_list("pk", flat=True):
+                    bump_cache_version("tag", tag_pk)
         return redirect(request.get_full_path())
 
     translator_choices = get_all_agent_choices()

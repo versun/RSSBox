@@ -84,16 +84,17 @@ def summarize_feed(
     entries = None
 
     try:
-        # 只处理前 feed.max_posts 条 entries
+        # 只处理前 feed.max_posts 条 entries; -id tie-break matches the
+        # cleanup keep-set so equal pubdates can't diverge the window.
         entries = (
             feed.entries.select_related("feed")
             .filter(ai_summary__isnull=True)
-            .order_by("-pubdate")[: feed.max_posts]
+            .order_by("-pubdate", "-id")[: feed.max_posts]
             .iterator(chunk_size=30)
         )
         total_entries = (
             feed.entries.filter(ai_summary__isnull=True)
-            .order_by("-pubdate")[: feed.max_posts]
+            .order_by("-pubdate", "-id")[: feed.max_posts]
             .count()
         )
         if not total_entries:

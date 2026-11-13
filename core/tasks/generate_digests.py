@@ -24,7 +24,6 @@ class DigestGenerator:
     def __init__(self, digest: Digest):
         self.digest = digest
         self.articles = []
-        # self.temp_translations = temp_translations or {}
 
     def prepare_articles(self):
         """
@@ -111,13 +110,7 @@ Summary: {article["summary"]}
         """
         logger.info(f"Generating digest '{self.digest.name}'")
         try:
-            # Pre-steps previously handled in generate_digest()
-            # 1) Create temporary translations for digest-specific language
-            #    to ensure consistent language in digest output without
-            #    polluting Entry translations
-            # self.temp_translations = _ensure_entries_have_translated_titles(self.digest) or {}
-
-            # 2) Ensure all entries have AI summaries before generating digest
+            # Ensure all entries have AI summaries before generating digest
             now = timezone.now()
             failed_entry_ids = _ensure_entries_have_summaries(self.digest)
             if failed_entry_ids:
@@ -276,145 +269,6 @@ Summary: {article["summary"]}
             chunks.append(current_chunk)
         logger.info(f"Total chunks produced: {len(chunks)}")
         return chunks
-
-
-def _ensure_entries_have_translated_titles(digest: Digest):
-    """
-    Generate temporary translations for digest entries without caching to Entry model.
-
-    This ensures consistent language in digest output by creating temporary translations
-    to the digest's target language. Translations are NOT saved to Entry.translated_title
-    to avoid polluting Feed-specific translations.
-
-    Only processes articles within the digest's days_range to avoid unnecessary work.
-
-    Args:
-        digest: The Digest instance
-
-    Returns:
-        dict: Mapping of entry_id to translated_title for digest use
-    """
-    from core.tasks.utils import auto_retry
-
-    # Get articles for digest within the specified days_range
-    all_articles = list(digest.get_articles_for_digest())
-
-    if not all_articles:
-        logger.info(f"No articles found for digest '{digest.name}'")
-        return {}
-
-    logger.info(
-        f"Processing {len(all_articles)} entries for temporary title translation to {digest.target_language}..."
-    )
-
-    # Create temporary translation cache for this digest
-    temp_translations = {}
-
-    # Group entries by feed to process efficiently
-    feed_ids = set(entry.feed_id for entry in all_articles)
-    candidate_feeds = Feed.objects.filter(id__in=feed_ids)
-
-    if not candidate_feeds.exists():
-        logger.warning(f"Found {len(all_articles)} entries but their feeds don't exist")
-        return
-
-    # Process temporary translation for each entry
-    digest_tokens = 0  # Tokens for digest-specific translations
-    total_tokens = 0  # Tokens for feed translations
-    total_characters = 0
-    translated_count = 0
-    feeds_to_update = {}  # Track feed token usage
-    use_digest_summarizer = False
-
-    for entry in all_articles:
-        try:
-            # Find the feed for this entry
-            feed = next((f for f in candidate_feeds if f.id == entry.feed_id), None)
-            if not feed:
-                continue
-
-            # First priority: use existing translated_title if available
-            if entry.translated_title and entry.translated_title.strip():
-                temp_translations[entry.id] = entry.translated_title
-                continue
-
-            # No existing translation - determine translator
-            if not feed.translator:
-                use_digest_summarizer = True
-                translator = digest.summarizer
-            else:
-                translator = feed.translator
-
-            # Determine what title to use based on language match
-            if feed.target_language == digest.target_language:
-                # Same language - trigger Feed translation to get translated_title
-                from core.tasks.translate_feeds import _translate_entry_title
-
-                metrics = _translate_entry_title(
-                    entry=entry,
-                    target_language=feed.target_language,
-                    engine=translator,
-                )
-
-                total_tokens += metrics["tokens"]
-                total_characters += metrics["characters"]
-
-                # Save the translation to Entry for future use
-                if metrics["tokens"] > 0:
-                    entry.save(update_fields=["translated_title"])
-                    translated_count += 1
-
-                temp_translations[entry.id] = (
-                    entry.translated_title or entry.original_title
-                )
-
-            else:
-                if not entry.original_title:
-                    # Fallback to original title if no translator or no content
-                    # temp_translations[entry.id] = entry.original_title
-                    continue
-
-                # Perform temporary translation (not saved to Entry)
-                logger.debug(
-                    f"[Digest Temp Translation] Translating title for entry {entry.id}"
-                )
-                result = auto_retry(
-                    translator.translate,
-                    max_retries=3,
-                    text=entry.original_title,
-                    target_language=digest.target_language,
-                    text_type="title",
-                )
-
-                if result and result.get("text"):
-                    temp_translations[entry.id] = result.get("text")
-                    digest_tokens += result.get("tokens", 0)
-                    total_characters += result.get("characters", 0)
-                    translated_count += 1
-                else:
-                    # Fallback to original title
-                    temp_translations[entry.id] = entry.original_title
-                # Update digest token counts if we used digest's summarizer
-            if use_digest_summarizer:
-                digest.total_tokens += total_tokens
-                digest.save()
-            else:
-                feed.total_tokens += total_tokens
-                feed.total_characters += total_characters
-                feed.save()
-
-        except Exception as e:
-            logger.error(
-                f"Error creating temporary translation for entry {entry.id}: {e}"
-            )
-            digest.log += (
-                f"Error creating temporary translation for entry {entry.id}: {e}\n"
-            )
-            digest.status = False
-            digest.save()
-            # Fallback to original title
-            temp_translations[entry.id] = entry.original_title or "No title"
-    return temp_translations
 
 
 def _ensure_entries_have_summaries(digest: Digest):

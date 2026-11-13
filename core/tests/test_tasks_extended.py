@@ -219,11 +219,11 @@ class TasksExtendedTestCase(TestCase):
 
         self.feed.refresh_from_db()
         self.assertTrue(self.feed.fetch_status)
-        # 条目数量应该保持不变
+        # 条目数量应该保持不变；同一 guid 的条目会被刷新，不会重复创建
         self.assertEqual(Entry.objects.count(), 1)
-        # 现有条目不应该被修改
         existing_entry.refresh_from_db()
-        self.assertEqual(existing_entry.original_title, "Existing Title")
+        self.assertEqual(existing_entry.guid, "guid0")
+        self.assertEqual(existing_entry.original_title, "Title0")
 
     # ==================== Extended Translation Tests ====================
 
@@ -283,10 +283,14 @@ class TasksExtendedTestCase(TestCase):
         self.feed.translate_content = False
         self.feed.save()
 
-        # 创建超过BATCH_SIZE的条目（BATCH_SIZE=30）
+        # 创建超过BATCH_SIZE的条目（BATCH_SIZE=30）；pubdate 递减，使
+        # 前 max_posts 个条目按 -pubdate 排序后恰好是后创建的 10 个
         entries = []
+        base_time = timezone.now()
         for i in range(35):
             entry = self._create_test_entry(title=f"Title {i}")
+            entry.pubdate = base_time - timezone.timedelta(minutes=i)
+            entry.save(update_fields=["pubdate"])
             entries.append(entry)
 
         # 确保mock返回正确的值
@@ -301,7 +305,8 @@ class TasksExtendedTestCase(TestCase):
         # 验证mock被调用
         self.assertTrue(mockauto_retry.called)
 
-        # 验证前max_posts个条目都被翻译（feed.max_posts = 10）
+        # 验证按 -pubdate 排序的前 max_posts 个条目都被翻译
+        # (feed.max_posts = 10)
         for i in range(10):  # 只检查前10个条目
             entry = entries[i]
             entry.refresh_from_db()

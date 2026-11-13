@@ -997,8 +997,12 @@ class StaleTranslationStatusTests(TestCase):
         )
 
     def _run_cache(self):
+        from django.core.cache import cache as django_cache
         from core.cache import cache_rss
 
+        # The same feed slug is reused across this class; clear its cached
+        # output so each scenario starts from a miss.
+        django_cache.clear()
         with patch("core.cache.generate_atom_feed", return_value="ATOM"):
             return cache_rss(self.feed.slug, feed_type="t", format="xml")
 
