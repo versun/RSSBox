@@ -28,9 +28,11 @@ def handle_feeds_translation(feeds: list, target_field: str = "title"):
             )
 
             translate_feed(feed, target_field=target_field)
-            # feed.translation_status = True
-            feed.last_translate = timezone.now()
-            feed.log += f"{timezone.now()} Translate Completed <br>"
+            if feed.translation_status:
+                feed.last_translate = timezone.now()
+                feed.log += f"{timezone.now()} Translate Completed <br>"
+            else:
+                feed.log += f"{timezone.now()} Translation incomplete; failed entries remain pending <br>"
         except Exception as e:
             logger.error(f"Error in translate_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
@@ -60,6 +62,7 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     total_characters = 0
     entries_to_save = []
     BATCH_SIZE = 30  # Reduced batch size for memory efficiency
+    feed.translation_status = True
 
     # 只处理前 feed.max_posts 条 entries
     entries = feed.entries.order_by("-pubdate")[: feed.max_posts].iterator(
@@ -67,9 +70,8 @@ def translate_feed(feed: Feed, target_field: str = "title"):
     )
 
     for entry in entries:
-        translation_status = None
         try:
-            logger.debug(f"Processing entry {entry}")
+            logger.debug("Processing entry %s", entry.pk)
             if not feed.translator:
                 raise Exception("Translate Engine Not Set")
 
@@ -126,16 +128,13 @@ def translate_feed(feed: Feed, target_field: str = "title"):
                 import gc
 
                 gc.collect()
-            translation_status = True
         except Exception as e:
             logger.error(f"Error processing entry {entry.link}: {str(e)}")
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
-            translation_status = False
-            # feed的翻译状态不应该因单个entry的翻译失败而失败，所以只记录错误日志
+            feed.translation_status = False
         finally:
-            feed.translation_status = translation_status
             # Explicitly clean up entry reference
             del entry
 
@@ -169,13 +168,14 @@ def _translate_entry_title(
     total_characters = 0
 
     # Check if title needs translation
-    if entry.translated_title:
+    if entry.translated_title or not (entry.original_title or "").strip():
         return {"tokens": 0, "characters": 0}
 
     logger.debug("[Title] Translating title")
     result = auto_retry(
         engine.translate,
         max_retries=3,
+        require_text=True,
         text=entry.original_title,
         target_language=target_language,
         text_type="title",
@@ -230,6 +230,7 @@ def _translate_entry_content(
     result = auto_retry(
         func=engine.translate,
         max_retries=3,
+        require_text=True,
         text=processed_html,
         target_language=target_language,
         text_type="content",

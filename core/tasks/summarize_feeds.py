@@ -26,14 +26,15 @@ def handle_feeds_summary(feeds: list):
             max_chunk_size = feed.summarizer.max_size()
             max_context_tokens = feed.summarizer.max_tokens
 
-            summarize_feed(
+            completed = summarize_feed(
                 feed,
                 min_chunk_size=min_chunk_size,
                 max_chunk_size=max_chunk_size,
                 max_context_tokens=max_context_tokens,
             )
-            feed.translation_status = True
-            feed.log += f"{timezone.now()} Summary Completed <br>"
+            feed.translation_status = completed
+            message = "Summary Completed" if completed else "Summary incomplete; failed entries remain pending"
+            feed.log += f"{timezone.now()} {message} <br>"
         except Exception as e:
             logger.error(f"Error in summarize_feed for feed {feed.name}: {str(e)}")
             feed.translation_status = False
@@ -68,6 +69,8 @@ def summarize_feed(
     entries_to_save = []
     total_tokens = 0
     BATCH_SIZE = 5  # Reduced batch size for memory efficiency
+    completed = True
+    entries = None
 
     try:
         # 只处理前 feed.max_posts 条 entries
@@ -84,7 +87,7 @@ def summarize_feed(
         )
         if not total_entries:
             logger.info(f"No entries to summarize for feed: {feed.feed_url}")
-            return False
+            return True
 
         logger.info(
             f"Starting summary for {total_entries} entries in feed: {feed.feed_url}"
@@ -135,11 +138,12 @@ def summarize_feed(
                 logger.error(
                     f"Error summarizing entry {entry.original_title}: {str(e)}"
                 )
-                entry.ai_summary = f"[Summary failed: {str(e)}]"
-                entries_to_save.append(entry)
+                completed = False
+                feed.log += f"{timezone.now()} Summary failed for entry {entry.pk}: {str(e)}<br>"
     except Exception as e:
         logger.error(f"Critical error summarizing feed {feed.feed_url}")
         feed.log += f"{timezone.now()} Critical error: {str(e)}<br>"
+        completed = False
     finally:
         if not summarizer:
             _save_progress(entries_to_save, feed, total_tokens)
@@ -149,7 +153,7 @@ def summarize_feed(
 
         # Clean up large references
         del entries, entries_to_save
-    return True
+    return completed
 
 
 def _summarize_entry(
@@ -210,6 +214,7 @@ def _summarize_entry(
         response = auto_retry(
             summarizer.summarize,
             max_retries=3,
+            require_text=True,
             text=text_chunks[0],
             target_language=target_language,
             user_prompt=user_prompt,
@@ -249,6 +254,7 @@ def _summarize_entry(
         response = auto_retry(
             summarizer.summarize,
             max_retries=3,
+            require_text=True,
             text=prompt,
             target_language=target_language,
             max_tokens=max_context_tokens,

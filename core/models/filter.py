@@ -156,11 +156,18 @@ class Filter(models.Model):
                 text_str = json.dumps(json_data, ensure_ascii=False)
                 passed = None
                 if self.agent:
-                    filter_results = self.agent.filter(
-                        text=text_str, system_prompt=self.filter_prompt
-                    )
-                    passed = filter_results["passed"]
-                    tokens += filter_results["tokens"]
+                    try:
+                        filter_results = self.agent.filter(
+                            text=text_str, system_prompt=self.filter_prompt
+                        )
+                        passed = filter_results["passed"]
+                        tokens += filter_results["tokens"]
+                    except Exception as exc:
+                        passed = None
+                        logger.warning(
+                            "AI filter %s failed for entry %s; leaving it pending: %s",
+                            self.pk, entry.pk, exc,
+                        )
                 result.passed = passed
                 result.save()
             else:

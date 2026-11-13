@@ -100,18 +100,26 @@ def update_single_feed(feed: Feed):
             logger.info(f"Starting feed update: {feed.name}")
 
             handle_single_feed_fetch(feed)
+            completed = True
             # task_manager.update_progress(feed_id, 50)
             # 执行更新操作
             if feed.translate_title:
                 handle_feeds_translation([feed], target_field="title")
+                completed = (feed.translation_status is not False) and completed
             if feed.translate_content:
                 handle_feeds_translation([feed], target_field="content")
+                completed = (feed.translation_status is not False) and completed
             if feed.summary:
                 handle_feeds_summary([feed])
+                completed = (feed.translation_status is not False) and completed
+
+            if feed.translate_title or feed.translate_content or feed.summary:
+                feed.translation_status = completed
+                feed.save(update_fields=["translation_status"])
 
             logger.info(f"Completed feed update: {feed.name}")
 
-            return True
+            return completed
         except Feed.DoesNotExist:
             logger.error(f"Feed not found: ID {feed.name}")
             return False

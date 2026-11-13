@@ -983,9 +983,8 @@ class OpenAIAgentModelTest(TestCase):
         mock_client.with_options().chat.completions.create.side_effect = Exception(
             "API Connection Error"
         )
-        result_failure = self.agent.completions("test content")
-        self.assertEqual(result_failure["text"], "")
-        self.assertEqual(result_failure["tokens"], 0)
+        with self.assertRaisesRegex(Exception, "API Connection Error"):
+            self.agent.completions("test content")
 
     @patch("core.models.agent.get_token_count", return_value=10)
     @patch("core.models.agent.OpenAI")
@@ -1401,11 +1400,8 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
             mock_completion
         )
 
-        result = self.agent.completions("test text")
-
-        # Should return empty text when finish_reason is not 'stop'
-        self.assertEqual(result["text"], "")
-        self.assertEqual(result["tokens"], 50)
+        with self.assertRaisesRegex(RuntimeError, "finish_reason=length"):
+            self.agent.completions("test text")
 
     @patch("core.models.agent.get_token_count")
     @patch("core.models.agent.OpenAI")
@@ -1422,10 +1418,8 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
             mock_completion
         )
 
-        result = self.agent.completions("test text")
-
-        self.assertEqual(result["text"], "")
-        self.assertEqual(result["tokens"], 50)
+        with self.assertRaisesRegex(RuntimeError, "finish_reason=unknown"):
+            self.agent.completions("test text")
 
     @patch("core.models.agent.get_token_count")
     @patch("core.models.agent.OpenAI")
@@ -2092,9 +2086,8 @@ class AgentBaseClassTest(TestCase):
         # Verify max_tokens is actually 0
         self.assertEqual(agent_no_tokens.max_tokens, 0)
 
-        # The ValueError is caught by try-except in completions method and logged to agent.log
-        # So we test that the task was submitted and the error was logged
-        result = agent_no_tokens.completions("test text", system_prompt="test prompt")
+        with self.assertRaisesRegex(ValueError, "max_tokens is not set"):
+            agent_no_tokens.completions("test text", system_prompt="test prompt")
 
         # Verify task was submitted (lines 257-261)
         mock_submit_task.assert_called_once()

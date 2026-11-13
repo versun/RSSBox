@@ -485,7 +485,7 @@ class TasksConsolidatedTestCase(TestCase):
     def test_summarize_feed_no_summarizer(self, mockauto_retry):
         """测试无摘要引擎的情况 - 错误处理验证"""
         result = summarize_feed(self.feed)
-        self.assertFalse(result)
+        self.assertTrue(result)  # No pending entries is a successful no-op.
 
     @patch("core.tasks.summarize_feeds.auto_retry")
     def test_summarize_feed_no_entries(self, mockauto_retry):
@@ -494,7 +494,7 @@ class TasksConsolidatedTestCase(TestCase):
         self.feed.save()
 
         result = summarize_feed(self.feed)
-        self.assertFalse(result)
+        self.assertTrue(result)
 
     def test_summarize_feed_with_critical_error(self):
         """测试摘要过程中的严重错误处理 - 异常情况验证"""
@@ -506,10 +506,10 @@ class TasksConsolidatedTestCase(TestCase):
             mock_clean.side_effect = Exception("Critical error")
 
             result = summarize_feed(self.feed)
-            self.assertTrue(result)  # 应该继续处理其他条目
+            self.assertFalse(result)
 
             entry.refresh_from_db()
-            self.assertIn("Summary failed", entry.ai_summary)
+            self.assertIsNone(entry.ai_summary)
 
     @patch("core.tasks.summarize_feeds.auto_retry")
     def test_summarize_feed_with_chunking(self, mockauto_retry):
@@ -592,9 +592,8 @@ class TasksConsolidatedTestCase(TestCase):
         def always_fail(**kwargs):
             raise Exception("Always fails")
 
-        result = auto_retry(always_fail, max_retries=3, text="test")
-
-        self.assertEqual(result, {})  # 应该返回空字典
+        with self.assertRaisesRegex(Exception, "Always fails"):
+            auto_retry(always_fail, max_retries=3, text="test")
 
     def testauto_retry_memory_cleanup(self):
         """测试重试函数的内存清理 - 内存管理验证"""
@@ -735,8 +734,8 @@ class TasksConsolidatedTestCase(TestCase):
             mockauto_retry.call_args.kwargs["user_prompt"], "Preserve HTML structure"
         )
 
-    @patch("core.tasks.fetch_feeds.handle_single_feed_fetch")
-    def test_handle_feeds_summary(self, mock_handle_single):
+    @patch("core.tasks.summarize_feeds.summarize_feed", return_value=True)
+    def test_handle_feeds_summary(self, mock_summarize):
         """测试批量摘要处理 - 批量操作验证"""
         # 确保所有feed都有summarizer
         self.feed.summarizer = self.agent
@@ -805,11 +804,9 @@ class TasksConsolidatedTestCase(TestCase):
                 return {"text": "", "tokens": 0, "characters": 0}
 
         agent = MockAgent()
-        metrics = _translate_entry_title(entry, target_language="Chinese", engine=agent)
-
-        self.assertIsNone(entry.translated_title)  # 空字符串变为None
-        self.assertEqual(metrics["tokens"], 0)
-        self.assertEqual(metrics["characters"], 0)
+        with self.assertRaisesRegex(RuntimeError, "returned no text"):
+            _translate_entry_title(entry, target_language="Chinese", engine=agent)
+        self.assertIsNone(entry.translated_title)
 
     def test_translate_title_with_missing_metrics(self):
         """测试标题翻译缺少指标的处理 - 容错性验证"""
@@ -835,7 +832,7 @@ class TasksConsolidatedTestCase(TestCase):
         long_content = "<p>" + "Long content. " * 100 + "</p>"
         entry = self._create_test_entry(content=long_content)
 
-        with patch("core.tasks.utils.auto_retry") as mockauto_retry:
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
             mockauto_retry.return_value = {"text": "Chunked summary", "tokens": 50}
 
             result = summarize_feed(self.feed)
@@ -901,7 +898,7 @@ class TasksConsolidatedTestCase(TestCase):
         for i in range(5):
             self._create_test_entry(title=f"Title {i}")
 
-        with patch("core.tasks.utils.auto_retry") as mockauto_retry:
+        with patch("core.tasks.summarize_feeds.auto_retry") as mockauto_retry:
             mockauto_retry.return_value = {"text": "Limited summary", "tokens": 10}
 
             result = summarize_feed(self.feed)
@@ -938,7 +935,8 @@ class TasksConsolidatedTestCase(TestCase):
             entry_without_summary.refresh_from_db()
             self.assertEqual(entry_without_summary.ai_summary, "New summary")
 
-    def test_summarize_feed_with_critical_error_in_finally(self):
+    @patch("core.tasks.summarize_feeds.auto_retry", return_value={"text": "Summary", "tokens": 10})
+    def test_summarize_feed_with_critical_error_in_finally(self, mock_retry):
         """测试finally块中的错误处理 - 异常处理验证"""
         self.feed.summarizer = self.agent
         self.feed.save()
