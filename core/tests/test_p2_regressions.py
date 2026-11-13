@@ -1029,6 +1029,8 @@ class StaleTranslationStatusTests(TestCase):
         self.assertEqual(result, "ATOM")
         self.feed.refresh_from_db()
         self.assertFalse(self.feed.translation_status)
+        # The released partial results get a fresh ETag via last_translate.
+        self.assertGreater(self.feed.last_translate, stale_time)
 
     def test_stale_status_without_timestamp_uses_last_translate(self):
         """Rows predating the column (started_at NULL) fall back to
