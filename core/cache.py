@@ -27,8 +27,10 @@ def _is_translation_stale(feed) -> bool:
     gone — the process crashed or was killed before it could write back a
     result, leaving the feed stuck in a "translating" limbo.
 
-    The threshold is twice the feed's own update_frequency, floored at
-    10 minutes so a very frequent feed still gets a reasonable grace period.
+    The threshold is twice the feed's own update_frequency, clamped to
+    [30min, 2h]: the floor keeps a healthy run on a frequent feed from
+    being mistaken for a crash, the cap keeps a weekly feed from staying
+    broken for a fortnight.
     """
     if feed.translation_status is not None:
         return False
@@ -40,7 +42,7 @@ def _is_translation_stale(feed) -> bool:
         started = feed.last_translate or feed.last_fetch
         if not started:
             return True
-    grace = max(10 * 60, feed.update_frequency * 60 * 2)
+    grace = max(30 * 60, min(feed.update_frequency * 60 * 2, 2 * 3600))
     return (timezone.now() - started).total_seconds() > grace
 
 
@@ -60,14 +62,24 @@ def cache_rss(feed_slug: str, feed_type="t", format="xml"):
                 # prevented the write-back. Reset it so readers get the feed
                 # (with whatever partial results exist) instead of an error,
                 # and so the next scheduled run picks the feed up again.
+                # last_translate is bumped so the released partial results
+                # show up in the feed's ETag/Last-Modified; the CAS predicate
+                # (status still None with the same timestamp we observed)
+                # keeps us from clobbering a run that started after we read.
                 logger.warning(
                     "Translation for %s appears stuck (status=None since %s); "
                     "resetting to failed and generating feed with available content",
                     feed_slug,
                     feed.translation_started_at,
                 )
-                feed.translation_status = False
-                feed.save(update_fields=["translation_status"])
+                Feed.objects.filter(
+                    pk=feed.pk,
+                    translation_status=None,
+                    translation_started_at=feed.translation_started_at,
+                ).update(
+                    translation_status=False,
+                    last_translate=timezone.now(),
+                )
             else:
                 # Translation genuinely in progress, keep the old cache.
                 logger.debug(
