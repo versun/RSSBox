@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from lxml import etree
 import mistune
+from feedgen.entry import FeedEntry
 from feedgen.feed import FeedGenerator
 from core.models import Feed, Entry, Tag
 from core.models.filter import bump_cache_version, cache_version
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TIMEOUT_MINUTES = 1440  # 1 day
 _DIGEST_CACHE_TIMEOUT_SECONDS = 3600  # digests regenerate at most daily
+_SAFE_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
 
 # Per-process guards around feed generation: a cache miss used to let every
 # concurrent request regenerate the same feed (single-flight). Locks are
@@ -243,6 +245,28 @@ def _build_atom_feed(
     return fg
 
 
+class _AtomEntry(FeedEntry):
+    """FeedEntry that keeps the attributes of its <link> elements.
+
+    feedgen 1.0.0 writes every entry link with only its ``href``
+    (https://github.com/lkiesow/python-feedgen/issues/135), so an enclosure
+    comes out as a second plain link and readers no longer see it as an
+    attachment. Restore rel/type/hreflang/title/length after the fact.
+    """
+
+    _LINK_ATTRIBUTES = ("rel", "type", "hreflang", "title", "length")
+
+    def atom_entry(self, extensions=True):
+        entry = super().atom_entry(extensions)
+        elements = [e for e in entry if etree.QName(e).localname == "link"]
+        for element, link in zip(elements, self.link() or []):
+            for attribute in self._LINK_ATTRIBUTES:
+                value = link.get(attribute)
+                if value and element.get(attribute) is None:
+                    element.set(attribute, str(value))
+        return entry
+
+
 def _add_atom_entry(fg, entry, feed_type, translation_display=None):
     """向Atom Feed添加条目"""
     pubdate = entry.pubdate or timezone.now()
@@ -284,7 +308,7 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
         summary = content or ""  # 确保summary始终是全文内容
 
     # 创建条目
-    fe = fg.add_entry()
+    fe = fg.add_entry(_AtomEntry())
     # 如果没有title，使用时间作为备用，转换到本地时区
     if not title:
         local_time = timezone.localtime(updated)
@@ -301,13 +325,19 @@ def _add_atom_entry(fg, entry, feed_type, translation_display=None):
     # 处理附件
     if entry.enclosures_xml:
         try:
-            xml = etree.fromstring(entry.enclosures_xml)
+            xml = etree.fromstring(entry.enclosures_xml, parser=_SAFE_XML_PARSER)
             for enclosure in xml.iter("enclosure"):
-                fe.enclosure(
-                    url=enclosure.get("href"),
-                    type=enclosure.get("type"),
-                    length=enclosure.get("length"),
-                )
+                href = enclosure.get("href")
+                if href:
+                    # Use link() rather than FeedEntry.enclosure(): the latter
+                    # stringifies a missing length to "None", which is invalid
+                    # Atom and crashes feed2json's int() conversion.
+                    fe.link(
+                        href=href,
+                        rel="enclosure",
+                        type=enclosure.get("type"),
+                        length=enclosure.get("length"),
+                    )
         except Exception as e:
             logger.error(f"Error parsing enclosures for entry {entry.id}: {str(e)}")
 
