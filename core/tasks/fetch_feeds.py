@@ -8,6 +8,7 @@ from core.models import Feed, Entry
 from typing import Dict
 import feedparser
 from fake_useragent import UserAgent
+from lxml import etree
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,35 @@ def _update_feed_metadata(feed, latest_feed):
     feed.etag = latest_feed.get("etag")
 
 
+def _serialize_enclosures(entry_data):
+    """Serialize feedparser's ``enclosures`` list for Entry.enclosures_xml.
+
+    feedparser exposes attachments as a list of dicts (href/type/length);
+    core.cache._add_atom_entry reads them back from
+    ``<enclosures><enclosure href=".." type=".." length=".."/></enclosures>``.
+    """
+    root = etree.Element("enclosures")
+    for enclosure in entry_data.get("enclosures") or []:
+        href = enclosure.get("href")
+        if not href:
+            continue
+        try:
+            element = etree.Element("enclosure", href=href)
+            if enclosure.get("type"):
+                element.set("type", enclosure["type"])
+            # Only a numeric length is valid Atom (and feed2json int()s it).
+            if str(enclosure.get("length", "")).isdigit():
+                element.set("length", str(enclosure["length"]))
+        except ValueError:
+            # Control characters from a malformed source are not valid XML;
+            # drop that attachment instead of aborting the whole fetch.
+            continue
+        root.append(element)
+    if not len(root):
+        return None
+    return etree.tostring(root, encoding="unicode")
+
+
 def _prepare_entry_data(entry_data, feed):
     """Prepare entry data"""
     from core.tasks.utils import extract_content_from_entry
@@ -256,7 +286,7 @@ def _prepare_entry_data(entry_data, feed):
         "original_title": entry_data.get("title", "No title"),
         "original_content": content,
         "original_summary": entry_data.get("summary"),
-        "enclosures_xml": entry_data.get("enclosures_xml"),
+        "enclosures_xml": _serialize_enclosures(entry_data),
         "guid": guid,
     }
 
