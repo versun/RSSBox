@@ -139,9 +139,12 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                         entry.original_content = article_content
                         entry_needs_save = True
                         source_changed = True
-                        # A new source invalidates any prior derived text
-                        # left over from an earlier version.
-                        entry.translated_title = None
+                        # Only the summary is derived from the body that
+                        # just changed. ``translated_title`` depends on
+                        # ``original_title`` alone and this pipeline never
+                        # touches it: clearing it here dropped the title
+                        # translation paid for earlier in the same run
+                        # (issue #181).
                         entry.ai_summary = None
                     # Clean up article content after use
                     del article_content
@@ -167,9 +170,7 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                     # bumped ``updated`` is also what lets the AI filter
                     # re-evaluate this entry against its new content.
                     entry.updated = timezone.now()
-                    fields.extend(
-                        ["updated", "translated_title", "ai_summary"]
-                    )
+                    fields.extend(["updated", "ai_summary"])
                 try:
                     with transaction.atomic():
                         entry.save(update_fields=fields)

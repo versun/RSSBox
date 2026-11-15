@@ -19,6 +19,14 @@ class Entry(models.Model):
     original_summary = models.TextField(null=True, blank=True)
     ai_summary = models.TextField(null=True, blank=True)
 
+    # SHA-256 of the RSS payload the publisher served for this item.
+    # ``original_content`` cannot serve as the change signal: the
+    # translation pipeline replaces it with a fetched full article, so
+    # comparing it against the next RSS payload always reports a change
+    # and wipes paid translations on every run (issue #181). NULL on
+    # rows written before the field existed.
+    source_hash = models.CharField(max_length=64, null=True, blank=True)
+
     def __str__(self):
         return self.original_title
 
