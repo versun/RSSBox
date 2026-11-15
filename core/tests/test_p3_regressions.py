@@ -388,9 +388,11 @@ class FetchArticleInvalidatesDerivedTextTests(TestCase):
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.original_content, "new body")
         self.assertEqual(self.entry.translated_content, "新正文")
-        # Stale derived text from the previous source must not survive.
-        self.assertIsNone(self.entry.translated_title)
+        # A new body stales the summary built from it, nothing else: the
+        # title translation depends on original_title, which did not
+        # change (issue #181).
         self.assertIsNone(self.entry.ai_summary)
+        self.assertEqual(self.entry.translated_title, "旧标题")
 
 
 class BatchModifyBumpTests(TestCase):

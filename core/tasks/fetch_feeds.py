@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import time
 from functools import lru_cache
@@ -268,6 +269,17 @@ def _serialize_enclosures(entry_data):
     return etree.tostring(root, encoding="unicode")
 
 
+def _source_hash(content: str) -> str:
+    """Fingerprint the RSS payload a publisher served for one item.
+
+    Only the payload goes in: the title is compared verbatim, and
+    ``original_content`` cannot be trusted because the translation
+    pipeline replaces it with a fetched full article.
+    """
+    payload = (content or "").encode("utf-8", "surrogatepass")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _prepare_entry_data(entry_data, feed):
     """Prepare entry data"""
     from core.tasks.utils import extract_content_from_entry
@@ -288,7 +300,24 @@ def _prepare_entry_data(entry_data, feed):
         "original_summary": entry_data.get("summary"),
         "enclosures_xml": _serialize_enclosures(entry_data),
         "guid": guid,
+        "source_hash": _source_hash(content),
     }
+
+
+def _content_changed(feed, entry_values, old_content, old_summary, old_hash) -> bool:
+    """Did the publisher change the payload of an item we already store?
+
+    With a fingerprint the answer is exact. Rows written before the column
+    existed carry NULL: ``original_content`` may already hold a fetched
+    article there, so it cannot be compared with the re-served payload.
+    ``original_summary`` is still the publisher's own text, which keeps the
+    upgrade pass free of both a mass re-translation and a missed update.
+    """
+    if old_hash is not None:
+        return entry_values["source_hash"] != old_hash
+    if feed.fetch_article:
+        return entry_values["original_summary"] != old_summary
+    return entry_values["original_content"] != old_content
 
 
 def _process_feed_entries(feed, entries):
@@ -299,21 +328,44 @@ def _process_feed_entries(feed, entries):
     `ignore_conflicts`) since the table has no (feed, guid) constraint.
     Existing rows are updated via bulk_update so a bumped ``updated``
     timestamp reaches Filter.needs_re_evaluation and lets stale AI
-    decisions get re-evaluated. When the re-served source actually
-    changed, the derived translations/summaries are cleared too so a
-    stale pair is never rendered next to the new source.
+    decisions get re-evaluated. Derived translations/summaries are only
+    cleared for the input that actually changed: a new title stales the
+    title translation, a new payload stales the content translation and
+    its summary.
     """
     BATCH_SIZE = 50
     entries_to_create = []
     entries_to_update = []
-    # Track pk/updated plus the source fields we refresh; comparing old
-    # vs new lets us only wipe derived text when the content really did
-    # change, so an identical re-serve doesn't cost a re-translation.
+    # Track pk/updated plus the source fields we refresh. ``source_hash``
+    # is the change signal: it fingerprints the RSS payload, so a re-fetch
+    # compares upstream against upstream even when ``original_content``
+    # now holds a fetched full article (issue #181).
     existing_entries = {
-        guid: (pk, updated, original_title, original_content)
-        for guid, pk, updated, original_title, original_content in Entry.objects.filter(
-            feed=feed
-        ).values_list("guid", "pk", "updated", "original_title", "original_content")
+        guid: (
+            pk,
+            updated,
+            original_title,
+            original_content,
+            original_summary,
+            source_hash,
+        )
+        for (
+            guid,
+            pk,
+            updated,
+            original_title,
+            original_content,
+            original_summary,
+            source_hash,
+        ) in Entry.objects.filter(feed=feed).values_list(
+            "guid",
+            "pk",
+            "updated",
+            "original_title",
+            "original_content",
+            "original_summary",
+            "source_hash",
+        )
     }
 
     # Sort entries by publication date (newest first)
@@ -337,11 +389,22 @@ def _process_feed_entries(feed, entries):
             seen_guids.add(guid)
             entries_to_create.append(Entry(feed=feed, **entry_values))
         elif guid in existing_entries:
-            pk, _old_updated, old_title, old_content = existing_entries[guid]
+            (
+                pk,
+                _old_updated,
+                old_title,
+                old_content,
+                old_summary,
+                old_source_hash,
+            ) = existing_entries[guid]
             # A publisher that stops serving <updated> should not erase
             # the timestamp we already have: needs_re_evaluation depends
             # on it and None permanently disables re-evaluation.
             refreshed_updated = entry_values["updated"] or _old_updated
+            title_changed = entry_values["original_title"] != old_title
+            content_changed = _content_changed(
+                feed, entry_values, old_content, old_summary, old_source_hash
+            )
             refreshed = Entry(
                 pk=pk,
                 feed=feed,
@@ -351,24 +414,29 @@ def _process_feed_entries(feed, entries):
                 pubdate=entry_values["pubdate"],
                 updated=refreshed_updated,
                 original_title=entry_values["original_title"],
-                original_content=entry_values["original_content"],
+                # Only a changed payload may replace what is stored: a
+                # fetched full article is richer than the re-served
+                # summary and must survive an identical re-fetch.
+                original_content=(
+                    entry_values["original_content"]
+                    if content_changed
+                    else old_content
+                ),
                 original_summary=entry_values["original_summary"],
                 enclosures_xml=entry_values["enclosures_xml"],
+                source_hash=entry_values["source_hash"],
             )
-            if (
-                entry_values["original_title"] != old_title
-                or entry_values["original_content"] != old_content
-            ):
-                # Source really changed: derived translation/summary is
-                # stale and must be regenerated, not rendered next to
-                # the new source. Unchanged re-serves keep their paid
-                # AI output by leaving those fields out of the update.
-                refreshed.translated_title = None
-                refreshed.translated_content = None
-                refreshed.ai_summary = None
-                entries_to_update.append((refreshed, True))
-            else:
-                entries_to_update.append((refreshed, False))
+            # Invalidate per input, never per entry: a title change stales
+            # only the title translation, a payload change stales the
+            # content translation and the summary built from it.
+            cleared = []
+            if title_changed:
+                cleared.append("translated_title")
+            if content_changed:
+                cleared.extend(["translated_content", "ai_summary"])
+            for field in cleared:
+                setattr(refreshed, field, None)
+            entries_to_update.append((refreshed, tuple(cleared)))
 
         if len(entries_to_create) >= BATCH_SIZE:
             Entry.objects.bulk_create(entries_to_create, ignore_conflicts=True)
@@ -386,11 +454,16 @@ def _process_feed_entries(feed, entries):
         "original_content",
         "original_summary",
         "enclosures_xml",
+        "source_hash",
     ]
     derived_fields = ["translated_title", "translated_content", "ai_summary"]
-    changed = [e for e, src_changed in entries_to_update if src_changed]
-    unchanged = [e for e, src_changed in entries_to_update if not src_changed]
-    if unchanged:
-        Entry.objects.bulk_update(unchanged, fields=source_fields)
-    if changed:
-        Entry.objects.bulk_update(changed, fields=source_fields + derived_fields)
+    # bulk_update writes every listed field for every row, so entries that
+    # keep a paid translation must not travel with the ones being cleared:
+    # group them by the exact derived fields they invalidate (none for an
+    # identical re-serve).
+    updates_by_cleared = {}
+    for refreshed, cleared in entries_to_update:
+        updates_by_cleared.setdefault(cleared, []).append(refreshed)
+    for cleared, rows in updates_by_cleared.items():
+        fields = source_fields + [f for f in derived_fields if f in cleared]
+        Entry.objects.bulk_update(rows, fields=fields)
