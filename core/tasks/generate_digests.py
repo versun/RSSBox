@@ -194,7 +194,7 @@ Summary: {article["summary"]}
             # 创建一条新的摘要 Entry
             entry = Entry.objects.create(
                 feed=digest_feed,
-                link=f"{settings.SITE_URL.rstrip('/')}/core/digest/{self.digest.slug}",
+                link=f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{self.digest.slug}",
                 author=self.digest.name or "Digest",
                 pubdate=now,
                 updated=now,
