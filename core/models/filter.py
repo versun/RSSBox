@@ -243,7 +243,14 @@ class Filter(models.Model):
         # instead of waiting out their TTL (up to a day/week).
         for pk in self.feeds.values_list("pk", flat=True):
             bump_cache_version("rss", pk)
-        for pk in self.tags.values_list("pk", flat=True):
+        from core.models.tag import Tag
+
+        # Tags that use this filter directly, or through a feed's filters.
+        tag_pks = Tag.objects.filter(
+            models.Q(filters=self)
+            | models.Q(apply_feed_filters=True, feeds__filters=self)
+        ).values_list("pk", flat=True)
+        for pk in set(tag_pks):
             bump_cache_version("tag", pk)
 
 

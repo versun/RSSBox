@@ -22,6 +22,15 @@ class Tag(models.Model):
         verbose_name=_("Filters"),
     )
 
+    apply_feed_filters = models.BooleanField(
+        _("Apply feed filters"),
+        default=False,
+        help_text=_(
+            "Use each feed's own filtered output (as in the feed's own RSS link) "
+            "instead of all its entries. The tag's filters are applied afterwards."
+        ),
+    )
+
     slug = AutoSlugField(
         verbose_name=_("URL Slug"),
         populate_from="name",
@@ -50,8 +59,17 @@ class Tag(models.Model):
         return self.slug
 
     def save(self, *args, **kwargs):
+        apply_feed_filters_changed = False
         if self.pk:  # 如果是更新操作
             old_instance = Tag.objects.get(pk=self.pk)
             if old_instance.name != self.name:  # 如果name被修改
                 self.slug = None  # 设置slug为None，让AutoSlugField重新生成
+            apply_feed_filters_changed = (
+                old_instance.apply_feed_filters != self.apply_feed_filters
+            )
         super().save(*args, **kwargs)
+        if apply_feed_filters_changed:
+            # Different entries now make up the output: drop the cached copy.
+            from core.models.filter import bump_cache_version
+
+            bump_cache_version("tag", self.pk)
