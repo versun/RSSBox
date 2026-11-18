@@ -16,7 +16,6 @@ class TagAdmin(admin.ModelAdmin):
         "name",
         "show_url",
         "show_filters",
-        "apply_feed_filters",
         "last_updated",
     )
     search_fields = ["name", "slug"]
