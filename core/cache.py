@@ -397,14 +397,20 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
         updated=timezone.now(),
     )
 
+    tag_obj = Tag.objects.get(slug=tag)
+
     # 收集所有条目
     all_entries = []
     entry_ids = []  # 用于存储所有条目的ID
     for feed in feeds:
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
-        # 收集当前feed的条目
-        entries = feed.entries.select_related("feed").all()  # tag的条目不走feed的filter，因为tag有自己的filter
+        # 收集当前feed的条目。默认不走feed的filter（tag有自己的filter）；
+        # apply_feed_filters 打开时使用 feed 自己的过滤结果，与 feed 的 RSS 输出一致
+        if tag_obj.apply_feed_filters:
+            entries = feed.filtered_entries.select_related("feed")
+        else:
+            entries = feed.entries.select_related("feed").all()
         if not entries:
             continue
 
@@ -417,7 +423,7 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     all_entries.sort(key=lambda x: x[0], reverse=True)
 
     # 获取tag filter对象
-    tag_filters = list(Tag.objects.get(slug=tag).filters.all())
+    tag_filters = list(tag_obj.filters.all())
     if any(f.filter_method in (f.AI_ONLY, f.BOTH) and f.agent_id for f in tag_filters):
         # Bound AI work before evaluating filters, not just the final output.
         all_entries = all_entries[:100]

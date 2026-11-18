@@ -16,6 +16,7 @@ class TagAdmin(admin.ModelAdmin):
         "name",
         "show_url",
         "show_filters",
+        "apply_feed_filters",
         "last_updated",
     )
     search_fields = ["name", "slug"]
@@ -23,7 +24,7 @@ class TagAdmin(admin.ModelAdmin):
     autocomplete_fields = [
         "filters",
     ]
-    fields = ["name", "filters", "show_url", "last_updated"]
+    fields = ["name", "filters", "apply_feed_filters", "show_url", "last_updated"]
     actions = [tag_force_update]
 
     @admin.display(description=_("Filters"))

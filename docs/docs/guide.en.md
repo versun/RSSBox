@@ -68,6 +68,8 @@ Through the tag system you can:
 - Apply unified filtering rules
 - Facilitate subsequent AI digest generation
 
+By default a tag uses all articles of its feeds and ignores the feeds' own filters; only the tag's filters apply. Enable **Apply feed filters** on the tag to build it from each feed's filtered output instead (the same articles as the feed's own RSS link). The tag's filters are then applied on top. This lets every feed keep its own rules while the tag simply combines them. AI digests always read the feeds' unfiltered articles.
+
 ### AI Digest Generation
 
 **AI Digest is a highlight feature of RSSBox**, intelligently aggregating multiple information sources:
