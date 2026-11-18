@@ -24,6 +24,18 @@ from core.admin import core_admin_site
 logger = logging.getLogger(__name__)
 
 
+# Fields that change what the feed's rendered output (and tag merges that
+# contain it) look like without triggering the reprocessing pipeline, so the
+# rendered caches must be invalidated explicitly when they change.
+_OUTPUT_AFFECTING_FIELDS = {
+    "name",
+    "max_posts",
+    "simple_update_frequency",
+    "slug",
+    "translation_display",
+}
+
+
 class FeedAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
     form = FeedForm
@@ -175,6 +187,9 @@ class FeedAdmin(admin.ModelAdmin):
         target_language_changed = "target_language" in form.changed_data
         # 处理默认名称设置
         obj.name = obj.name or ("Loading" if needs_reprocessing else "Empty")
+        # save_related() runs after the M2M (filters/tags) is written; stash
+        # the form so it can see form.changed_data for cache invalidation.
+        self._saved_form = form
         # 无需特殊处理的情况直接保存返回
         if not needs_reprocessing:
             logger.info("No reprocessing needed, saving and returning")
@@ -212,6 +227,31 @@ class FeedAdmin(admin.ModelAdmin):
 
         transaction.on_commit(partial(self._submit_feed_update_task, obj))
 
+    def save_related(self, request, form, formsets, change):
+        # The M2M (filters/tags) is written by save_m2m inside super(), so
+        # form.changed_data is only reliable for them now — and the tag
+        # membership has to be read before it is overwritten.
+        form = getattr(self, "_saved_form", form)
+        feed = form.instance
+        old_tag_pks = set(feed.tags.values_list("pk", flat=True)) if feed.pk else set()
+        super().save_related(request, form, formsets, change)
+
+        changed = set(getattr(form, "changed_data", ()) or ())
+        if not changed & (_OUTPUT_AFFECTING_FIELDS | {"filters", "tags"}):
+            return
+
+        # These edits change what the feed's rendered output (and the tag
+        # merges containing it) looks like without reprocessing entries, so
+        # the rendered caches must be invalidated explicitly — otherwise they
+        # keep serving stale output until their TTL.
+        from core.models.filter import bump_cache_version
+
+        if changed & (_OUTPUT_AFFECTING_FIELDS | {"filters"}):
+            bump_cache_version("rss", feed.pk)
+        tag_pks = old_tag_pks | set(feed.tags.values_list("pk", flat=True))
+        for tag_pk in tag_pks:
+            bump_cache_version("tag", tag_pk)
+
     def _submit_feed_update_task(self, feed):
         task_id = task_manager.submit_task(
             f"update_feed_{feed.slug}", update_single_feed, feed
@@ -220,7 +260,7 @@ class FeedAdmin(admin.ModelAdmin):
 
     @admin.display(description=_("Name"))
     def show_name(self, obj):
-         return format_html(
+        return format_html(
             "<a href='{0}'>{1}</a><br><sub>->{2}</sub>",
             reverse("admin:core_feed_change", args=[obj.id]),
             obj.name,
@@ -309,7 +349,7 @@ class FeedAdmin(admin.ModelAdmin):
             time_str = local_time.strftime("%Y-%m-%d %H:%M:%S")
         else:
             time_str = "-"
-        
+
         return format_html(
             "<span>{0}</span><br><span>{1}</span>",
             self.simple_update_frequency(obj),

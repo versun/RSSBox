@@ -343,6 +343,16 @@ class DigestAdmin(admin.ModelAdmin):
             )
         )
 
+    def save_related(self, request, form, formsets, change):
+        # The digest's tags M2M is written here; any config change means the
+        # next generated digest (and the cached digest feed) differs, so the
+        # rendered digest cache must be invalidated.
+        super().save_related(request, form, formsets, change)
+        if change and getattr(form, "changed_data", ()):
+            from core.models.filter import bump_cache_version
+
+            bump_cache_version("digest", form.instance.pk)
+
     def save_model(self, request, obj, form, change):
         """Custom save logic if needed."""
         super().save_model(request, obj, form, change)

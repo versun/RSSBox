@@ -8,6 +8,7 @@ from core.models.feed import Feed
 from utils.text_handler import get_token_count
 from config import settings
 from core.cache import cache_digest
+from core.models.filter import bump_cache_version
 from core.tasks.utils import PERSISTENCE_ERRORS, add_tokens, record_spent_tokens
 
 logger = logging.getLogger(__name__)
@@ -208,6 +209,9 @@ Summary: {article["summary"]}
             )
 
             self.digest.status = True  # Set status to success
+            # A fresh entry was written: bump the version so the cache_digest
+            # warm-up below rebuilds instead of hitting the stale cached feed.
+            bump_cache_version("digest", self.digest.pk)
             cache_digest(self.digest.slug, "xml")
             cache_digest(self.digest.slug, "json")
             local_now = timezone.localtime(now)

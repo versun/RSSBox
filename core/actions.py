@@ -197,6 +197,8 @@ def tag_force_update(modeladmin, request, queryset):
 
     with transaction.atomic():
         for instance in queryset:
+            # Force regeneration: cache_tag serves the cached feed otherwise.
+            bump_cache_version("tag", instance.pk)
             task_manager.submit_task(
                 f"force_update_tag_{instance.slug}_xml",
                 cache_tag,

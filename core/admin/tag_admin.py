@@ -26,6 +26,16 @@ class TagAdmin(admin.ModelAdmin):
     fields = ["name", "filters", "apply_feed_filters", "show_url", "last_updated"]
     actions = [tag_force_update]
 
+    def save_related(self, request, form, formsets, change):
+        # The tag's filters M2M is written here; a tag whose filter set
+        # changed renders a different merged feed, so its rendered cache
+        # must be invalidated (apply_feed_filters bumps itself in Tag.save).
+        super().save_related(request, form, formsets, change)
+        if "filters" in getattr(form, "changed_data", ()):
+            from core.models.filter import bump_cache_version
+
+            bump_cache_version("tag", form.instance.pk)
+
     @admin.display(description=_("Filters"))
     def show_filters(self, obj):
         if not obj.filters.exists():
