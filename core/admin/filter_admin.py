@@ -11,14 +11,16 @@ logger = logging.getLogger(__name__)
 
 # FilterForm fields that affect which entries pass a filter without needing
 # reevaluate_existing (which already clears decisions and invalidates caches).
-_FILTER_OUTPUT_FIELDS = {
-    "keywords",
-    "operation",
-    "filter_method",
-    "target_field",
-    "agent",
-    "filter_prompt",
-}
+_FILTER_OUTPUT_FIELDS = frozenset(
+    {
+        "keywords",
+        "operation",
+        "filter_method",
+        "target_field",
+        "agent",
+        "filter_prompt",
+    }
+)
 
 
 class FilterAdmin(admin.ModelAdmin):

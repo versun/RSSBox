@@ -24,26 +24,30 @@ from core.admin import core_admin_site
 logger = logging.getLogger(__name__)
 
 
-_REPROCESSING_FIELDS = {
-    "feed_url",  # 需要重新抓取
-    "target_language",  # 需要重新翻译
-    "translate_title",  # 需要重新翻译标题
-    "translate_content",  # 需要重新翻译内容
-    "summary",  # 需要重新生成摘要
-    "translator_option",  # 需要用新翻译器重新翻译
-    "summarizer",  # 需要用新引擎重新生成摘要
-    "additional_prompt",
-}
+_REPROCESSING_FIELDS = frozenset(
+    {
+        "feed_url",  # 需要重新抓取
+        "target_language",  # 需要重新翻译
+        "translate_title",  # 需要重新翻译标题
+        "translate_content",  # 需要重新翻译内容
+        "summary",  # 需要重新生成摘要
+        "translator_option",  # 需要用新翻译器重新翻译
+        "summarizer",  # 需要用新引擎重新生成摘要
+        "additional_prompt",
+    }
+)
 
 # Fields that change what the feed's rendered output (and tag merges that
 # contain it) look like without triggering the reprocessing pipeline, so the
 # rendered caches must be invalidated explicitly when they change.
-_TAG_OUTPUT_FIELDS = {
-    "name",
-    "max_posts",
-    "simple_update_frequency",
-    "translation_display",
-}
+_TAG_OUTPUT_FIELDS = frozenset(
+    {
+        "name",
+        "max_posts",
+        "simple_update_frequency",
+        "translation_display",
+    }
+)
 _OUTPUT_AFFECTING_FIELDS = _TAG_OUTPUT_FIELDS | {"slug"}
 
 
@@ -201,28 +205,33 @@ class FeedAdmin(admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-        # 处理条目数据变更
-        if target_language_changed:
-            obj.entries.update(
-                translated_content=None, translated_title=None, ai_summary=None
-            )
-        if feed_url_changed:
-            obj.entries.all().delete()
-
         # Rendered feed/tag caches change as soon as the entries' derived
-        # fields are wiped or the pipeline starts; bump now (not only
-        # after the task finishes) so a reader between the wipe and the
-        # task's own bump cannot repopulate the stale key.
-        if change and (target_language_changed or feed_url_changed):
-            from core.models.filter import bump_cache_version
+        # fields are wiped or deleted; bump on commit (before submitting the
+        # background task) so a reader between commit and the task's own bump
+        # cannot repopulate the stale key, while an in-flight reader before
+        # commit cannot cache pre-wipe rows under the new version key.
+        wipe_targets = ()
+        if change and (feed_url_changed or target_language_changed):
+            if feed_url_changed:
+                obj.entries.all().delete()
+            else:
+                obj.entries.update(
+                    translated_content=None, translated_title=None, ai_summary=None
+                )
+            wipe_targets = (
+                ("rss", obj.pk),
+                *(("tag", tag_pk) for tag_pk in obj.tags.values_list("pk", flat=True)),
+            )
 
-            bump_cache_version("rss", obj.pk)
-            for tag_pk in obj.tags.values_list("pk", flat=True):
-                bump_cache_version("tag", tag_pk)
+        def _after_commit():
+            if wipe_targets:
+                from core.models.filter import bump_cache_version
 
-        from functools import partial
+                for scope, key in wipe_targets:
+                    bump_cache_version(scope, key)
+            self._submit_feed_update_task(obj)
 
-        transaction.on_commit(partial(self._submit_feed_update_task, obj))
+        transaction.on_commit(_after_commit)
 
     def save_related(self, request, form, formsets, change):
         # The M2M (filters/tags) is written by save_m2m inside super(), so the
@@ -248,12 +257,13 @@ class FeedAdmin(admin.ModelAdmin):
         # target_language changes); bumping rss here would orphan the still-
         # valid cached feed while _build_rss returns None (404) until the
         # background update_single_feed finishes and does its own bump.
-        from core.models.filter import bump_cache_version
+        from core.models.filter import bump_cache_versions_on_commit
 
+        targets = []
         if (changed & (_OUTPUT_AFFECTING_FIELDS | {"filters"})) and not (
             changed & _REPROCESSING_FIELDS
         ):
-            bump_cache_version("rss", feed.pk)
+            targets.append(("rss", feed.pk))
 
         if changed & (_TAG_OUTPUT_FIELDS | {"tags"}):
             tag_pks = old_tag_pks | set(feed.tags.values_list("pk", flat=True))
@@ -265,8 +275,8 @@ class FeedAdmin(admin.ModelAdmin):
         else:
             tag_pks = set()
 
-        for tag_pk in tag_pks:
-            bump_cache_version("tag", tag_pk)
+        targets.extend(("tag", tag_pk) for tag_pk in tag_pks)
+        bump_cache_versions_on_commit(targets)
 
     def _submit_feed_update_task(self, feed):
         task_id = task_manager.submit_task(

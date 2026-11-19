@@ -349,9 +349,9 @@ class DigestAdmin(admin.ModelAdmin):
         # rendered digest cache must be invalidated.
         super().save_related(request, form, formsets, change)
         if change and getattr(form, "changed_data", ()):
-            from core.models.filter import bump_cache_version
+            from core.models.filter import bump_cache_versions_on_commit
 
-            bump_cache_version("digest", form.instance.pk)
+            bump_cache_versions_on_commit([("digest", form.instance.pk)])
 
     def save_model(self, request, obj, form, change):
         """Custom save logic if needed."""

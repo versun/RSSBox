@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils.text import slugify as django_slugify
 from django.utils.translation import gettext_lazy as _
 from autoslug import AutoSlugField
@@ -60,11 +62,19 @@ class Tag(models.Model):
     def save(self, *args, **kwargs):
         apply_feed_filters_changed = False
         update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            # Materialize iterators so membership checks cannot consume them.
+            update_fields = frozenset(update_fields)
+            kwargs["update_fields"] = update_fields
         check_name = update_fields is None or "name" in update_fields
         check_apply_feed_filters = (
             update_fields is None or "apply_feed_filters" in update_fields
         )
-        if self.pk and (check_name or check_apply_feed_filters):
+        if (
+            self.pk
+            and not kwargs.get("force_insert")
+            and (check_name or check_apply_feed_filters)
+        ):
             old_instance = (
                 Tag.objects.filter(pk=self.pk)
                 .only("name", "apply_feed_filters")
@@ -74,7 +84,7 @@ class Tag(models.Model):
                 if check_name and old_instance.name != self.name:
                     self.slug = None  # 让AutoSlugField重新生成
                     if update_fields is not None and "slug" not in update_fields:
-                        kwargs["update_fields"] = [*update_fields, "slug"]
+                        kwargs["update_fields"] = update_fields | {"slug"}
                 if check_apply_feed_filters:
                     apply_feed_filters_changed = (
                         old_instance.apply_feed_filters != self.apply_feed_filters
@@ -82,6 +92,14 @@ class Tag(models.Model):
         super().save(*args, **kwargs)
         if apply_feed_filters_changed:
             # Different entries now make up the output: drop the cached copy.
-            from core.models.filter import bump_cache_version
+            from core.models.filter import bump_cache_versions_on_commit
 
-            bump_cache_version("tag", self.pk)
+            bump_cache_versions_on_commit([("tag", self.pk)])
+
+
+@receiver(post_delete, sender=Tag)
+def _invalidate_cache_on_tag_delete(sender, instance: Tag, **kwargs):
+    """Invalidate the tag's cache so a recreated tag with the same slug/pk won't hit stale XML."""
+    from core.models.filter import bump_cache_versions_on_commit
+
+    bump_cache_versions_on_commit([("tag", instance.pk)])

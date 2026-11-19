@@ -253,7 +253,33 @@ class Digest(models.Model):
     def get_digest_feed(self) -> Feed:
         """获取或创建 Digest 专用 Feed"""
         feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}"
-        subtitle = self.description or ""
+        subtitle = (self.description or "")[:255]
+
+        feeds = list(Feed.objects.filter(feed_url=feed_url).order_by("pk"))
+        if feeds:
+            # Prefer a row matching target_language if legacy duplicates exist;
+            # otherwise reuse the digest feed in place so changing target_language
+            # does not orphan old feeds and their entries.
+            feed = next(
+                (f for f in feeds if f.target_language == self.target_language),
+                feeds[0],
+            )
+            update_fields = []
+            if feed.name != self.name:
+                feed.name = self.name
+                update_fields.append("name")
+            if feed.subtitle != subtitle:
+                feed.subtitle = subtitle
+                update_fields.append("subtitle")
+            if feed.target_language != self.target_language:
+                feed.target_language = self.target_language
+                update_fields.append("target_language")
+            if feed.language != self.target_language:
+                feed.language = self.target_language
+                update_fields.append("language")
+            if update_fields:
+                feed.save(update_fields=update_fields)
+            return feed
 
         defaults = {
             "name": self.name,
@@ -268,15 +294,11 @@ class Digest(models.Model):
             "summary": False,
         }
 
-        feed, created = Feed.objects.get_or_create(
+        feed, _ = Feed.objects.get_or_create(
             feed_url=feed_url,
             target_language=self.target_language,
             defaults=defaults,
         )
-        if not created and (feed.name != self.name or feed.subtitle != subtitle):
-            feed.name = self.name
-            feed.subtitle = subtitle
-            feed.save(update_fields=["name", "subtitle"])
         return feed
 
 
@@ -286,12 +308,12 @@ def delete_associated_feed_and_entries(sender, instance: "Digest", **kwargs):
     当删除一个 Digest 时，删除其专用 Feed，从而通过 Entry.feed 的 CASCADE 删除相关 Entries。
     注意：不要使用 get_or_create 以避免误创建。
     """
+    from core.models.filter import bump_cache_versions_on_commit
+
+    bump_cache_versions_on_commit([("digest", instance.pk)])
     try:
         feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{instance.slug}"
-        Feed.objects.filter(
-            feed_url=feed_url,
-            target_language=instance.target_language,
-        ).delete()
+        Feed.objects.filter(feed_url=feed_url).delete()
     except Exception:
         # 静默失败以避免阻断 Digest 删除流程；实际错误会在上层日志中体现
         pass

@@ -303,7 +303,6 @@ def feed_batch_modify(modeladmin, request, queryset):
                                     feed.tags.values_list("pk", flat=True)
                                 )
                                 feed.tags.set(tag_ids)  # 批量更新每个 Feed 的 tags
-                                bump_cache_version("rss", feed.pk)
                                 affected_tag_pks = old_tag_pks | set(
                                     feed.tags.values_list("pk", flat=True)
                                 )
@@ -316,9 +315,9 @@ def feed_batch_modify(modeladmin, request, queryset):
                             for obj in queryset:
                                 obj.filters.set(filter_ids)
                                 bump_cache_version("rss", obj.pk)
-                                for tag_pk in obj.tags.values_list(
-                                    "pk", flat=True
-                                ):
+                                for tag_pk in obj.tags.filter(
+                                    apply_feed_filters=True
+                                ).values_list("pk", flat=True):
                                     bump_cache_version("tag", tag_pk)
                     case _:
                         update_fields[field] = field_types.get(field, str)(value)

@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 def _get_modified(request, feed_slug, feed_type="t", **kwargs):
     try:
-        feed = Feed.objects.get(slug=feed_slug)
+        feed = Feed.objects.only("pk", "last_translate", "last_fetch").get(
+            slug=feed_slug
+        )
         if feed_type == "t":
             modified = feed.last_translate
         else:
@@ -48,17 +50,22 @@ def _mix_version_into_stamp(stamp, scope, pk):
     return base + timezone.timedelta(seconds=version)
 
 
+def _mix_version_into_etag(base: str, scope: str, pk):
+    """Append the invalidation version onto an ETag base string."""
+    version = cache_version(scope, pk)
+    if not base and not version:
+        return None
+    return f"{base}-v{version}" if version else base
+
+
 def _get_etag(request, feed_slug, feed_type="t", **kwargs):
     try:
-        feed = Feed.objects.get(slug=feed_slug)
-        version = cache_version("rss", feed.pk)
+        feed = Feed.objects.only("pk", "last_translate", "etag").get(slug=feed_slug)
         if feed_type == "t":
             base = feed.last_translate.isoformat() if feed.last_translate else ""
         else:
             base = feed.etag or ""
-        if not base and not version:
-            return None
-        return f"{base}-v{version}"
+        return _mix_version_into_etag(base, "rss", feed.pk)
     except Feed.DoesNotExist:
         logger.warning(
             "Feed not fetched yet, Please update it first: %s",
@@ -99,7 +106,7 @@ def _make_response(atom_feed, filename, format="xml"):
 
 def _get_digest_modified(request, slug: str, **kwargs):
     try:
-        digest = Digest.objects.get(slug=slug)
+        digest = Digest.objects.only("pk", "last_generated").get(slug=slug)
     except Digest.DoesNotExist:
         return None
     return _mix_version_into_stamp(digest.last_generated, "digest", digest.pk)
@@ -107,14 +114,11 @@ def _get_digest_modified(request, slug: str, **kwargs):
 
 def _get_digest_etag(request, slug: str, **kwargs):
     try:
-        digest = Digest.objects.get(slug=slug)
+        digest = Digest.objects.only("pk", "last_generated").get(slug=slug)
     except Digest.DoesNotExist:
         return None
-    version = cache_version("digest", digest.pk)
     base = digest.last_generated.isoformat() if digest.last_generated else ""
-    if not base and not version:
-        return None
-    return f"{base}-v{version}" if version else base
+    return _mix_version_into_etag(base, "digest", digest.pk)
 
 
 def import_opml(request):

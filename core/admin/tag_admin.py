@@ -31,10 +31,10 @@ class TagAdmin(admin.ModelAdmin):
         # changed renders a different merged feed, so its rendered cache
         # must be invalidated (apply_feed_filters bumps itself in Tag.save).
         super().save_related(request, form, formsets, change)
-        if change and "filters" in getattr(form, "changed_data", ()):
-            from core.models.filter import bump_cache_version
+        if change and "filters" in (getattr(form, "changed_data", None) or ()):
+            from core.models.filter import bump_cache_versions_on_commit
 
-            bump_cache_version("tag", form.instance.pk)
+            bump_cache_versions_on_commit([("tag", form.instance.pk)])
 
     @admin.display(description=_("Filters"))
     def show_filters(self, obj):

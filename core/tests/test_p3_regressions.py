@@ -17,7 +17,7 @@ from django.utils import timezone
 from core.cache import cache_rss
 from core.management.commands import feed_updater as cmd
 from core.management.commands.cleanup_entries import cleanup_feed_entries
-from core.models import Entry, Feed, Filter, FilterResult, Tag
+from core.models import Entry, Feed, Filter, Tag
 from core.models.filter import bump_cache_version, cache_version
 
 
@@ -58,7 +58,8 @@ class CacheVersionTests(TestCase):
         rss_before = cache_version("rss", self.feed.pk)
         tag_before = cache_version("tag", tag.pk)
 
-        filt.clear_ai_filter_cache_results()
+        with self.captureOnCommitCallbacks(execute=True):
+            filt.clear_ai_filter_cache_results()
 
         self.assertGreater(cache_version("rss", self.feed.pk), rss_before)
         self.assertGreater(cache_version("tag", tag.pk), tag_before)
@@ -190,8 +191,6 @@ class EntryRefreshOnFetchTests(TestCase):
         )
 
     def _entry_data(self, guid, title, published, updated, content="c"):
-        import time as time_mod
-
         def st(dt):
             return dt.timetuple() if dt else None
 

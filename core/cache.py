@@ -165,26 +165,27 @@ def _build_rss(feed: Feed, feed_type: str, format: str, cache_key: str):
 def cache_tag(tag: str, feed_type="t", format="xml"):
     logger.debug(f"Start cache_tag for {tag} with type {feed_type} and format {format}")
 
-    feeds = Feed.objects.filter(tags__slug=tag)
-    max_frequency_feed = feeds.order_by("-update_frequency").first()
     tag_pk = Tag.objects.filter(slug=tag).values_list("pk", flat=True).first()
     cache_key = (
         f"cache_tag_{tag}_{feed_type}_{format}_v{cache_version('tag', tag_pk)}"
     )
     return _generate_once(
-        "tag", tag, cache_key,
-        lambda: _build_tag(tag, feeds, feed_type, max_frequency_feed, cache_key),
+        "tag",
+        tag,
+        cache_key,
+        lambda: _build_tag(tag, feed_type, cache_key),
     )
 
 
-def _build_tag(tag, feeds, feed_type, max_frequency_feed, cache_key):
+def _build_tag(tag, feed_type, cache_key):
+    feeds = list(Feed.objects.filter(tags__slug=tag))
     atom_feed = merge_feeds_into_one_atom(tag, feeds, feed_type)
 
     if not atom_feed:
         return None
 
     # 缓存
-    max_frequency = max_frequency_feed.update_frequency if max_frequency_feed else None
+    max_frequency = max((f.update_frequency for f in feeds), default=None)
     cache.set(cache_key, atom_feed, cache_timeout_seconds(max_frequency))
     logger.debug(f"Cached successfully with key {cache_key}")
     return atom_feed
@@ -399,52 +400,44 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
 
     # 收集所有条目
     all_entries = []
-    entry_ids = []  # 用于存储所有条目的ID
     for feed in feeds:
         # 添加Feed作为分类
         fg.category(term=str(feed.id), label=feed.name, scheme=feed.feed_url)
+        if feed.max_posts <= 0:
+            continue
         # 收集当前feed的条目。默认不走feed的filter（tag有自己的filter）；
         # apply_feed_filters 打开时使用 feed 自己的过滤结果，与 feed 的 RSS 输出一致
-        if tag_obj.apply_feed_filters:
-            entries = feed.filtered_entries.select_related("feed")
-        else:
-            entries = feed.entries.select_related("feed").all()
-
-        recent_entries = list(
-            entries.order_by("-pubdate", "-id")[: max(0, feed.max_posts)]
+        entries = (
+            feed.filtered_entries if tag_obj.apply_feed_filters else feed.entries.all()
         )
-        for entry in reversed(recent_entries):
+        for entry in entries.select_related("feed").order_by("-pubdate", "-id")[
+            : feed.max_posts
+        ]:
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
-            entry_ids.append(entry.id)
 
     # 按时间降序排序（最新的在最前面）
     all_entries.sort(key=lambda x: x[0], reverse=True)
 
     # 获取tag filter对象
     tag_filters = list(tag_obj.filters.all())
-    if any(f.filter_method in (f.AI_ONLY, f.BOTH) and f.agent_id for f in tag_filters):
-        # Bound AI work before evaluating filters, not just the final output.
-        all_entries = all_entries[:100]
-        entry_ids = [entry.pk for _, entry in all_entries]
-
-    # 开始过滤 - 使用批量查询优化性能
-    if not tag_filters:
-        # 没有过滤器，直接使用所有条目
+    if not tag_filters or not all_entries:
         filtered_entries = all_entries
     else:
-        # 批量获取所有条目ID的QuerySet
-        base_qs = Entry.objects.filter(id__in=entry_ids)
+        if any(
+            f.filter_method in (f.AI_ONLY, f.BOTH) and f.agent_id for f in tag_filters
+        ):
+            # Bound AI work before evaluating filters, not just the final output.
+            all_entries = all_entries[:100]
 
-        # 应用所有过滤器（链式应用）
-        filtered_qs = base_qs
+        # 批量获取所有条目ID的QuerySet并链式应用过滤器
+        filtered_qs = Entry.objects.filter(
+            id__in=[entry.pk for _, entry in all_entries]
+        )
         for filter_obj in tag_filters:
             filtered_qs = filter_obj.apply_filter(filtered_qs)
 
-        # 获取通过过滤的条目ID集合
         passed_ids = set(filtered_qs.values_list("id", flat=True))
-
-        # 构建过滤后的条目列表（保持原排序）
         filtered_entries = [
             item for item in all_entries if item[1].id in passed_ids
         ]

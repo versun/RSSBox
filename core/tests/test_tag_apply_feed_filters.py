@@ -77,12 +77,18 @@ class TagApplyFeedFiltersTests(TestCase):
         self.assertEqual(self._titles(), ["A: python release"])
 
     def test_toggling_the_option_invalidates_the_tag_cache(self):
-        with patch("core.models.filter.bump_cache_version") as bump:
+        with (
+            patch("core.models.filter.bump_cache_version") as bump,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
             self.tag.apply_feed_filters = True
             self.tag.save()
         bump.assert_called_once_with("tag", self.tag.pk)
 
-        with patch("core.models.filter.bump_cache_version") as bump:
+        with (
+            patch("core.models.filter.bump_cache_version") as bump,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
             self.tag.name = "Renamed"
             self.tag.save()
         bump.assert_not_called()
@@ -94,7 +100,10 @@ class TagApplyFeedFiltersTests(TestCase):
         self.tag.apply_feed_filters = True
         self.tag.save()
 
-        with patch("core.models.filter.bump_cache_version") as bump:
+        with (
+            patch("core.models.filter.bump_cache_version") as bump,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
             include.clear_ai_filter_cache_results()
         bump.assert_any_call("rss", self.feed_a.pk)
         bump.assert_any_call("tag", self.tag.pk)
@@ -108,9 +117,26 @@ class TagApplyFeedFiltersTests(TestCase):
     def test_save_with_update_fields_skips_unrelated_invalidation(self):
         self.tag.apply_feed_filters = True
         self.tag.last_updated = timezone.now()
-        with patch("core.models.filter.bump_cache_version") as bump:
+        with (
+            patch("core.models.filter.bump_cache_version") as bump,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
             self.tag.save(update_fields=["last_updated"])
         bump.assert_not_called()
+
+    def test_save_with_iterator_update_fields_preserves_name_and_slug(self):
+        self.tag.name = "Iterator Renamed"
+        self.tag.save(update_fields=iter(["name"]))
+        self.tag.refresh_from_db()
+        self.assertEqual(self.tag.name, "Iterator Renamed")
+        self.assertEqual(self.tag.slug, "iterator-renamed")
+
+    def test_zero_max_posts_feed_is_skipped_in_tag_merge(self):
+        self.feed_a.max_posts = 0
+        self.feed_a.save()
+        self.tag.apply_feed_filters = True
+        self.tag.save()
+        self.assertEqual(self._titles(), ["B: weather"])
 
     def test_updated_timestamp_uses_newest_filtered_entry(self):
         from datetime import datetime

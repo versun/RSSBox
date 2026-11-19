@@ -8,7 +8,6 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
-from tagulous.models import TagField
 
 
 class Feed(models.Model):
@@ -254,9 +253,12 @@ class Feed(models.Model):
 
 
 @receiver(pre_delete, sender=Feed)
-def _invalidate_tag_caches_on_feed_delete(sender, instance: Feed, **kwargs):
-    """Invalidate merged tag caches before M2M rows are cascade-deleted."""
-    from core.models.filter import bump_cache_version
+def _invalidate_caches_on_feed_delete(sender, instance: Feed, **kwargs):
+    """Invalidate feed and merged tag caches before M2M rows are cascade-deleted."""
+    from core.models.filter import bump_cache_versions_on_commit
 
-    for tag_pk in instance.tags.values_list("pk", flat=True):
-        bump_cache_version("tag", tag_pk)
+    targets = [
+        ("rss", instance.pk),
+        *(("tag", tag_pk) for tag_pk in instance.tags.values_list("pk", flat=True)),
+    ]
+    bump_cache_versions_on_commit(targets)

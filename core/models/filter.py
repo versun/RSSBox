@@ -1,5 +1,5 @@
 import logging
-from django.db import models
+from django.db import models, transaction
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.core.cache import cache
@@ -236,10 +236,16 @@ class Filter(models.Model):
 
     def invalidate_related_caches(self):
         """Orphan rendered caches for feeds and tags that depend on this filter."""
-        for pk in self.feeds.values_list("pk", flat=True):
-            bump_cache_version("rss", pk)
+        if self.pk is None:
+            return
         from core.models.tag import Tag
 
+        # Snapshot affected PKs now (important for pre_delete before M2M rows
+        # are cascade-deleted) and bump after commit so concurrent readers
+        # cannot cache pre-commit DB state under the new version key.
+        targets = [
+            ("rss", pk) for pk in self.feeds.values_list("pk", flat=True)
+        ]
         # Tags that use this filter directly, or through a feed's filters.
         tag_pks = (
             Tag.objects.filter(
@@ -249,8 +255,8 @@ class Filter(models.Model):
             .values_list("pk", flat=True)
             .distinct()
         )
-        for pk in tag_pks:
-            bump_cache_version("tag", pk)
+        targets.extend(("tag", pk) for pk in tag_pks)
+        bump_cache_versions_on_commit(targets)
 
     def clear_ai_filter_cache_results(self):
         """
@@ -300,6 +306,25 @@ def bump_cache_version(scope: str, key) -> None:
             scope,
             key,
         )
+
+
+def bump_cache_versions_on_commit(targets) -> None:
+    """Schedule ``bump_cache_version`` for each ``(scope, key)`` after commit.
+
+    Outside a transaction this executes immediately; inside ``atomic()``
+    (such as Django admin POSTs and ``Model.delete()``) it defers until the
+    DB changes are committed and visible to other connections, preventing a
+    concurrent reader from caching stale rows under the new version key.
+    """
+    items = tuple(dict.fromkeys(targets))
+    if not items:
+        return
+
+    def _bump():
+        for scope, key in items:
+            bump_cache_version(scope, key)
+
+    transaction.on_commit(_bump)
 
 
 class FilterResult(models.Model):
