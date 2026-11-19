@@ -113,16 +113,17 @@ class Filter(models.Model):
             return queryset.none() if self.operation == self.INCLUDE else queryset
 
         # 构建查询条件：内容包含任何关键词
+        # uicontains (core/lookups.py) folds Unicode case; SQLite LIKE only folds ASCII.
         query = models.Q()
         for keyword in keywords:
             if self.filter_original_title:
-                query |= models.Q(original_title__icontains=keyword)
+                query |= models.Q(original_title__uicontains=keyword)
             if self.filter_original_content:
-                query |= models.Q(original_content__icontains=keyword)
+                query |= models.Q(original_content__uicontains=keyword)
             if self.filter_translated_title:
-                query |= models.Q(translated_title__icontains=keyword)
+                query |= models.Q(translated_title__uicontains=keyword)
             if self.filter_translated_content:
-                query |= models.Q(translated_content__icontains=keyword)
+                query |= models.Q(translated_content__uicontains=keyword)
 
         if self.operation == self.INCLUDE:
             # 包含模式：只显示包含任何关键词的内容
