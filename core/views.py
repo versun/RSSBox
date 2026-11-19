@@ -100,15 +100,19 @@ def _make_response(atom_feed, filename, format="xml"):
 def _get_digest_modified(request, slug: str, **kwargs):
     try:
         digest = Digest.objects.get(slug=slug)
-        return digest.last_generated
     except Digest.DoesNotExist:
         return None
+    return _mix_version_into_stamp(digest.last_generated, "digest", digest.pk)
 
 
 def _get_digest_etag(request, slug: str, **kwargs):
     try:
         digest = Digest.objects.get(slug=slug)
-        return digest.last_generated.isoformat() if digest.last_generated else None
+        version = cache_version("digest", digest.pk)
+        base = digest.last_generated.isoformat() if digest.last_generated else ""
+        if not base and not version:
+            return None
+        return f"{base}-v{version}" if version else base
     except Digest.DoesNotExist:
         return None
 

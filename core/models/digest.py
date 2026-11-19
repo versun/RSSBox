@@ -268,11 +268,18 @@ class Digest(models.Model):
             "target_language": self.target_language,
         }
 
-        return Feed.objects.get_or_create(
+        feed, created = Feed.objects.get_or_create(
             feed_url=feed_url,
             target_language=self.target_language,
             defaults=defaults,
-        )[0]
+        )
+        if not created and (
+            feed.name != self.name or feed.subtitle != self.description
+        ):
+            feed.name = self.name
+            feed.subtitle = self.description
+            feed.save(update_fields=["name", "subtitle"])
+        return feed
 
 
 @receiver(post_delete, sender=Digest)

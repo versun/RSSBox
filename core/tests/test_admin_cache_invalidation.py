@@ -36,10 +36,10 @@ class FeedAdminInvalidationTest(TestCase):
             name="F", feed_url="https://example.com/f.xml", slug="f"
         )
 
-    def _save(self, changed_data, change=True):
+    def _save(self, changed_data, change=True, save_m2m=None):
         form = _form(self.feed, changed_data)
-        # Django calls save_model before save_related; stash like the real flow.
-        self.admin._saved_form = form
+        if save_m2m is not None:
+            form.save_m2m.side_effect = save_m2m
         with patch("core.models.filter.bump_cache_version") as bump:
             self.admin.save_related(self.request, form, [], change)
         return bump
@@ -54,14 +54,15 @@ class FeedAdminInvalidationTest(TestCase):
 
     def test_tag_reassignment_bumps_old_and_new_tags(self):
         old_tag = Tag.objects.create(name="old")
-        Tag.objects.create(name="new")
+        new_tag = Tag.objects.create(name="new")
         self.feed.tags.add(old_tag)
-        bump = self._save(["tags"])
+        bump = self._save(
+            ["tags"],
+            save_m2m=lambda: self.feed.tags.set([new_tag]),
+        )
 
-        # The feed left old_tag and joined new_tag (M2M set in setUp for old;
-        # the mock does not move membership, so new is read from the form
-        # instance's current tags — only old_tag is asserted unconditionally).
         bump.assert_any_call("tag", old_tag.pk)
+        bump.assert_any_call("tag", new_tag.pk)
         # rss output is unchanged by membership alone.
         self.assertNotIn(("rss", self.feed.pk), [c.args for c in bump.call_args_list])
 
@@ -72,6 +73,26 @@ class FeedAdminInvalidationTest(TestCase):
 
         bump.assert_any_call("rss", self.feed.pk)
         bump.assert_any_call("tag", tag.pk)
+
+    def test_reprocessing_edit_defers_rss_bump_but_bumps_tags(self):
+        """When reprocessing is triggered, save_model sets translation_status=None;
+        bumping rss in save_related would orphan the cached feed while _build_rss
+        returns None (404) until update_single_feed finishes."""
+        old_tag = Tag.objects.create(name="old")
+        new_tag = Tag.objects.create(name="new")
+        self.feed.tags.add(old_tag)
+        bump = self._save(
+            ["additional_prompt", "name", "tags"],
+            save_m2m=lambda: self.feed.tags.set([new_tag]),
+        )
+
+        self.assertNotIn(("rss", self.feed.pk), [c.args for c in bump.call_args_list])
+        bump.assert_any_call("tag", old_tag.pk)
+        bump.assert_any_call("tag", new_tag.pk)
+
+    def test_create_does_not_bump(self):
+        bump = self._save(["name", "max_posts", "filters", "tags"], change=False)
+        bump.assert_not_called()
 
     def test_unrelated_change_does_not_bump(self):
         bump = self._save(["total_characters"])
@@ -119,6 +140,40 @@ class DigestAdminInvalidationTest(TestCase):
         with patch("core.models.filter.bump_cache_version") as bump:
             self.admin.save_related(self.request, form, [], False)
         bump.assert_not_called()
+
+    def test_edit_syncs_digest_feed_and_advances_validators(self):
+        from django.core.cache import cache
+        from django.utils import timezone
+        from core.views import _get_digest_etag, _get_digest_modified
+
+        cache.clear()
+        try:
+            self.digest.last_generated = timezone.now()
+            self.digest.save()
+            feed_before = self.digest.get_digest_feed()
+            self.assertEqual(feed_before.name, "d")
+
+            etag_before = _get_digest_etag(self.request, self.digest.slug)
+            modified_before = _get_digest_modified(self.request, self.digest.slug)
+
+            self.digest.name = "Renamed Digest"
+            self.digest.description = "Updated description"
+            self.digest.save()
+            form = _form(self.digest, ["name", "description"])
+            self.admin.save_related(self.request, form, [], True)
+
+            feed_after = self.digest.get_digest_feed()
+            self.assertEqual(feed_after.pk, feed_before.pk)
+            self.assertEqual(feed_after.name, "Renamed Digest")
+            self.assertEqual(feed_after.subtitle, "Updated description")
+            self.assertNotEqual(
+                _get_digest_etag(self.request, self.digest.slug), etag_before
+            )
+            self.assertGreater(
+                _get_digest_modified(self.request, self.digest.slug), modified_before
+            )
+        finally:
+            cache.clear()
 
 
 class TagForceUpdateTest(TestCase):

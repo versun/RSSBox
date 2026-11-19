@@ -24,6 +24,17 @@ from core.admin import core_admin_site
 logger = logging.getLogger(__name__)
 
 
+_REPROCESSING_FIELDS = {
+    "feed_url",  # 需要重新抓取
+    "target_language",  # 需要重新翻译
+    "translate_title",  # 需要重新翻译标题
+    "translate_content",  # 需要重新翻译内容
+    "summary",  # 需要重新生成摘要
+    "translator_option",  # 需要用新翻译器重新翻译
+    "summarizer",  # 需要用新引擎重新生成摘要
+    "additional_prompt",
+}
+
 # Fields that change what the feed's rendered output (and tag merges that
 # contain it) look like without triggering the reprocessing pipeline, so the
 # rendered caches must be invalidated explicitly when they change.
@@ -170,26 +181,12 @@ class FeedAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         logger.info(f"Call Feed save_model: {obj}")
-        needs_reprocessing = any(
-            field in form.changed_data
-            for field in [
-                "feed_url",  # 需要重新抓取
-                "target_language",  # 需要重新翻译
-                "translate_title",  # 需要重新翻译标题
-                "translate_content",  # 需要重新翻译内容
-                "summary",  # 需要重新生成摘要
-                "translator_option",  # 需要用新翻译器重新翻译
-                "summarizer",  # 需要用新引擎重新生成摘要
-                "additional_prompt",
-            ]
-        )
-        feed_url_changed = "feed_url" in form.changed_data
-        target_language_changed = "target_language" in form.changed_data
+        changed = set(getattr(form, "changed_data", ()) or ())
+        needs_reprocessing = bool(changed & _REPROCESSING_FIELDS)
+        feed_url_changed = "feed_url" in changed
+        target_language_changed = "target_language" in changed
         # 处理默认名称设置
         obj.name = obj.name or ("Loading" if needs_reprocessing else "Empty")
-        # save_related() runs after the M2M (filters/tags) is written; stash
-        # the form so it can see form.changed_data for cache invalidation.
-        self._saved_form = form
         # 无需特殊处理的情况直接保存返回
         if not needs_reprocessing:
             logger.info("No reprocessing needed, saving and returning")
@@ -228,13 +225,14 @@ class FeedAdmin(admin.ModelAdmin):
         transaction.on_commit(partial(self._submit_feed_update_task, obj))
 
     def save_related(self, request, form, formsets, change):
-        # The M2M (filters/tags) is written by save_m2m inside super(), so
-        # form.changed_data is only reliable for them now — and the tag
-        # membership has to be read before it is overwritten.
-        form = getattr(self, "_saved_form", form)
+        # The M2M (filters/tags) is written by save_m2m inside super(), so the
+        # previous tag membership has to be read before it is overwritten.
         feed = form.instance
         old_tag_pks = set(feed.tags.values_list("pk", flat=True)) if feed.pk else set()
         super().save_related(request, form, formsets, change)
+
+        if not change:
+            return
 
         changed = set(getattr(form, "changed_data", ()) or ())
         if not changed & (_OUTPUT_AFFECTING_FIELDS | {"filters", "tags"}):
@@ -244,9 +242,16 @@ class FeedAdmin(admin.ModelAdmin):
         # merges containing it) looks like without reprocessing entries, so
         # the rendered caches must be invalidated explicitly — otherwise they
         # keep serving stale output until their TTL.
+        # When reprocessing IS triggered, save_model already set
+        # translation_status=None (and bumped rss for destructive feed_url /
+        # target_language changes); bumping rss here would orphan the still-
+        # valid cached feed while _build_rss returns None (404) until the
+        # background update_single_feed finishes and does its own bump.
         from core.models.filter import bump_cache_version
 
-        if changed & (_OUTPUT_AFFECTING_FIELDS | {"filters"}):
+        if (changed & (_OUTPUT_AFFECTING_FIELDS | {"filters"})) and not (
+            changed & _REPROCESSING_FIELDS
+        ):
             bump_cache_version("rss", feed.pk)
         tag_pks = old_tag_pks | set(feed.tags.values_list("pk", flat=True))
         for tag_pk in tag_pks:
