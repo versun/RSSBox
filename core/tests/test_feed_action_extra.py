@@ -33,6 +33,24 @@ class ConvertStructTimeTests(SimpleTestCase):
         # Test None handling
         self.assertIsNone(convert_struct_time_to_datetime(None))
 
+    def test_struct_time_is_utc_whatever_the_local_timezone(self):
+        """feedparser's struct_time is UTC; a non-UTC TZ must not shift it."""
+        import os
+
+        saved = os.environ.get("TZ")
+        os.environ["TZ"] = "Europe/Sofia"
+        time.tzset()
+        try:
+            parsed = time.gmtime(1795039200)  # 2026-11-18T22:00:00Z
+            dt = convert_struct_time_to_datetime(parsed)
+            self.assertEqual(int(dt.timestamp()), 1795039200)
+        finally:
+            if saved is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = saved
+            time.tzset()
+
 
 class ManualFetchFeedTests(SimpleTestCase):
     """Isolated tests for core.tasks.fetch_feeds.manual_fetch_feed."""

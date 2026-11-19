@@ -1,3 +1,4 @@
+import calendar
 import hashlib
 import logging
 import time
@@ -84,8 +85,10 @@ def handle_single_feed_fetch(feed: Feed):
 def convert_struct_time_to_datetime(time_str):
     if not time_str:
         return None
+    # feedparser's *_parsed values are UTC. time.mktime() would read them as
+    # local time and shift every date by the container's UTC offset.
     return timezone.datetime.fromtimestamp(
-        time.mktime(time_str), tz=timezone.get_default_timezone()
+        calendar.timegm(time_str), tz=timezone.get_default_timezone()
     )
 
 
