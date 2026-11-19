@@ -25,12 +25,20 @@ def setup_environment():
 def start_development_server():
     """启动开发服务器"""
     print("🌐 Start DEV Server...")
-    try:
-        subprocess.run(["python", "manage.py", "runserver"], check=True)
-    except KeyboardInterrupt:
-        print("\n🛑 Server Stopped by User")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Start DEV Server Failed : {e}")
+    # 转发命令行参数，如 `uv run dev 0.0.0.0:8080 --noreload`
+    args = sys.argv[1:]
+    cmd = [sys.executable, "manage.py", "runserver"] + args
+    if os.name == "posix":
+        # Replace this process with runserver so signals (Ctrl+C, kill)
+        # reach it directly instead of orphaning the server.
+        os.execvp(cmd[0], cmd)
+    else:
+        try:
+            subprocess.run(cmd, check=True)
+        except KeyboardInterrupt:
+            print("\n🛑 Server Stopped by User")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Start DEV Server Failed : {e}")
 
 
 def main():

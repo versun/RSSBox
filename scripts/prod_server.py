@@ -150,12 +150,17 @@ def start_production_server():
         ]
 
     print(f"🚀 启动生产服务器 (http://{host}:{port})...")
-    try:
-        subprocess.run(cmd)
-    except KeyboardInterrupt:
-        print("\n🛑 服务已停止")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ 开发服务启动失败: {e}")
+    if os.name == "posix":
+        # Replace this process with the server so signals (Ctrl+C, kill)
+        # reach the server directly instead of orphaning it.
+        os.execvp(cmd[0], cmd)
+    else:
+        try:
+            subprocess.run(cmd)
+        except KeyboardInterrupt:
+            print("\n🛑 服务已停止")
+        except subprocess.CalledProcessError as e:
+            print(f"❌ 生产服务启动失败: {e}")
 
 
 def main():
