@@ -1,5 +1,7 @@
 import logging
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils.translation import gettext_lazy as _
 from tagulous.models import TagField
@@ -232,6 +234,24 @@ class Filter(models.Model):
             entry.updated and entry.updated > result.last_updated
         )
 
+    def invalidate_related_caches(self):
+        """Orphan rendered caches for feeds and tags that depend on this filter."""
+        for pk in self.feeds.values_list("pk", flat=True):
+            bump_cache_version("rss", pk)
+        from core.models.tag import Tag
+
+        # Tags that use this filter directly, or through a feed's filters.
+        tag_pks = (
+            Tag.objects.filter(
+                models.Q(filters=self)
+                | models.Q(apply_feed_filters=True, feeds__filters=self)
+            )
+            .values_list("pk", flat=True)
+            .distinct()
+        )
+        for pk in tag_pks:
+            bump_cache_version("tag", pk)
+
     def clear_ai_filter_cache_results(self):
         """
         清除与此过滤器相关的所有缓存结果
@@ -241,17 +261,13 @@ class Filter(models.Model):
         # Deleting decisions changes what filtered feeds/tags output; orphan
         # the rendered caches so they are regenerated on the next request
         # instead of waiting out their TTL (up to a day/week).
-        for pk in self.feeds.values_list("pk", flat=True):
-            bump_cache_version("rss", pk)
-        from core.models.tag import Tag
+        self.invalidate_related_caches()
 
-        # Tags that use this filter directly, or through a feed's filters.
-        tag_pks = Tag.objects.filter(
-            models.Q(filters=self)
-            | models.Q(apply_feed_filters=True, feeds__filters=self)
-        ).values_list("pk", flat=True)
-        for pk in set(tag_pks):
-            bump_cache_version("tag", pk)
+
+@receiver(pre_delete, sender=Filter)
+def _invalidate_caches_on_filter_delete(sender, instance: Filter, **kwargs):
+    """Invalidate dependent feed/tag caches before M2M rows are cascade-deleted."""
+    instance.invalidate_related_caches()
 
 
 def _cache_version_key(scope: str, key) -> str:

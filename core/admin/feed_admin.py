@@ -38,13 +38,13 @@ _REPROCESSING_FIELDS = {
 # Fields that change what the feed's rendered output (and tag merges that
 # contain it) look like without triggering the reprocessing pipeline, so the
 # rendered caches must be invalidated explicitly when they change.
-_OUTPUT_AFFECTING_FIELDS = {
+_TAG_OUTPUT_FIELDS = {
     "name",
     "max_posts",
     "simple_update_frequency",
-    "slug",
     "translation_display",
 }
+_OUTPUT_AFFECTING_FIELDS = _TAG_OUTPUT_FIELDS | {"slug"}
 
 
 class FeedAdmin(admin.ModelAdmin):
@@ -213,7 +213,7 @@ class FeedAdmin(admin.ModelAdmin):
         # fields are wiped or the pipeline starts; bump now (not only
         # after the task finishes) so a reader between the wipe and the
         # task's own bump cannot repopulate the stale key.
-        if target_language_changed or feed_url_changed:
+        if change and (target_language_changed or feed_url_changed):
             from core.models.filter import bump_cache_version
 
             bump_cache_version("rss", obj.pk)
@@ -227,14 +227,15 @@ class FeedAdmin(admin.ModelAdmin):
     def save_related(self, request, form, formsets, change):
         # The M2M (filters/tags) is written by save_m2m inside super(), so the
         # previous tag membership has to be read before it is overwritten.
+        changed = set(getattr(form, "changed_data", ()) or ()) if change else set()
         feed = form.instance
-        old_tag_pks = set(feed.tags.values_list("pk", flat=True)) if feed.pk else set()
+        old_tag_pks = (
+            set(feed.tags.values_list("pk", flat=True))
+            if "tags" in changed and feed.pk
+            else set()
+        )
         super().save_related(request, form, formsets, change)
 
-        if not change:
-            return
-
-        changed = set(getattr(form, "changed_data", ()) or ())
         if not changed & (_OUTPUT_AFFECTING_FIELDS | {"filters", "tags"}):
             return
 
@@ -253,7 +254,17 @@ class FeedAdmin(admin.ModelAdmin):
             changed & _REPROCESSING_FIELDS
         ):
             bump_cache_version("rss", feed.pk)
-        tag_pks = old_tag_pks | set(feed.tags.values_list("pk", flat=True))
+
+        if changed & (_TAG_OUTPUT_FIELDS | {"tags"}):
+            tag_pks = old_tag_pks | set(feed.tags.values_list("pk", flat=True))
+        elif "filters" in changed:
+            # Feed-level filters only affect tags that opt into them.
+            tag_pks = set(
+                feed.tags.filter(apply_feed_filters=True).values_list("pk", flat=True)
+            )
+        else:
+            tag_pks = set()
+
         for tag_pk in tag_pks:
             bump_cache_version("tag", tag_pk)
 

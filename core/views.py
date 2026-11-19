@@ -108,13 +108,13 @@ def _get_digest_modified(request, slug: str, **kwargs):
 def _get_digest_etag(request, slug: str, **kwargs):
     try:
         digest = Digest.objects.get(slug=slug)
-        version = cache_version("digest", digest.pk)
-        base = digest.last_generated.isoformat() if digest.last_generated else ""
-        if not base and not version:
-            return None
-        return f"{base}-v{version}" if version else base
     except Digest.DoesNotExist:
         return None
+    version = cache_version("digest", digest.pk)
+    base = digest.last_generated.isoformat() if digest.last_generated else ""
+    if not base and not version:
+        return None
+    return f"{base}-v{version}" if version else base
 
 
 def import_opml(request):

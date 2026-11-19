@@ -15,8 +15,9 @@ from django.test import RequestFactory, TestCase
 
 from core.admin.digest_admin import DigestAdmin
 from core.admin.feed_admin import FeedAdmin
+from core.admin.filter_admin import FilterAdmin
 from core.admin.tag_admin import TagAdmin
-from core.models import Digest, Feed, OpenAIAgent, Tag
+from core.models import Digest, Feed, Filter, OpenAIAgent, Tag
 
 
 def _form(instance, changed_data):
@@ -44,13 +45,41 @@ class FeedAdminInvalidationTest(TestCase):
             self.admin.save_related(self.request, form, [], change)
         return bump
 
-    def test_filter_change_bumps_feed_and_its_tags(self):
-        tag = Tag.objects.create(name="t1")
-        self.feed.tags.add(tag)
+    def test_filter_change_bumps_feed_and_only_apply_feed_filters_tags(self):
+        opt_in_tag = Tag.objects.create(name="t-opt-in", apply_feed_filters=True)
+        opt_out_tag = Tag.objects.create(name="t-opt-out", apply_feed_filters=False)
+        self.feed.tags.add(opt_in_tag, opt_out_tag)
         bump = self._save(["filters"])
 
         bump.assert_any_call("rss", self.feed.pk)
-        bump.assert_any_call("tag", tag.pk)
+        bump.assert_any_call("tag", opt_in_tag.pk)
+        self.assertNotIn(
+            ("tag", opt_out_tag.pk), [c.args for c in bump.call_args_list]
+        )
+
+    def test_slug_change_bumps_feed_only(self):
+        tag = Tag.objects.create(name="t1")
+        self.feed.tags.add(tag)
+        bump = self._save(["slug"])
+
+        bump.assert_called_once_with("rss", self.feed.pk)
+
+    def test_deleting_feed_invalidates_its_tags(self):
+        tag = Tag.objects.create(name="t1")
+        self.feed.tags.add(tag)
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.feed.delete()
+        bump.assert_called_once_with("tag", tag.pk)
+
+    def test_create_save_model_does_not_bump(self):
+        new_feed = Feed(name="New", feed_url="https://example.com/new.xml")
+        form = _form(new_feed, ["feed_url", "target_language"])
+        with (
+            patch("core.models.filter.bump_cache_version") as bump,
+            patch("core.admin.feed_admin.transaction.on_commit"),
+        ):
+            self.admin.save_model(self.request, new_feed, form, False)
+        bump.assert_not_called()
 
     def test_tag_reassignment_bumps_old_and_new_tags(self):
         old_tag = Tag.objects.create(name="old")
@@ -118,6 +147,71 @@ class TagAdminInvalidationTest(TestCase):
         with patch("core.models.filter.bump_cache_version") as bump:
             self.admin.save_related(self.request, form, [], True)
         bump.assert_not_called()
+
+    def test_create_with_filters_does_not_bump(self):
+        form = _form(self.tag, ["filters"])
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.admin.save_related(self.request, form, [], False)
+        bump.assert_not_called()
+
+
+class FilterAdminInvalidationTest(TestCase):
+    def setUp(self):
+        self.admin = FilterAdmin(Filter, AdminSite())
+        self.user = User.objects.create_superuser("admin", "a@b.c", "pw")
+        self.request = RequestFactory().post("/")
+        self.request.user = self.user
+        self.filt = Filter.objects.create(name="No ads", operation=Filter.EXCLUDE)
+        self.feed = Feed.objects.create(
+            name="F", feed_url="https://example.com/f.xml", slug="f-filt"
+        )
+        self.feed.filters.add(self.filt)
+        self.direct_tag = Tag.objects.create(name="direct")
+        self.direct_tag.filters.add(self.filt)
+        self.opt_in_tag = Tag.objects.create(name="opt-in", apply_feed_filters=True)
+        self.opt_out_tag = Tag.objects.create(name="opt-out", apply_feed_filters=False)
+        self.feed.tags.add(self.opt_in_tag, self.opt_out_tag)
+
+    def test_rule_change_without_reevaluate_bumps_feeds_and_tags(self):
+        form = _form(self.filt, ["keywords"])
+        form._reevaluated = False
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.admin.save_related(self.request, form, [], True)
+        calls = [c.args for c in bump.call_args_list]
+        self.assertIn(("rss", self.feed.pk), calls)
+        self.assertIn(("tag", self.direct_tag.pk), calls)
+        self.assertIn(("tag", self.opt_in_tag.pk), calls)
+        self.assertNotIn(("tag", self.opt_out_tag.pk), calls)
+
+    def test_reevaluate_does_not_double_bump(self):
+        form = _form(self.filt, ["keywords", "reevaluate_existing"])
+        form._reevaluated = True
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.admin.save_related(self.request, form, [], True)
+        bump.assert_not_called()
+
+    def test_name_only_change_does_not_bump(self):
+        form = _form(self.filt, ["name"])
+        form._reevaluated = False
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.admin.save_related(self.request, form, [], True)
+        bump.assert_not_called()
+
+    def test_create_does_not_bump(self):
+        form = _form(self.filt, ["keywords", "operation"])
+        form._reevaluated = False
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.admin.save_related(self.request, form, [], False)
+        bump.assert_not_called()
+
+    def test_deleting_filter_invalidates_feeds_and_tags(self):
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.filt.delete()
+        calls = [c.args for c in bump.call_args_list]
+        self.assertIn(("rss", self.feed.pk), calls)
+        self.assertIn(("tag", self.direct_tag.pk), calls)
+        self.assertIn(("tag", self.opt_in_tag.pk), calls)
+        self.assertNotIn(("tag", self.opt_out_tag.pk), calls)
 
 
 class DigestAdminInvalidationTest(TestCase):
@@ -240,4 +334,46 @@ class DigestGenerationCacheTest(TestCase):
             result = generate_digests.DigestGenerator(digest).generate()
 
         self.assertTrue(result["success"])
+        self.assertGreater(cache_version("digest", digest.pk), version_before)
+
+    def test_cache_warmup_failure_does_not_mark_generation_failed(self):
+        from core.models.filter import cache_version
+        from core.tasks import generate_digests
+
+        digest = self.digest
+
+        def _fake_prepare(generator):
+            generator.articles = [{"a": 1}]
+
+        version_before = cache_version("digest", digest.pk)
+        with (
+            patch.object(
+                digest.summarizer,
+                "digester",
+                return_value={"text": "digest body", "tokens": 1},
+            ),
+            patch.object(
+                generate_digests, "_ensure_entries_have_summaries", return_value=[]
+            ),
+            patch.object(
+                generate_digests.DigestGenerator,
+                "prepare_articles",
+                _fake_prepare,
+            ),
+            patch.object(
+                generate_digests.DigestGenerator,
+                "build_prompt",
+                return_value=(["articles text"], "prompt", {}),
+            ),
+            patch.object(
+                generate_digests,
+                "cache_digest",
+                side_effect=RuntimeError("cache down"),
+            ),
+        ):
+            result = generate_digests.DigestGenerator(digest).generate()
+
+        self.assertTrue(result["success"])
+        digest.refresh_from_db()
+        self.assertTrue(digest.status)
         self.assertGreater(cache_version("digest", digest.pk), version_before)

@@ -214,7 +214,7 @@ def tag_force_update(modeladmin, request, queryset):
                 "json",
             )
             instance.last_updated = timezone.now()
-            instance.save()
+            instance.save(update_fields=["last_updated"])
 
 
 @admin.display(description=_("Batch modification"))

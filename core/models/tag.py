@@ -1,5 +1,4 @@
 from django.db import models
-from django.template.defaultfilters import default
 from django.utils.text import slugify as django_slugify
 from django.utils.translation import gettext_lazy as _
 from autoslug import AutoSlugField
@@ -60,13 +59,26 @@ class Tag(models.Model):
 
     def save(self, *args, **kwargs):
         apply_feed_filters_changed = False
-        if self.pk:  # 如果是更新操作
-            old_instance = Tag.objects.get(pk=self.pk)
-            if old_instance.name != self.name:  # 如果name被修改
-                self.slug = None  # 设置slug为None，让AutoSlugField重新生成
-            apply_feed_filters_changed = (
-                old_instance.apply_feed_filters != self.apply_feed_filters
+        update_fields = kwargs.get("update_fields")
+        check_name = update_fields is None or "name" in update_fields
+        check_apply_feed_filters = (
+            update_fields is None or "apply_feed_filters" in update_fields
+        )
+        if self.pk and (check_name or check_apply_feed_filters):
+            old_instance = (
+                Tag.objects.filter(pk=self.pk)
+                .only("name", "apply_feed_filters")
+                .first()
             )
+            if old_instance is not None:
+                if check_name and old_instance.name != self.name:
+                    self.slug = None  # 让AutoSlugField重新生成
+                    if update_fields is not None and "slug" not in update_fields:
+                        kwargs["update_fields"] = [*update_fields, "slug"]
+                if check_apply_feed_filters:
+                    apply_feed_filters_changed = (
+                        old_instance.apply_feed_filters != self.apply_feed_filters
+                    )
         super().save(*args, **kwargs)
         if apply_feed_filters_changed:
             # Different entries now make up the output: drop the cached copy.

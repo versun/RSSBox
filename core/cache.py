@@ -8,10 +8,8 @@ import mistune
 from feedgen.entry import FeedEntry
 from feedgen.feed import FeedGenerator
 from core.models import Feed, Entry, Tag
-from core.models.filter import bump_cache_version, cache_version
+from core.models.filter import cache_version
 from utils.text_handler import set_translation_display
-
-from .models import Feed
 
 logger = logging.getLogger(__name__)
 
@@ -411,10 +409,11 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
             entries = feed.filtered_entries.select_related("feed")
         else:
             entries = feed.entries.select_related("feed").all()
-        if not entries:
-            continue
 
-        for entry in reversed(entries.order_by("-pubdate", "-id")[: feed.max_posts]):
+        recent_entries = list(
+            entries.order_by("-pubdate", "-id")[: max(0, feed.max_posts)]
+        )
+        for entry in reversed(recent_entries):
             sort_time = entry.pubdate or entry.updated or timezone.now()
             all_entries.append((sort_time, entry))
             entry_ids.append(entry.id)
@@ -432,7 +431,7 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
     # 开始过滤 - 使用批量查询优化性能
     if not tag_filters:
         # 没有过滤器，直接使用所有条目
-        filtered_entries = [entry for (_, entry) in all_entries]
+        filtered_entries = all_entries
     else:
         # 批量获取所有条目ID的QuerySet
         base_qs = Entry.objects.filter(id__in=entry_ids)
@@ -447,17 +446,16 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
 
         # 构建过滤后的条目列表（保持原排序）
         filtered_entries = [
-            entry for (_, entry) in all_entries if entry.id in passed_ids
+            item for item in all_entries if item[1].id in passed_ids
         ]
 
     # 更新Feed时间为最新条目时间
     if filtered_entries:
         # 第一个条目是最新的（因为已按时间降序排序）
-        latest_time = all_entries[0][0]
-        fg.updated(latest_time)
+        fg.updated(filtered_entries[0][0])
 
     # 添加所有条目（最多100条）
-    for entry in filtered_entries[:100]:
+    for _, entry in filtered_entries[:100]:
         _add_atom_entry(fg, entry, feed_type)
 
     # 生成最终XML

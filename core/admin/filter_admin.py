@@ -9,6 +9,17 @@ from core.actions import clean_filter_results
 
 logger = logging.getLogger(__name__)
 
+# FilterForm fields that affect which entries pass a filter without needing
+# reevaluate_existing (which already clears decisions and invalidates caches).
+_FILTER_OUTPUT_FIELDS = {
+    "keywords",
+    "operation",
+    "filter_method",
+    "target_field",
+    "agent",
+    "filter_prompt",
+}
+
 
 class FilterAdmin(admin.ModelAdmin):
     change_form_template = "admin/change_form_with_tabs.html"
@@ -45,6 +56,17 @@ class FilterAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("keywords")
+
+    def save_related(self, request, form, formsets, change):
+        # Keywords M2M (and optional reevaluate_existing) run inside super();
+        # if reevaluate_existing didn't already invalidate caches, bump them
+        # for any rule change so rendered feeds don't stay stale until TTL.
+        super().save_related(request, form, formsets, change)
+        if not change or getattr(form, "_reevaluated", False):
+            return
+        changed = set(getattr(form, "changed_data", ()) or ())
+        if changed & _FILTER_OUTPUT_FIELDS:
+            form.instance.invalidate_related_caches()
 
     @admin.display(description=_("Keywords"))
     def show_keywords(self, obj):

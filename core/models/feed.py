@@ -4,6 +4,8 @@ from config import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
 from tagulous.models import TagField
@@ -249,3 +251,12 @@ class Feed(models.Model):
         for filter_obj in filters:
             queryset = filter_obj.apply_filter(queryset)
         return queryset
+
+
+@receiver(pre_delete, sender=Feed)
+def _invalidate_tag_caches_on_feed_delete(sender, instance: Feed, **kwargs):
+    """Invalidate merged tag caches before M2M rows are cascade-deleted."""
+    from core.models.filter import bump_cache_version
+
+    for tag_pk in instance.tags.values_list("pk", flat=True):
+        bump_cache_version("tag", tag_pk)

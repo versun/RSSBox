@@ -253,11 +253,12 @@ class Digest(models.Model):
     def get_digest_feed(self) -> Feed:
         """获取或创建 Digest 专用 Feed"""
         feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}"
+        subtitle = self.description or ""
 
         defaults = {
-            "name": f"{self.name}",
-            "subtitle": f"{self.description}",
-            "link": f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}",
+            "name": self.name,
+            "subtitle": subtitle,
+            "link": feed_url,
             "author": "RSSBox Digest",
             "language": self.target_language,
             "update_frequency": 1440,
@@ -265,7 +266,6 @@ class Digest(models.Model):
             "translate_title": False,
             "translate_content": False,
             "summary": False,
-            "target_language": self.target_language,
         }
 
         feed, created = Feed.objects.get_or_create(
@@ -273,11 +273,9 @@ class Digest(models.Model):
             target_language=self.target_language,
             defaults=defaults,
         )
-        if not created and (
-            feed.name != self.name or feed.subtitle != self.description
-        ):
+        if not created and (feed.name != self.name or feed.subtitle != subtitle):
             feed.name = self.name
-            feed.subtitle = self.description
+            feed.subtitle = subtitle
             feed.save(update_fields=["name", "subtitle"])
         return feed
 

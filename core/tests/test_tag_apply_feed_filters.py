@@ -99,3 +99,31 @@ class TagApplyFeedFiltersTests(TestCase):
         bump.assert_any_call("rss", self.feed_a.pk)
         bump.assert_any_call("tag", self.tag.pk)
         self.assertNotIn(("tag", other_tag.pk), [c.args for c in bump.call_args_list])
+
+    def test_save_with_explicit_pk_does_not_crash(self):
+        tag = Tag(pk=99999, name="Explicit PK")
+        tag.save()
+        self.assertTrue(Tag.objects.filter(pk=99999).exists())
+
+    def test_save_with_update_fields_skips_unrelated_invalidation(self):
+        self.tag.apply_feed_filters = True
+        self.tag.last_updated = timezone.now()
+        with patch("core.models.filter.bump_cache_version") as bump:
+            self.tag.save(update_fields=["last_updated"])
+        bump.assert_not_called()
+
+    def test_updated_timestamp_uses_newest_filtered_entry(self):
+        from datetime import datetime
+        from lxml import etree
+
+        no_python = Filter.objects.create(name="no python", operation=Filter.EXCLUDE)
+        no_python.keywords = "python"
+        no_python.save()
+        self.tag.filters.add(no_python)
+
+        xml = merge_feeds_into_one_atom(self.tag.slug, [self.feed_a, self.feed_b])
+        root = etree.fromstring(xml.encode("utf-8"))
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        feed_updated = datetime.fromisoformat(root.find("atom:updated", ns).text)
+        newest_kept = self.feed_a.entries.get(original_title="A: rust release")
+        self.assertEqual(feed_updated, newest_kept.pubdate)

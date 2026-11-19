@@ -4,7 +4,6 @@ from django.utils import timezone
 
 from core.models.digest import Digest
 from core.models.entry import Entry
-from core.models.feed import Feed
 from utils.text_handler import get_token_count
 from config import settings
 from core.cache import cache_digest
@@ -212,8 +211,18 @@ Summary: {article["summary"]}
             # A fresh entry was written: bump the version so the cache_digest
             # warm-up below rebuilds instead of hitting the stale cached feed.
             bump_cache_version("digest", self.digest.pk)
-            cache_digest(self.digest.slug, "xml")
-            cache_digest(self.digest.slug, "json")
+            try:
+                cache_digest(self.digest.slug, "xml")
+                cache_digest(self.digest.slug, "json")
+            except Exception as cache_error:
+                # The digest Entry is already persisted and the old cache was
+                # invalidated above; a warm-up failure shouldn't mark the
+                # generation itself as failed.
+                logger.warning(
+                    "Failed to warm digest cache for %s: %s",
+                    self.digest.slug,
+                    cache_error,
+                )
             local_now = timezone.localtime(now)
             self.digest.log += f"{local_now.strftime('%Y-%m-%d %H:%M:%S')} Digest generation successful for {self.digest.name}\n"
             return {
