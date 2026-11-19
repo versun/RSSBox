@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.urls import path, reverse
 from django.db import transaction
-from core.models import Feed
+from core.models import EntryTaskState, Feed, TranslationChunkCache
 from core.forms import FeedForm
 from core.actions import (
     export_original_feed_as_opml,
@@ -17,6 +17,7 @@ from core.actions import (
 )
 from utils.modelAdmin_utils import status_icon
 from core.tasks.task_manager import task_manager
+from core.tasks.utils import reset_entry_task_states_queryset
 from core.views import import_opml
 from core.management.commands.feed_updater import update_single_feed
 from core.admin import core_admin_site
@@ -218,10 +219,50 @@ class FeedAdmin(admin.ModelAdmin):
                 obj.entries.update(
                     translated_content=None, translated_title=None, ai_summary=None
                 )
+                EntryTaskState.objects.filter(entry__feed=obj).delete()
+                TranslationChunkCache.objects.filter(entry__feed=obj).delete()
             wipe_targets = (
                 ("rss", obj.pk),
                 *(("tag", tag_pk) for tag_pk in obj.tags.values_list("pk", flat=True)),
             )
+        elif change:
+            reset_stages = set()
+            clear_cache_stages = set()
+            if "additional_prompt" in changed:
+                all_stages = (
+                    EntryTaskState.STAGE_TITLE,
+                    EntryTaskState.STAGE_CONTENT,
+                    EntryTaskState.STAGE_SUMMARY,
+                )
+                reset_stages.update(all_stages)
+                clear_cache_stages.update(all_stages)
+            if "translator_option" in changed:
+                trans_stages = (
+                    EntryTaskState.STAGE_TITLE,
+                    EntryTaskState.STAGE_CONTENT,
+                )
+                reset_stages.update(trans_stages)
+                clear_cache_stages.update(trans_stages)
+            if "summarizer" in changed:
+                reset_stages.add(EntryTaskState.STAGE_SUMMARY)
+                clear_cache_stages.add(EntryTaskState.STAGE_SUMMARY)
+            if "translate_title" in changed and obj.translate_title:
+                reset_stages.add(EntryTaskState.STAGE_TITLE)
+            if "translate_content" in changed and obj.translate_content:
+                reset_stages.add(EntryTaskState.STAGE_CONTENT)
+            if "summary" in changed and obj.summary:
+                reset_stages.add(EntryTaskState.STAGE_SUMMARY)
+            if reset_stages:
+                reset_entry_task_states_queryset(
+                    EntryTaskState.objects.filter(entry__feed=obj),
+                    stages=reset_stages,
+                    include_manual_pause=False,
+                    exclude_succeeded=True,
+                )
+            if clear_cache_stages:
+                TranslationChunkCache.objects.filter(
+                    entry__feed=obj, stage__in=clear_cache_stages
+                ).delete()
 
         def _after_commit():
             if wipe_targets:

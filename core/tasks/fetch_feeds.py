@@ -433,9 +433,9 @@ def _process_feed_entries(feed, entries):
             if title_changed:
                 cleared.append("translated_title")
             if content_changed:
-                cleared.extend(["translated_content", "ai_summary"])
+                cleared.extend(["translated_content", "ai_summary", "article_fetched"])
             for field in cleared:
-                setattr(refreshed, field, None)
+                setattr(refreshed, field, False if field == "article_fetched" else None)
             entries_to_update.append((refreshed, tuple(cleared)))
 
         if len(entries_to_create) >= BATCH_SIZE:
@@ -456,7 +456,12 @@ def _process_feed_entries(feed, entries):
         "enclosures_xml",
         "source_hash",
     ]
-    derived_fields = ["translated_title", "translated_content", "ai_summary"]
+    derived_fields = [
+        "translated_title",
+        "translated_content",
+        "ai_summary",
+        "article_fetched",
+    ]
     # bulk_update writes every listed field for every row, so entries that
     # keep a paid translation must not travel with the ones being cleared:
     # group them by the exact derived fields they invalidate (none for an
@@ -464,6 +469,25 @@ def _process_feed_entries(feed, entries):
     updates_by_cleared = {}
     for refreshed, cleared in entries_to_update:
         updates_by_cleared.setdefault(cleared, []).append(refreshed)
+    cleared_stage_map = {
+        "translated_title": "title",
+        "translated_content": "content",
+        "ai_summary": "summary",
+    }
     for cleared, rows in updates_by_cleared.items():
         fields = source_fields + [f for f in derived_fields if f in cleared]
         Entry.objects.bulk_update(rows, fields=fields)
+        stages = [
+            cleared_stage_map[field]
+            for field in cleared
+            if field in cleared_stage_map
+        ]
+        if stages:
+            from core.tasks.utils import reset_entry_task_states
+
+            reset_entry_task_states(
+                [row.pk for row in rows],
+                stages=stages,
+                include_manual_pause=False,
+                clear_chunks=True,
+            )

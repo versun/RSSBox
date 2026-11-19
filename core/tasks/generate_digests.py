@@ -358,6 +358,7 @@ def _ensure_entries_have_summaries(digest: Digest):
             f"[{idx + 1}/{len(entries_without_summary)}] Processing: {entry.original_title}"
         )
         try:
+            billed_cache_keys: list[str] = []
             summary, entry_tokens = _summarize_entry(
                 entry=entry,
                 summarizer=summarizer,
@@ -370,6 +371,7 @@ def _ensure_entries_have_summaries(digest: Digest):
                 chunk_delimiter=".",
                 max_chunks_per_entry=20,
                 summary_detail=summary_detail,
+                billed_cache_keys_out=billed_cache_keys,
             )
 
             entry.ai_summary = summary
@@ -381,7 +383,14 @@ def _ensure_entries_have_summaries(digest: Digest):
                 # Nothing was committed; carry the paid usage so the handler
                 # below can still bill it.
                 save_error.tokens_used = entry_tokens
+                if billed_cache_keys:
+                    save_error.billed_cache_keys = tuple(
+                        dict.fromkeys(billed_cache_keys)
+                    )
                 raise
+            from core.tasks.utils import record_entry_stage_success
+
+            record_entry_stage_success(entry, "summary")
 
             logger.info(
                 f"Completed summary for '{entry.original_title}' - Tokens: {entry_tokens}"

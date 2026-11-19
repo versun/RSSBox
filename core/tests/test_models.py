@@ -1480,9 +1480,11 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
         else:
             max_tokens_used = call_args[1]["max_completion_tokens"]
 
-        # Should be min(4096, max(512, 4096 - 150 - 200)) = min(4096, 3746) = 3746
-        expected_max_tokens = max(4096, max(512, 4096 - 150 - 200))
+        # Context headroom must stay within (max_tokens - input_tokens) * 0.8
+        # so input_tokens + max_completion_tokens never exceeds max_tokens.
+        expected_max_tokens = int((4096 - 150) * 0.8)
         self.assertEqual(max_tokens_used, expected_max_tokens)
+        self.assertLessEqual(150 + max_tokens_used, self.agent.max_tokens)
 
     @patch("core.models.agent.get_token_count")
     @patch("core.models.agent.OpenAI")

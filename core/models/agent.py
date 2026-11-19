@@ -1,20 +1,29 @@
+import hashlib
 import logging
 import math
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from config import settings
+from config import settings as app_settings
 from openai import OpenAI
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField
 import time
 import datetime
 from django.core.cache import cache
-from utils.text_handler import get_token_count, adaptive_chunking
+from utils.text_handler import get_token_count, adaptive_chunking, chunk_html
 import deepl
 import json
 from urllib import request, parse
 from core.tasks.task_manager import task_manager
-from core.tasks.utils import auto_retry
+from core.tasks.utils import (
+    TruncatedResponseError,
+    auto_retry,
+    classify_ai_error,
+    is_timeout_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +31,8 @@ logger = logging.getLogger(__name__)
 # input budget after splitting.
 MAX_CHUNK_RECURSION_DEPTH = 3
 MAX_CHUNKS_PER_COMPLETION = 100
+MIN_SPLIT_ON_TRUNCATE_TOKENS = 500
+CHUNK_CACHE_VERSION = "v1"
 
 
 class Agent(models.Model):
@@ -81,12 +92,13 @@ class OpenAIAgent(Agent):
         help_text="e.g. gpt-3.5-turbo, gpt-4-turbo",
     )
     title_translate_prompt = models.TextField(
-        _("Title Translate Prompt"), default=settings.default_title_translate_prompt
+        _("Title Translate Prompt"), default=app_settings.default_title_translate_prompt
     )
     content_translate_prompt = models.TextField(
-        _("Content Translate Prompt"), default=settings.default_content_translate_prompt
+        _("Content Translate Prompt"),
+        default=app_settings.default_content_translate_prompt,
     )
-    summary_prompt = models.TextField(default=settings.default_summary_prompt)
+    summary_prompt = models.TextField(default=app_settings.default_summary_prompt)
 
     advanced_params = models.JSONField(
         default=openai_advanced_default,
@@ -94,6 +106,25 @@ class OpenAIAgent(Agent):
     )
     max_tokens = models.IntegerField(
         default=0, help_text="0 means detect automatically"
+    )
+    max_chunk_tokens = models.IntegerField(
+        _("Target Chunk Size (Tokens)"),
+        default=4000,
+        validators=[MinValueValidator(0)],
+        help_text=_(
+            "Target max input tokens per chunk for long articles "
+            "(0 = use full model context window). Smaller chunks prevent timeouts."
+        ),
+    )
+    request_timeout = models.FloatField(
+        _("Request Timeout (s)"),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=_(
+            "Optional per-agent timeout override in seconds "
+            "(leave blank to use OPENAI_API_TIMEOUT)."
+        ),
     )
     rate_limit_rpm = models.IntegerField(
         _("Rate Limit (RPM)"),
@@ -114,11 +145,48 @@ class OpenAIAgent(Agent):
         verbose_name = "OpenAI"
         verbose_name_plural = "OpenAI"
 
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.max_chunk_tokens is not None and self.max_chunk_tokens < 0:
+            errors["max_chunk_tokens"] = _(
+                "Target chunk size must be 0 or greater."
+            )
+        if self.request_timeout is not None and (
+            not math.isfinite(self.request_timeout) or self.request_timeout <= 0
+        ):
+            errors["request_timeout"] = _(
+                "Request timeout must be a finite number greater than 0."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def effective_chunk_limit(self) -> int:
+        """Per-call input token budget bounded by both max_tokens and max_chunk_tokens."""
+        if self.max_tokens <= 0:
+            return 0
+        if self.max_chunk_tokens and self.max_chunk_tokens > 0:
+            return min(self.max_tokens, self.max_chunk_tokens)
+        return self.max_tokens
+
+    def min_size(self) -> int:
+        return self.effective_chunk_limit() * 0.7
+
+    def max_size(self) -> int:
+        return self.effective_chunk_limit() * 0.9
+
     def _init(self):
+        timeout = (
+            self.request_timeout
+            if self.request_timeout is not None
+            and math.isfinite(self.request_timeout)
+            and self.request_timeout > 0
+            else settings.OPENAI_API_TIMEOUT
+        )
         return OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
-            timeout=settings.OPENAI_API_TIMEOUT,
+            timeout=timeout,
             max_retries=settings.OPENAI_API_MAX_RETRIES,
         )
 
@@ -290,21 +358,220 @@ class OpenAIAgent(Agent):
         # 增加计数并设置过期时间（确保在下一分钟开始时过期）
         cache.set(cache_key, request_count + 1, timeout=60)
 
+    def _build_chunk_cache_key(
+        self, chunk_text: str, system_prompt: str, chunk_cache_context: dict
+    ) -> str:
+        adv_params = (
+            self.advanced_params if isinstance(self.advanced_params, dict) else {}
+        )
+        payload = json.dumps(
+            {
+                "v": CHUNK_CACHE_VERSION,
+                "entry_id": chunk_cache_context.get("entry_id"),
+                "agent_id": self.pk,
+                "model": self.model,
+                "base_url": self.base_url,
+                "stage": chunk_cache_context.get("stage", "content"),
+                "target_language": chunk_cache_context.get("target_language", ""),
+                "system_prompt": system_prompt or "",
+                "merge_system_prompt": bool(self.merge_system_prompt),
+                "advanced_params": adv_params,
+                "chunk": chunk_text,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+            default=str,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _get_cached_chunk(self, cache_key: str) -> tuple[str, int] | None:
+        """Return ``(translated_text, unbilled_tokens)`` if a fresh cache row exists."""
+        from core.models.entry import TranslationChunkCache
+
+        try:
+            row = TranslationChunkCache.objects.filter(cache_key=cache_key).first()
+            if row is None:
+                return None
+            ttl = getattr(settings, "CHUNK_CACHE_TTL_SECONDS", 60 * 60 * 72)
+            cutoff = timezone.now() - datetime.timedelta(seconds=ttl)
+            if row.created_at < cutoff:
+                row.delete()
+                return None
+            return row.translated_text, max(0, int(row.tokens or 0))
+        except Exception:
+            logger.warning("Chunk cache lookup failed for key %s", cache_key[:12])
+            return None
+
+    def _save_cached_chunk(
+        self,
+        cache_key: str,
+        translated_text: str,
+        tokens: int,
+        chunk_cache_context: dict,
+    ) -> None:
+        from core.models.entry import TranslationChunkCache
+
+        try:
+            TranslationChunkCache.objects.update_or_create(
+                cache_key=cache_key,
+                defaults={
+                    "entry_id": chunk_cache_context.get("entry_id"),
+                    "stage": chunk_cache_context.get("stage", "content"),
+                    "translated_text": translated_text,
+                    "tokens": max(0, int(tokens or 0)),
+                    "created_at": timezone.now(),
+                },
+            )
+        except Exception:
+            logger.warning("Chunk cache save failed for key %s", cache_key[:12])
+
+    def _compute_output_token_limit(
+        self, input_tokens: int, text_token_count: int
+    ) -> int:
+        """Compute a safe default max_completion_tokens bounded by remaining
+        context headroom (so input + output never exceeds max_tokens), input
+        scale, and OPENAI_MAX_OUTPUT_TOKENS so large-context models (e.g. 1M
+        context) do not unlock runaway reasoning/output budgets."""
+        remaining = max(1, self.max_tokens - input_tokens)
+        context_headroom = min(remaining, max(256, int(remaining * 0.8)))
+        configured_cap = max(
+            256, getattr(settings, "OPENAI_MAX_OUTPUT_TOKENS", 16384)
+        )
+        estimated_needed = max(4096, int(text_token_count * 4))
+        return min(context_headroom, configured_cap, estimated_needed)
+
+    def _split_text_for_budget(
+        self, text: str, text_token_count: int, budget: int, *, is_html: bool
+    ) -> list[str]:
+        if is_html:
+            return chunk_html(text, max_tokens=budget)
+        # min_chunk_size 不能超过可用预算，否则分块结果仍会超过预算
+        return adaptive_chunking(
+            text,
+            target_chunks=max(2, math.ceil(text_token_count / budget)),
+            min_chunk_size=min(500, budget),
+            max_chunk_size=budget,
+        )
+
+    def _complete_chunks(
+        self,
+        chunks: list[str],
+        *,
+        system_prompt: str,
+        chunk_depth: int,
+        is_html: bool,
+        chunk_cache_context: dict | None,
+        initial_tokens: int = 0,
+        **kwargs,
+    ) -> tuple[str, int, list[str]]:
+        if len(chunks) > MAX_CHUNKS_PER_COMPLETION:
+            raise RuntimeError(
+                f"Text produced {len(chunks)} chunks, above the limit of "
+                f"{MAX_CHUNKS_PER_COMPLETION}; refusing to call the provider"
+            )
+
+        # Strip cache_leaf for child chunks since this loop persists each chunk
+        # directly and handles double-entry token accounting across retries.
+        child_cache_context = (
+            {k: v for k, v in chunk_cache_context.items() if k != "cache_leaf"}
+            if chunk_cache_context
+            else None
+        )
+        tokens = initial_tokens
+        billed_cache_keys: list[str] = []
+        translated_chunks = []
+        total_chunks = len(chunks)
+
+        for chunk_idx, chunk in enumerate(chunks, start=1):
+            cache_key = None
+            if child_cache_context:
+                cache_key = self._build_chunk_cache_key(
+                    chunk, system_prompt, child_cache_context
+                )
+                cached = self._get_cached_chunk(cache_key)
+                if cached is not None:
+                    cached_text, unbilled_tokens = cached
+                    logger.info(
+                        "Reusing cached chunk %s/%s for entry=%s stage=%s",
+                        chunk_idx,
+                        total_chunks,
+                        child_cache_context.get("entry_id"),
+                        child_cache_context.get("stage"),
+                    )
+                    translated_chunks.append(cached_text)
+                    if unbilled_tokens:
+                        tokens += unbilled_tokens
+                        billed_cache_keys.append(cache_key)
+                    continue
+
+            try:
+                # user_prompt 已追加到 system_prompt，递归时不要重复追加
+                result = auto_retry(
+                    self.completions,
+                    max_retries=2,
+                    text=chunk,
+                    system_prompt=system_prompt,
+                    _chunk_depth=chunk_depth + 1,
+                    is_html=is_html,
+                    chunk_cache_context=child_cache_context,
+                    **kwargs,
+                )
+            except Exception as chunk_error:
+                # auto_retry attaches what the failed attempts paid for
+                tokens += getattr(chunk_error, "tokens_used", 0)
+                billed_cache_keys.extend(
+                    getattr(chunk_error, "billed_cache_keys", ()) or ()
+                )
+                if tokens:
+                    chunk_error.tokens_used = tokens
+                if billed_cache_keys:
+                    chunk_error.billed_cache_keys = tuple(
+                        dict.fromkeys(billed_cache_keys)
+                    )
+                chunk_error.is_chunked_failure = True
+                raise
+
+            translated_chunks.append(result["text"])
+            chunk_tokens = result.get("tokens", 0)
+            tokens += chunk_tokens
+            if result.get("billed_cache_keys"):
+                billed_cache_keys.extend(result["billed_cache_keys"])
+            if cache_key and child_cache_context:
+                self._save_cached_chunk(
+                    cache_key,
+                    result["text"],
+                    chunk_tokens,
+                    child_cache_context,
+                )
+                billed_cache_keys.append(cache_key)
+
+        joiner = "\n" if is_html else " "
+        return (
+            joiner.join(translated_chunks),
+            tokens,
+            list(dict.fromkeys(billed_cache_keys)),
+        )
+
     def completions(
         self,
         text: str,
         system_prompt: str = None,
         user_prompt: str = None,
         _chunk_depth: int = 0,  # 内部参数：分块递归深度，>0 表示分块调用
+        is_html: bool = False,
+        chunk_cache_context: dict = None,
         **kwargs,
     ) -> dict:
-        client = self._init()
         tokens = 0
         result_text = ""
+        leaf_input_tokens = 0
+        billed_cache_keys: list[str] = []
+        provider_call_started_at = None
 
         try:
+            system_prompt = system_prompt or ""
             if user_prompt:
-                system_prompt = (system_prompt or "") + f"\n\n{user_prompt}"
+                system_prompt = f"{system_prompt}\n\n{user_prompt}"
 
             if self.max_tokens == 0:
                 task_manager.submit_task(
@@ -327,8 +594,14 @@ class OpenAIAgent(Agent):
                     "increase max_tokens or shorten the prompt"
                 )
 
+            # 将目标分块大小与模型总上下文容量解耦：大上下文模型对长文也按目标块大小切分，
+            # 避免单次非流式请求过长导致超时和重复计费（issue #186）。
+            effective_chunk_budget = max_usable_tokens
+            if self.max_chunk_tokens and self.max_chunk_tokens > 0:
+                effective_chunk_budget = min(max_usable_tokens, self.max_chunk_tokens)
+
             # 检查文本长度是否需要分块
-            if text_token_count > max_usable_tokens:
+            if text_token_count > effective_chunk_budget:
                 if _chunk_depth >= MAX_CHUNK_RECURSION_DEPTH:
                     raise RuntimeError(
                         "Chunk recursion depth exceeded "
@@ -336,48 +609,65 @@ class OpenAIAgent(Agent):
                     )
 
                 logger.info(
-                    f"Text too large ({text_token_count} tokens), chunking..."
+                    "Text too large (%s tokens > budget %s), chunking (is_html=%s)...",
+                    text_token_count,
+                    effective_chunk_budget,
+                    is_html,
                 )
 
-                # min_chunk_size 不能超过可用预算，否则分块结果仍会超过预算
-                chunks = adaptive_chunking(
-                    text,
-                    target_chunks=math.ceil(text_token_count / max_usable_tokens),
-                    min_chunk_size=min(500, max_usable_tokens),
-                    max_chunk_size=max_usable_tokens,
+                chunks = self._split_text_for_budget(
+                    text, text_token_count, effective_chunk_budget, is_html=is_html
                 )
 
-                if len(chunks) > MAX_CHUNKS_PER_COMPLETION:
-                    raise RuntimeError(
-                        f"Text produced {len(chunks)} chunks, above the limit of "
-                        f"{MAX_CHUNKS_PER_COMPLETION}; refusing to call the provider"
-                    )
-
-                # Chunk-level retry: each chunk gets one retry before the
-                # whole text is failed. If a chunk still fails, the failure
-                # is marked so the outer retry does NOT replay every chunk
-                # that already succeeded (which would pay for them again).
-                translated_chunks = []
-                for chunk in chunks:
-                    try:
-                        # user_prompt 已追加到 system_prompt，递归时不要重复追加
-                        result = auto_retry(
-                            self.completions,
-                            max_retries=2,
-                            text=chunk,
-                            system_prompt=system_prompt,
-                            _chunk_depth=_chunk_depth + 1,
-                            **kwargs,
+                # If an atomic HTML node (e.g. an oversized <img>) cannot be
+                # split any smaller, proceed directly as a leaf call when it
+                # still fits inside the model's hard usable window; otherwise
+                # fail fast instead of recursing uselessly.
+                atomic_unsplit = (
+                    len(chunks) == 1
+                    and get_token_count(chunks[0]) >= text_token_count
+                )
+                if atomic_unsplit:
+                    if text_token_count > max_usable_tokens:
+                        raise RuntimeError(
+                            f"Atomic chunk ({text_token_count} tokens) exceeds "
+                            f"usable input budget ({max_usable_tokens} tokens)"
                         )
-                    except Exception as chunk_error:
-                        # auto_retry attaches what the failed attempts paid for
-                        tokens += getattr(chunk_error, "tokens_used", 0)
-                        chunk_error.is_chunked_failure = True
-                        raise
-                    translated_chunks.append(result["text"])
-                    tokens += result["tokens"]
+                else:
+                    joined_text, total_tokens, child_keys = self._complete_chunks(
+                        chunks,
+                        system_prompt=system_prompt,
+                        chunk_depth=_chunk_depth,
+                        is_html=is_html,
+                        chunk_cache_context=chunk_cache_context,
+                        **kwargs,
+                    )
+                    res_dict = {"text": joined_text, "tokens": total_tokens}
+                    if child_keys:
+                        res_dict["billed_cache_keys"] = child_keys
+                    return res_dict
 
-                return {"text": " ".join(translated_chunks), "tokens": tokens}
+            leaf_cache_key = None
+            if (
+                chunk_cache_context
+                and chunk_cache_context.get("cache_leaf")
+                and _chunk_depth == 0
+            ):
+                leaf_cache_key = self._build_chunk_cache_key(
+                    text, system_prompt, chunk_cache_context
+                )
+                cached = self._get_cached_chunk(leaf_cache_key)
+                if cached is not None:
+                    cached_text, unbilled_tokens = cached
+                    logger.info(
+                        "Reusing cached leaf call for entry=%s stage=%s",
+                        chunk_cache_context.get("entry_id"),
+                        chunk_cache_context.get("stage"),
+                    )
+                    res_dict = {"text": cached_text, "tokens": unbilled_tokens}
+                    if unbilled_tokens:
+                        res_dict["billed_cache_keys"] = [leaf_cache_key]
+                    return res_dict
 
             if self.merge_system_prompt:
                 messages = [{"role": "user", "content": f"{system_prompt}\n\n{text}"}]
@@ -387,13 +677,15 @@ class OpenAIAgent(Agent):
                     {"role": "user", "content": text},
                 ]
             input_tokens = prompt_tokens + text_token_count
+            leaf_input_tokens = input_tokens
 
-            # 只在真正请求服务商前占用速率配额
+            # 只在真正请求服务商前初始化客户端并占用速率配额
+            client = self._init()
             self._wait_for_rate_limit()
 
-            # 计算合理的输出token限制
-            # 输出token限制 = 模型总限制 - 输入token - 安全缓冲
-            output_token_limit = int(max(4096, (self.max_tokens - input_tokens) * 0.8))
+            output_token_limit = self._compute_output_token_limit(
+                input_tokens=input_tokens, text_token_count=text_token_count
+            )
 
             # 正常流程
             adv_params = self.advanced_params or {}
@@ -408,6 +700,7 @@ class OpenAIAgent(Agent):
             ):
                 call_kwargs["max_completion_tokens"] = output_token_limit
 
+            provider_call_started_at = time.monotonic()
             res = client.with_options(
                 max_retries=settings.OPENAI_API_MAX_RETRIES
             ).chat.completions.create(
@@ -416,32 +709,151 @@ class OpenAIAgent(Agent):
                 messages=messages,
                 **call_kwargs,
             )
+            elapsed = time.monotonic() - provider_call_started_at
+            provider_call_started_at = None
+
             # 先记录用量：即使响应不完整，这次调用也已计费
-            tokens = res.usage.total_tokens if getattr(res, "usage", None) else 0
-            if (
-                res.choices
-                and res.choices[0].finish_reason == "stop"
-                and res.choices[0].message.content
-                and res.choices[0].message.content.strip()
-            ):
-                result_text = res.choices[0].message.content
+            usage = getattr(res, "usage", None)
+            tokens = getattr(usage, "total_tokens", 0) if usage else 0
+            prompt_tok = getattr(usage, "prompt_tokens", None) if usage else None
+            completion_tok = (
+                getattr(usage, "completion_tokens", None) if usage else None
+            )
+            details = (
+                getattr(usage, "completion_tokens_details", None) if usage else None
+            )
+            reasoning_tok = (
+                getattr(details, "reasoning_tokens", None) if details else None
+            )
+            request_id = getattr(res, "id", None)
+
+            finish_reason = None
+            if res.choices:
+                try:
+                    finish_reason = res.choices[0].finish_reason
+                except Exception:
+                    finish_reason = None
+
+            logger.info(
+                "[%s] model=%s entry=%s stage=%s attempt_id=%s request_id=%s "
+                "finish_reason=%s elapsed=%.2fs tokens=%s "
+                "(prompt=%s completion=%s reasoning=%s)",
+                self.name,
+                self.model,
+                chunk_cache_context.get("entry_id") if chunk_cache_context else None,
+                chunk_cache_context.get("stage") if chunk_cache_context else None,
+                chunk_cache_context.get("attempt_id") if chunk_cache_context else None,
+                request_id,
+                finish_reason,
+                elapsed,
+                tokens,
+                prompt_tok,
+                completion_tok,
+                reasoning_tok,
+            )
+
+            content = (
+                getattr(getattr(res.choices[0], "message", None), "content", None)
+                if res.choices
+                else None
+            )
+            if finish_reason == "stop" and content and content.strip():
+                result_text = content
                 logger.debug(f"[{self.name}]: {result_text[:50]}...")
+            elif finish_reason == "length":
+                # Adaptive recovery: if this input is still large enough to
+                # halve, split into smaller chunks so output stays under the
+                # token cap instead of deterministically truncating again.
+                if (
+                    text_token_count >= MIN_SPLIT_ON_TRUNCATE_TOKENS
+                    and _chunk_depth < MAX_CHUNK_RECURSION_DEPTH
+                ):
+                    half_budget = max(250, text_token_count // 2)
+                    sub_chunks = self._split_text_for_budget(
+                        text, text_token_count, half_budget, is_html=is_html
+                    )
+                    if 2 <= len(sub_chunks) <= MAX_CHUNKS_PER_COMPLETION:
+                        logger.warning(
+                            "[%s] Output truncated (finish_reason=length) for %s "
+                            "tokens; adaptively splitting into %s chunks (budget=%s)",
+                            self.name,
+                            text_token_count,
+                            len(sub_chunks),
+                            half_budget,
+                        )
+                        joined_text, total_tokens, child_keys = self._complete_chunks(
+                            sub_chunks,
+                            system_prompt=system_prompt,
+                            chunk_depth=_chunk_depth,
+                            is_html=is_html,
+                            chunk_cache_context=chunk_cache_context,
+                            initial_tokens=tokens,
+                            **kwargs,
+                        )
+                        if leaf_cache_key and chunk_cache_context:
+                            self._save_cached_chunk(
+                                leaf_cache_key,
+                                joined_text,
+                                total_tokens,
+                                chunk_cache_context,
+                            )
+                            child_keys = list(
+                                dict.fromkeys([*child_keys, leaf_cache_key])
+                            )
+                        res_dict = {"text": joined_text, "tokens": total_tokens}
+                        if child_keys:
+                            res_dict["billed_cache_keys"] = child_keys
+                        return res_dict
+                raise TruncatedResponseError(
+                    "No complete text response (finish_reason=length)"
+                )
             else:
-                # 安全获取 finish_reason，避免在 choices 为空时抛出异常
-                finish_reason = None
-                if res.choices:
-                    try:
-                        finish_reason = res.choices[0].finish_reason
-                    except Exception:
-                        finish_reason = None
                 raise RuntimeError(
                     f"No complete text response (finish_reason={finish_reason or 'unknown'})"
                 )
+
+            if leaf_cache_key and chunk_cache_context:
+                self._save_cached_chunk(
+                    leaf_cache_key, result_text, tokens, chunk_cache_context
+                )
+                billed_cache_keys.append(leaf_cache_key)
         except Exception as e:
+            if provider_call_started_at is not None:
+                failed_elapsed = time.monotonic() - provider_call_started_at
+                logger.warning(
+                    "[%s] model=%s entry=%s stage=%s attempt_id=%s error_type=%s "
+                    "elapsed=%.2fs est_input_tokens=%s: %s",
+                    self.name,
+                    self.model,
+                    chunk_cache_context.get("entry_id")
+                    if chunk_cache_context
+                    else None,
+                    chunk_cache_context.get("stage") if chunk_cache_context else None,
+                    chunk_cache_context.get("attempt_id")
+                    if chunk_cache_context
+                    else None,
+                    classify_ai_error(e),
+                    failed_elapsed,
+                    leaf_input_tokens,
+                    e,
+                )
             # Attach the spent usage so the caller can account for the failed
             # attempt instead of losing the tokens it already paid for.
-            if tokens:
+            if tokens and not getattr(e, "is_chunked_failure", False):
                 e.tokens_used = tokens
+            if billed_cache_keys:
+                e.billed_cache_keys = tuple(
+                    dict.fromkeys(
+                        list(getattr(e, "billed_cache_keys", ()) or ())
+                        + billed_cache_keys
+                    )
+                )
+            if (
+                leaf_input_tokens
+                and is_timeout_error(e)
+                and not getattr(e, "estimated_unbilled_tokens", 0)
+            ):
+                e.estimated_unbilled_tokens = leaf_input_tokens
             # 分块调用的异常交给最外层统一记录，避免每层递归重复记录
             if _chunk_depth == 0:
                 self.log = f"{timezone.now()}: {str(e)}"
@@ -449,7 +861,10 @@ class OpenAIAgent(Agent):
                 self.save(update_fields=["log"])
             raise
 
-        return {"text": result_text, "tokens": tokens}
+        res_dict = {"text": result_text, "tokens": tokens}
+        if billed_cache_keys:
+            res_dict["billed_cache_keys"] = billed_cache_keys
+        return res_dict
 
     def translate(
         self,
@@ -465,6 +880,9 @@ class OpenAIAgent(Agent):
             if text_type == "title"
             else self.content_translate_prompt
         ).replace("{target_language}", target_language)
+
+        if text_type == "content" and "is_html" not in kwargs:
+            kwargs["is_html"] = True
 
         return self.completions(
             text, system_prompt=system_prompt, user_prompt=user_prompt, **kwargs
@@ -493,7 +911,7 @@ class OpenAIAgent(Agent):
         logger.info(f">>> Start Filter: {text[:50]}...")
         results = self.completions(
             text,
-            system_prompt=system_prompt + settings.output_format_for_filter_prompt,
+            system_prompt=system_prompt + app_settings.output_format_for_filter_prompt,
             **kwargs,
         )
 

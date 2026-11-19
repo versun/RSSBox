@@ -5,13 +5,13 @@ from unittest.mock import Mock, patch
 import httpx
 from django.test import TestCase
 from django.utils import timezone
-from openai import APITimeoutError, BadRequestError
+from openai import APITimeoutError, BadRequestError, InternalServerError
 
-from core.models import Entry, Feed
+from core.models import Entry, EntryTaskState, Feed
 from core.models.agent import OpenAIAgent
 from core.tasks.summarize_feeds import handle_feeds_summary
 from core.tasks.translate_feeds import handle_feeds_translation
-from core.tasks.utils import auto_retry
+from core.tasks.utils import TruncatedResponseError, auto_retry
 
 
 class AIFailureRecoveryTests(TestCase):
@@ -63,9 +63,15 @@ class AIFailureRecoveryTests(TestCase):
     def timeout(self):
         return APITimeoutError(request=httpx.Request("POST", "https://example.com"))
 
-    def test_timeout_is_retried_and_success_is_saved(self):
+    def server_error(self):
+        response = httpx.Response(
+            500, request=httpx.Request("POST", "https://example.com")
+        )
+        return InternalServerError("server error", response=response, body=None)
+
+    def test_transient_server_error_is_retried_and_success_is_saved(self):
         entry = self.entry()
-        self.request.side_effect = [self.timeout(), self.response()]
+        self.request.side_effect = [self.server_error(), self.response()]
         handle_feeds_summary([self.feed])
         entry.refresh_from_db()
         self.feed.refresh_from_db()
@@ -73,9 +79,22 @@ class AIFailureRecoveryTests(TestCase):
         self.assertEqual(entry.ai_summary, "A useful result")
         self.assertTrue(self.feed.translation_status)
 
-    def test_exhausted_summary_remains_pending_and_succeeds_next_run(self):
+    def test_timeout_is_not_retried_immediately_in_round(self):
+        """Client timeout may leave upstream running and billing (issue #186),
+        so it must not be immediately replayed within the same run."""
         entry = self.entry()
-        self.request.side_effect = self.timeout()
+        self.request.side_effect = [self.timeout(), self.response()]
+        handle_feeds_summary([self.feed])
+        entry.refresh_from_db()
+        self.feed.refresh_from_db()
+        self.assertEqual(self.request.call_count, 1)
+        self.sleep.assert_not_called()
+        self.assertIsNone(entry.ai_summary)
+        self.assertFalse(self.feed.translation_status)
+
+    def test_exhausted_summary_remains_pending_and_succeeds_after_backoff(self):
+        entry = self.entry()
+        self.request.side_effect = self.server_error()
         handle_feeds_summary([self.feed])
         entry.refresh_from_db()
         self.feed.refresh_from_db()
@@ -85,6 +104,10 @@ class AIFailureRecoveryTests(TestCase):
         self.assertEqual(self.request.call_count, 3)
         self.assertEqual(self.sleep.call_count, 2)
 
+        # Once backoff elapses, the next run retries and succeeds.
+        EntryTaskState.objects.filter(entry=entry, stage="summary").update(
+            next_retry_at=timezone.now() - timedelta(seconds=1)
+        )
         self.request.side_effect = None
         self.request.return_value = self.response()
         handle_feeds_summary([self.feed])
@@ -92,9 +115,11 @@ class AIFailureRecoveryTests(TestCase):
         self.assertEqual(entry.ai_summary, "A useful result")
 
     def test_empty_and_incomplete_responses_are_not_saved_as_summaries(self):
-        entry = self.entry()
-        for text, reason in [("", "stop"), ("  ", "stop"), ("partial", "length")]:
+        for idx, (text, reason) in enumerate(
+            [("", "stop"), ("  ", "stop"), ("partial", "length")]
+        ):
             with self.subTest(text=text, reason=reason):
+                entry = self.entry(number=idx)
                 self.request.return_value = self.response(text, reason)
                 handle_feeds_summary([self.feed])
                 entry.refresh_from_db()
@@ -114,7 +139,7 @@ class AIFailureRecoveryTests(TestCase):
 
     def test_summary_failure_is_not_hidden_by_later_success(self):
         failed, good = self.entry(0), self.entry(1)
-        self.request.side_effect = [self.timeout()] * 3 + [self.response()]
+        self.request.side_effect = [self.timeout(), self.response()]
         handle_feeds_summary([self.feed])
         failed.refresh_from_db()
         good.refresh_from_db()
@@ -125,7 +150,7 @@ class AIFailureRecoveryTests(TestCase):
 
     def test_translation_failure_is_not_hidden_by_later_success(self):
         failed, good = self.entry(0), self.entry(1)
-        self.request.side_effect = [self.timeout()] * 3 + [self.response()]
+        self.request.side_effect = [self.timeout(), self.response()]
         handle_feeds_translation([self.feed], target_field="title")
         failed.refresh_from_db()
         good.refresh_from_db()
@@ -162,8 +187,15 @@ class AIFailureRecoveryTests(TestCase):
         self.sleep.assert_not_called()
 
     def test_retry_exhaustion_raises_last_error(self):
-        func = Mock(side_effect=self.timeout())
-        with self.assertRaises(APITimeoutError):
+        func = Mock(side_effect=self.server_error())
+        with self.assertRaises(InternalServerError):
             auto_retry(func)
         self.assertEqual(func.call_count, 3)
         self.assertEqual(self.sleep.call_count, 2)
+
+    def test_truncated_response_is_not_retried(self):
+        self.request.return_value = self.response("cut off", reason="length")
+        with self.assertRaises(TruncatedResponseError):
+            auto_retry(self.agent.summarize, text="Article", target_language="English")
+        self.assertEqual(self.request.call_count, 1)
+        self.sleep.assert_not_called()

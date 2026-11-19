@@ -1,4 +1,5 @@
 import logging
+import uuid
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import F
@@ -13,7 +14,14 @@ from core.tasks.utils import (
     PERSISTENCE_ERRORS,
     PersistError,
     auto_retry,
+    clear_entry_chunk_caches,
+    get_entry_task_state_map,
+    is_timeout_error,
+    record_entry_stage_failure,
+    record_entry_stage_success,
     record_spent_tokens,
+    reset_entry_task_states,
+    should_skip_entry_stage,
 )
 
 logger = logging.getLogger(__name__)
@@ -83,7 +91,9 @@ def _entry_was_deleted(entry_pk, save_error) -> bool:
         return False
 
 
-def translate_feed(feed: Feed, target_field: str = "title") -> int:
+def translate_feed(
+    feed: Feed, target_field: str = "title", entry_ids: list | None = None
+) -> int:
     """Translate feed entries; return how many entries were saved."""
     logger.info("Translating feed: %s", feed.target_language)
     total_tokens = 0
@@ -96,19 +106,59 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
         return 0
     feed.translation_status = True
 
+    state_map = get_entry_task_state_map(feed, target_field, entry_ids=entry_ids)
+    now = timezone.now()
+
     # 只处理前 feed.max_posts 条 entries; -id ties break equal pubdates
     # the same way cleanup_entries picks its keep-set.
-    entries = feed.entries.order_by("-pubdate", "-id")[: feed.max_posts].iterator(
-        chunk_size=50
-    )
+    if entry_ids is not None:
+        entries = feed.entries.filter(pk__in=entry_ids).order_by(
+            "-pubdate", "-id"
+        ).iterator(chunk_size=50)
+    else:
+        entries = feed.entries.order_by("-pubdate", "-id")[: feed.max_posts].iterator(
+            chunk_size=50
+        )
 
     for entry in entries:
         entry_tokens = 0
         entry_characters = 0
+        entry_billed_cache_keys = []
+        attempt_id = uuid.uuid4().hex[:12]
         try:
             logger.debug("Processing entry %s", entry.pk)
+            needs_work = (
+                target_field == "title"
+                and feed.translate_title
+                and not entry.translated_title
+                and bool((entry.original_title or "").strip())
+            ) or (
+                target_field == "content"
+                and feed.translate_content
+                and not entry.translated_content
+                and (bool(entry.original_content) or feed.fetch_article)
+            )
+            if not needs_work:
+                continue
+
+            entry_state = state_map.get(entry.pk)
+            skip, skip_reason = should_skip_entry_stage(entry_state, now=now)
+            if skip:
+                if skip_reason == "backoff":
+                    # Still failing and awaiting retry (not paused/isolated),
+                    # so this feed's translation is not yet complete.
+                    feed.translation_status = False
+                logger.info(
+                    "Skipping entry %s stage=%s (%s, attempts=%s, next_retry_at=%s)",
+                    entry.pk,
+                    target_field,
+                    skip_reason,
+                    entry_state.attempt_count,
+                    entry_state.next_retry_at,
+                )
+                continue
+
             entry_needs_save = False
-            source_changed = False
 
             # Process title translation
             if (
@@ -121,31 +171,75 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                     target_language=feed.target_language,
                     engine=feed.translator,
                     user_prompt=feed.additional_prompt,
+                    attempt_id=attempt_id,
                 )
                 entry_tokens += metrics["tokens"]
                 entry_characters += metrics["characters"]
-                entry_needs_save = True
+                if metrics.get("billed_cache_keys"):
+                    entry_billed_cache_keys.extend(metrics["billed_cache_keys"])
+                if entry.translated_title:
+                    entry_needs_save = True
 
             # Process content translation
             if target_field == "content" and feed.translate_content:
-                # Only fetch while the entry still needs a translation. Once
-                # an original/translation pair exists it is kept as is:
-                # refetching would either serve a stale pair or, for pages
-                # with dynamic markup, pay for a full re-translation on
-                # every run.
-                if feed.fetch_article and not entry.translated_content:
+                # Only fetch while the entry still lacks both a translation and
+                # a previously fetched full article. Using the explicit data
+                # flag ``article_fetched`` (decoupled from EntryTaskState retry
+                # counters) guarantees that:
+                # - a failed web fetch is retried on the next attempt;
+                # - enabling fetch_article later still fetches full text;
+                # - a successful fetch (even before any LLM error or after
+                #   force-update resets attempt_count) is never overwritten so
+                #   cached chunks stay valid.
+                if (
+                    feed.fetch_article
+                    and not entry.translated_content
+                    and not entry.article_fetched
+                ):
                     article_content = _fetch_article_content(entry.link)
-                    if article_content and article_content != entry.original_content:
-                        entry.original_content = article_content
-                        entry_needs_save = True
-                        source_changed = True
-                        # Only the summary is derived from the body that
-                        # just changed. ``translated_title`` depends on
-                        # ``original_title`` alone and this pipeline never
-                        # touches it: clearing it here dropped the title
-                        # translation paid for earlier in the same run
-                        # (issue #181).
-                        entry.ai_summary = None
+                    if article_content:
+                        entry.article_fetched = True
+                        if article_content != entry.original_content:
+                            entry.original_content = article_content
+                            # Only the summary is derived from the body that
+                            # just changed. ``translated_title`` depends on
+                            # ``original_title`` alone and this pipeline never
+                            # touches it: clearing it here dropped the title
+                            # translation paid for earlier in the same run
+                            # (issue #181).
+                            entry.ai_summary = None
+                            # Only a changed source counts as an update; translating
+                            # must not overwrite the publisher's timestamp. The
+                            # bumped ``updated`` is also what lets the AI filter
+                            # re-evaluate this entry against its new content.
+                            entry.updated = timezone.now()
+                            fetch_update_fields = [
+                                "original_content",
+                                "updated",
+                                "ai_summary",
+                                "article_fetched",
+                            ]
+                        else:
+                            fetch_update_fields = ["article_fetched"]
+                        try:
+                            entry.save(update_fields=fetch_update_fields)
+                        except Exception as save_error:
+                            if _entry_was_deleted(entry.pk, save_error):
+                                logger.warning(
+                                    "Entry %s was deleted while saving fetched article; skipping",
+                                    entry.pk,
+                                )
+                                continue
+                            raise PersistError(
+                                f"Could not persist fetched content for entry {entry.pk}: {save_error}"
+                            ) from save_error
+                        if "original_content" in fetch_update_fields:
+                            # Body changed: invalidate stale content chunk caches
+                            # and reset summary state so summary will re-run.
+                            clear_entry_chunk_caches([entry.pk], stages=["content"])
+                            reset_entry_task_states(
+                                [entry.pk], stages=["summary"], clear_chunks=True
+                            )
                     # Clean up article content after use
                     del article_content
 
@@ -155,22 +249,17 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                         target_language=feed.target_language,
                         engine=feed.translator,
                         user_prompt=feed.additional_prompt,
+                        attempt_id=attempt_id,
                     )
                     entry_tokens += metrics["tokens"]
                     entry_characters += metrics["characters"]
-                    entry_needs_save = True
+                    if metrics.get("billed_cache_keys"):
+                        entry_billed_cache_keys.extend(metrics["billed_cache_keys"])
+                    if entry.translated_content:
+                        entry_needs_save = True
 
             if entry_needs_save:
                 fields = [f"translated_{target_field}"]
-                if target_field == "content" and feed.fetch_article:
-                    fields.append("original_content")
-                if source_changed:
-                    # Only a changed source counts as an update; translating
-                    # must not overwrite the publisher's timestamp. The
-                    # bumped ``updated`` is also what lets the AI filter
-                    # re-evaluate this entry against its new content.
-                    entry.updated = timezone.now()
-                    fields.extend(["updated", "ai_summary"])
                 try:
                     with transaction.atomic():
                         entry.save(update_fields=fields)
@@ -202,7 +291,12 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
                         f"Could not persist translation for entry {entry.pk}: {save_error}"
                     )
                     error.tokens_used = entry_tokens
+                    if entry_billed_cache_keys:
+                        error.billed_cache_keys = tuple(
+                            dict.fromkeys(entry_billed_cache_keys)
+                        )
                     raise error from save_error
+                record_entry_stage_success(entry, target_field)
                 feed.total_tokens += entry_tokens
                 feed.total_characters += entry_characters
                 total_tokens += entry_tokens
@@ -220,7 +314,38 @@ def translate_feed(feed: Feed, target_field: str = "title") -> int:
             break
         except Exception as e:
             record_spent_tokens(feed, e)
-            logger.error(f"Error processing entry {entry.link}: {str(e)}")
+            est_tokens = 0
+            if is_timeout_error(e):
+                est_tokens = getattr(e, "estimated_unbilled_tokens", 0)
+                if not est_tokens:
+                    source_text = (
+                        entry.original_title
+                        if target_field == "title"
+                        else entry.original_content
+                    )
+                    try:
+                        est_tokens = text_handler.get_token_count(source_text or "")
+                    except Exception:
+                        est_tokens = 0
+            state = record_entry_stage_failure(
+                entry,
+                target_field,
+                e,
+                estimated_input_tokens=est_tokens,
+            )
+            logger.error(
+                "Error processing entry %s (%s) stage=%s attempt_id=%s error_type=%s "
+                "attempts=%s status=%s next_retry_at=%s: %s",
+                entry.pk,
+                entry.link,
+                target_field,
+                attempt_id,
+                state.last_error_type if state else "unknown",
+                state.attempt_count if state else None,
+                state.status if state else None,
+                state.next_retry_at if state else None,
+                str(e),
+            )
             feed.log += (
                 f"{timezone.now()} Error processing entry {entry.link}: {str(e)}<br>"
             )
@@ -242,16 +367,25 @@ def _translate_entry_title(
     target_language: str,
     engine: Agent,
     user_prompt: str = None,
+    attempt_id: str | None = None,
 ) -> dict:
     """Translate entry title with memory optimization."""
     total_tokens = 0
     total_characters = 0
+    billed_cache_keys = ()
 
     # Check if title needs translation
     if entry.translated_title or not (entry.original_title or "").strip():
         return {"tokens": 0, "characters": 0}
 
     logger.debug("[Title] Translating title")
+    chunk_cache_context = {
+        "entry_id": entry.pk,
+        "stage": "title",
+        "target_language": target_language,
+    }
+    if attempt_id:
+        chunk_cache_context["attempt_id"] = attempt_id
     result = auto_retry(
         engine.translate,
         max_retries=3,
@@ -260,6 +394,7 @@ def _translate_entry_title(
         target_language=target_language,
         text_type="title",
         user_prompt=user_prompt,
+        chunk_cache_context=chunk_cache_context,
     )
 
     if result:
@@ -267,8 +402,12 @@ def _translate_entry_title(
         entry.translated_title = translated_title if translated_title else None
         total_tokens = result.get("tokens", 0)
         total_characters = result.get("characters", 0)
+        billed_cache_keys = tuple(result.get("billed_cache_keys") or ())
 
-    return {"tokens": total_tokens, "characters": total_characters}
+    metrics = {"tokens": total_tokens, "characters": total_characters}
+    if billed_cache_keys:
+        metrics["billed_cache_keys"] = billed_cache_keys
+    return metrics
 
 
 def _translate_entry_content(
@@ -276,6 +415,7 @@ def _translate_entry_content(
     target_language: str,
     engine: Agent,
     user_prompt: str = None,
+    attempt_id: str | None = None,
 ) -> dict:
     """Translate entry content with memory optimization."""
     total_tokens = 0
@@ -306,6 +446,14 @@ def _translate_entry_content(
 
     gc.collect()
 
+    chunk_cache_context = {
+        "entry_id": entry.pk,
+        "stage": "content",
+        "target_language": target_language,
+    }
+    if attempt_id:
+        chunk_cache_context["attempt_id"] = attempt_id
+
     # Perform translation
     result = auto_retry(
         func=engine.translate,
@@ -315,6 +463,7 @@ def _translate_entry_content(
         target_language=target_language,
         text_type="content",
         user_prompt=user_prompt,
+        chunk_cache_context=chunk_cache_context,
     )
 
     translated_content = result.get("text")
@@ -322,13 +471,17 @@ def _translate_entry_content(
     entry.translated_content = translated_content if translated_content else None
     total_tokens = result.get("tokens", 0)
     total_characters = result.get("characters", 0)
+    billed_cache_keys = tuple(result.get("billed_cache_keys") or ())
 
     # Clean up large strings
     del processed_html
     if translated_content:
         del translated_content
 
-    return {"tokens": total_tokens, "characters": total_characters}
+    metrics = {"tokens": total_tokens, "characters": total_characters}
+    if billed_cache_keys:
+        metrics["billed_cache_keys"] = billed_cache_keys
+    return metrics
 
 
 def _download_article(link: str, user_agent: str):

@@ -14,8 +14,9 @@ from django.conf import settings
 from lxml import etree
 from utils.modelAdmin_utils import get_all_agent_choices
 from core.admin import core_admin_site
-from core.models import Filter, Tag, OpenAIAgent
+from core.models import EntryTaskState, Filter, Tag, OpenAIAgent, TranslationChunkCache
 from core.tasks.task_manager import task_manager
+from core.tasks.utils import reset_entry_task_states_queryset
 from .management.commands.feed_updater import update_multiple_feeds
 from core.cache import cache_tag
 from core.models.filter import bump_cache_version
@@ -28,6 +29,14 @@ def clean_translated_content(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
         feed.entries.all().update(translated_title=None, translated_content=None)
+        EntryTaskState.objects.filter(
+            entry__feed=feed,
+            stage__in=[EntryTaskState.STAGE_TITLE, EntryTaskState.STAGE_CONTENT],
+        ).delete()
+        TranslationChunkCache.objects.filter(
+            entry__feed=feed,
+            stage__in=[EntryTaskState.STAGE_TITLE, EntryTaskState.STAGE_CONTENT],
+        ).delete()
         # Cleared translations change the rendered feed immediately; bump
         # so readers don't wait out the cache TTL for the original-only
         # output (and the tag merges that contain these entries).
@@ -46,6 +55,14 @@ def clean_ai_summary(modeladmin, request, queryset):
     for feed in queryset:
         # 更新该feed下所有entry的翻译相关字段为None或空字符串
         feed.entries.all().update(ai_summary=None)
+        EntryTaskState.objects.filter(
+            entry__feed=feed,
+            stage=EntryTaskState.STAGE_SUMMARY,
+        ).delete()
+        TranslationChunkCache.objects.filter(
+            entry__feed=feed,
+            stage=EntryTaskState.STAGE_SUMMARY,
+        ).delete()
         bump_cache_version("rss", feed.pk)
         for tag_pk in feed.tags.values_list("pk", flat=True):
             bump_cache_version("tag", tag_pk)
@@ -178,14 +195,26 @@ def export_translated_feed_as_opml(modeladmin, request, queryset):
 def feed_force_update(modeladmin, request, queryset):
     logger.info("Call feed_force_update: %s", queryset)
 
+    feeds = list(queryset)
+    if not feeds:
+        return
+
     with transaction.atomic():
-        for instance in queryset:
+        now = timezone.now()
+        for instance in feeds:
             instance.fetch_status = None
             instance.translation_status = None
-            instance.translation_started_at = timezone.now()
+            instance.translation_started_at = now
             instance.save()
+        # Manual force-update clears backoff/auto-pause so pending entries
+        # can be retried, while respecting explicitly paused entries and
+        # keeping chunk resume caches intact.
+        reset_entry_task_states_queryset(
+            EntryTaskState.objects.filter(entry__feed_id__in=[f.pk for f in feeds]),
+            include_manual_pause=False,
+            exclude_succeeded=True,
+        )
 
-    feeds = list(queryset)
     task_manager.submit_task(
         f"force_update_feeds_{time.time_ns()}", update_multiple_feeds, feeds
     )

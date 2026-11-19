@@ -5,9 +5,12 @@ import os
 import sys
 import time
 import logging
+from datetime import timedelta
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
-from core.models import Feed, Entry
+from django.utils import timezone
+from core.models import Feed, TranslationChunkCache
 
 current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
 
@@ -105,6 +108,13 @@ def cleanup_all_feeds():
                 close_old_connections()  # Close connections after processing batch
 
         logger.info(f"{current_time}: Completed cleanup for {total_feeds} feeds")
+
+        # Also prune expired chunk translation caches so orphaned rows never accumulate.
+        ttl = getattr(settings, "CHUNK_CACHE_TTL_SECONDS", 60 * 60 * 72)
+        cutoff = timezone.now() - timedelta(seconds=ttl)
+        pruned, _ = TranslationChunkCache.objects.filter(created_at__lt=cutoff).delete()
+        if pruned:
+            logger.info("Pruned %s expired TranslationChunkCache rows", pruned)
     except Exception as e:
         logger.exception("cleanup_all_feeds failed: %s", str(e))
         raise

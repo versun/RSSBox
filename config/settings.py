@@ -32,6 +32,22 @@ LT_TIMEOUT=int(os.environ.get("LT_TIMEOUT", '5'))
 SQLITE_TIMEOUT=float(os.environ.get("SQLITE_TIMEOUT", "30"))
 OPENAI_API_TIMEOUT = float(os.environ.get("OPENAI_API_TIMEOUT", "120"))
 OPENAI_API_MAX_RETRIES = max(0, int(os.environ.get("OPENAI_API_MAX_RETRIES", "0")))
+OPENAI_MAX_OUTPUT_TOKENS = max(
+    256, int(os.environ.get("OPENAI_MAX_OUTPUT_TOKENS", "16384"))
+)
+ENTRY_MAX_RETRY_ATTEMPTS = max(
+    1, int(os.environ.get("ENTRY_MAX_RETRY_ATTEMPTS", "3"))
+)
+ENTRY_RETRY_BASE_DELAY_SECONDS = max(
+    0, int(os.environ.get("ENTRY_RETRY_BASE_DELAY_SECONDS", "3600"))
+)
+ENTRY_RETRY_MAX_DELAY_SECONDS = max(
+    ENTRY_RETRY_BASE_DELAY_SECONDS,
+    int(os.environ.get("ENTRY_RETRY_MAX_DELAY_SECONDS", "86400")),
+)
+CHUNK_CACHE_TTL_SECONDS = max(
+    60, int(os.environ.get("CHUNK_CACHE_TTL_SECONDS", str(60 * 60 * 72)))
+)
 # Custom User-Agent for fetching feeds. Empty = use built-in default.
 RSS_FETCH_USER_AGENT = os.environ.get("RSS_FETCH_USER_AGENT", "")
 # Per-operation socket timeout for HTTP(S) feed downloads, including fallback requests.

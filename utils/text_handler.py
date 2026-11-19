@@ -1,7 +1,9 @@
 import functools
+import html as html_lib
+import math
 import re
 from typing import List
-from bs4 import Comment
+from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 import tiktoken
 import html2text
 
@@ -233,6 +235,345 @@ def adaptive_chunking(
         return chunk_on_delimiter(text, min(max_chunk_size, int(chunk_size * 1.3)))
 
     return chunks
+
+
+_HTML_TAG_RE = re.compile(r"<[a-zA-Z][^>]*>")
+_HTML_CODE_TAGS = frozenset({"pre", "code"})
+_HTML_BLOCK_TAGS = frozenset(
+    {
+        "p",
+        "div",
+        "section",
+        "article",
+        "main",
+        "aside",
+        "header",
+        "footer",
+        "blockquote",
+        "figure",
+        "figcaption",
+        "ul",
+        "ol",
+        "li",
+        "dl",
+        "dt",
+        "dd",
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "pre",
+        "hr",
+    }
+)
+
+
+_HTML_TAG_SOUP = BeautifulSoup("", "html.parser")
+
+
+def _open_close_tags(tag: Tag, strip_id: bool = False) -> tuple[str, str]:
+    attrs = {k: v for k, v in tag.attrs.items() if not (strip_id and k == "id")}
+    clone = _HTML_TAG_SOUP.new_tag(tag.name, attrs=attrs)
+    rendered = str(clone)
+    close_tag = f"</{tag.name}>"
+    if rendered.endswith(close_tag):
+        return rendered[: -len(close_tag)], close_tag
+    return rendered, ""
+
+
+def _pack_fragments(fragments: List[str], max_tokens: int, sep: str = "") -> List[str]:
+    packed: List[str] = []
+    current_parts: List[str] = []
+    current_tokens = 0
+    sep_tokens = get_token_count(sep) if sep else 0
+
+    for fragment in fragments:
+        if not fragment:
+            continue
+        frag_tokens = get_token_count(fragment)
+        if not current_parts:
+            current_parts = [fragment]
+            current_tokens = frag_tokens
+            continue
+
+        # Fast O(1) accumulation while clearly below the budget; verify exact
+        # joined token count near the boundary to keep packing exact and O(N).
+        if current_tokens + sep_tokens + frag_tokens <= max_tokens - 2:
+            current_parts.append(fragment)
+            current_tokens += sep_tokens + frag_tokens
+            continue
+
+        current_str = sep.join(current_parts)
+        candidate = f"{current_str}{sep}{fragment}"
+        candidate_tokens = get_token_count(candidate)
+        if candidate_tokens <= max_tokens:
+            current_parts = [candidate]
+            current_tokens = candidate_tokens
+        else:
+            packed.append(current_str)
+            current_parts = [fragment]
+            current_tokens = frag_tokens
+
+    if current_parts:
+        packed.append(sep.join(current_parts))
+    return packed
+
+
+def _split_raw_for_escaped_budget(raw: str, max_tokens: int) -> List[str]:
+    """Split raw text so every HTML-escaped piece fits within ``max_tokens``
+    without ever cutting an HTML entity in half."""
+    escaped = html_lib.escape(raw, quote=False)
+    if get_token_count(escaped) <= max_tokens or len(raw) <= 1:
+        return [escaped]
+
+    mid = len(raw) // 2
+    split_at = raw.rfind(" ", 1, mid + 1)
+    if split_at == -1:
+        split_at = raw.find(" ", mid)
+    if split_at <= 0 or split_at >= len(raw) - 1:
+        split_at = mid
+    else:
+        split_at += 1  # Keep trailing space on the left fragment.
+
+    return _split_raw_for_escaped_budget(
+        raw[:split_at], max_tokens
+    ) + _split_raw_for_escaped_budget(raw[split_at:], max_tokens)
+
+
+def _split_text_to_escaped_fragments(
+    raw_text: str,
+    max_tokens: int,
+    *,
+    preserve_newlines: bool = False,
+) -> List[str]:
+    if preserve_newlines:
+        pieces: List[str] = []
+        for line in raw_text.splitlines(keepends=True):
+            pieces.extend(_split_raw_for_escaped_budget(line, max_tokens))
+        return _pack_fragments(pieces, max_tokens, sep="")
+
+    leading_space = " " if raw_text and raw_text[0].isspace() else ""
+    trailing_space = " " if raw_text and raw_text[-1].isspace() else ""
+    raw_chunks = [c for c in chunk_on_delimiter(raw_text, max_tokens) if c]
+    if not raw_chunks:
+        return []
+    if leading_space and not raw_chunks[0][0].isspace():
+        raw_chunks[0] = leading_space + raw_chunks[0]
+    if trailing_space and not raw_chunks[-1][-1].isspace():
+        raw_chunks[-1] = raw_chunks[-1] + trailing_space
+
+    pieces = []
+    for chunk in raw_chunks:
+        pieces.extend(_split_raw_for_escaped_budget(chunk, max_tokens))
+    return pieces
+
+
+def _group_code_lines(fragments: List[str], max_tokens: int) -> List[str]:
+    """Coalesce inline fragments belonging to the same source line so code
+    chunks split cleanly on line boundaries whenever a line fits the budget."""
+    grouped: List[str] = []
+    line_parts: List[str] = []
+
+    def _flush_line():
+        if not line_parts:
+            return
+        line = "".join(line_parts)
+        if get_token_count(line) <= max_tokens:
+            grouped.append(line)
+        else:
+            grouped.extend(line_parts)
+        line_parts.clear()
+
+    for frag in fragments:
+        line_parts.append(frag)
+        if frag.endswith(("\n", "\r")):
+            _flush_line()
+    _flush_line()
+    return grouped
+
+
+def _split_html_node(
+    node, max_tokens: int, *, preserve_newlines: bool = False
+) -> List[str]:
+    if isinstance(node, Comment):
+        return []
+
+    if isinstance(node, NavigableString):
+        raw = str(node)
+        if not raw or (not preserve_newlines and not raw.strip()):
+            return []
+        escaped = html_lib.escape(raw, quote=False)
+        if get_token_count(escaped) <= max_tokens:
+            return [escaped]
+        return _split_text_to_escaped_fragments(
+            raw, max_tokens, preserve_newlines=preserve_newlines
+        )
+
+    rendered = str(node)
+    if not rendered or (not preserve_newlines and not rendered.strip()):
+        return []
+    if get_token_count(rendered) <= max_tokens:
+        return [rendered]
+
+    if not isinstance(node, Tag):
+        return chunk_on_delimiter(rendered, max_tokens)
+
+    open_tag, close_tag = _open_close_tags(node, strip_id=False)
+    open_tag_no_id = (
+        _open_close_tags(node, strip_id=True)[0] if "id" in node.attrs else open_tag
+    )
+    wrapper_overhead = max(
+        get_token_count(open_tag + close_tag),
+        get_token_count(open_tag) + get_token_count(close_tag),
+    )
+    inner_budget = max_tokens - wrapper_overhead
+
+    if inner_budget <= 1 or not close_tag:
+        # Void tags (e.g. <img ...>) or tags whose opening wrapper alone eats
+        # the budget are atomic markup; never slice through tag syntax with
+        # plain-text delimiter splitting.
+        return [rendered]
+
+    children = [c for c in node.children if not isinstance(c, Comment)]
+    if not children:
+        return [rendered]
+
+    in_code = preserve_newlines or (node.name in _HTML_CODE_TAGS)
+    has_tag_child = any(isinstance(c, Tag) for c in children)
+    if in_code and not has_tag_child:
+        pieces = _split_text_to_escaped_fragments(
+            node.get_text(), inner_budget, preserve_newlines=True
+        )
+        return [
+            f"{open_tag if idx == 0 else open_tag_no_id}{piece}{close_tag}"
+            for idx, piece in enumerate(pieces)
+            if piece
+        ]
+
+    has_block_child = not in_code and any(
+        isinstance(c, Tag) and c.name in _HTML_BLOCK_TAGS for c in children
+    )
+    child_fragments: List[str] = []
+    pending_code_indent = ""
+    for child in children:
+        if isinstance(child, NavigableString):
+            raw_child = str(child)
+            if not raw_child:
+                continue
+            if not raw_child.strip():
+                if in_code:
+                    # Keep newline on the preceding line and attach leading
+                    # indentation to the next line's first fragment so chunk
+                    # splits never detach indentation from its code line.
+                    for line in raw_child.splitlines(keepends=True):
+                        if line.endswith(("\n", "\r")):
+                            if pending_code_indent:
+                                child_fragments.append(pending_code_indent + line)
+                                pending_code_indent = ""
+                            else:
+                                child_fragments.append(line)
+                        else:
+                            pending_code_indent += line
+                elif not has_block_child:
+                    child_fragments.append(raw_child)
+                continue
+            if in_code:
+                for line in raw_child.splitlines(keepends=True):
+                    if not line.strip() and not line.endswith(("\n", "\r")):
+                        pending_code_indent += line
+                        continue
+                    piece_raw = pending_code_indent + line
+                    pending_code_indent = ""
+                    child_fragments.extend(
+                        _split_raw_for_escaped_budget(piece_raw, inner_budget)
+                    )
+                continue
+            child_fragments.extend(
+                _split_html_node(child, inner_budget, preserve_newlines=False)
+            )
+            continue
+
+        child_str = str(child)
+        if not child_str:
+            continue
+        if not child_str.strip():
+            if in_code or not has_block_child:
+                child_fragments.append(child_str)
+            continue
+        sub_frags = _split_html_node(child, inner_budget, preserve_newlines=in_code)
+        if pending_code_indent and sub_frags:
+            prefixed = pending_code_indent + sub_frags[0]
+            if get_token_count(prefixed) <= inner_budget:
+                sub_frags[0] = prefixed
+            else:
+                child_fragments.append(pending_code_indent)
+            pending_code_indent = ""
+        child_fragments.extend(sub_frags)
+
+    if pending_code_indent:
+        child_fragments.append(pending_code_indent)
+
+    if not child_fragments:
+        return []
+
+    if in_code:
+        child_fragments = _group_code_lines(child_fragments, inner_budget)
+
+    sep = "\n" if has_block_child else ""
+    grouped = _pack_fragments(child_fragments, inner_budget, sep=sep)
+    return [
+        f"{open_tag if idx == 0 else open_tag_no_id}{group}{close_tag}"
+        for idx, group in enumerate(grouped)
+        if group.strip()
+    ]
+
+
+def chunk_html(html: str, max_tokens: int) -> List[str]:
+    """Split HTML content into valid chunks under ``max_tokens``.
+
+    Preserves HTML tags, links, code blocks, and ``notranslate`` spans by
+    grouping sibling DOM nodes instead of slicing on punctuation. Falls back
+    to plain-text chunking when the input contains no HTML markup.
+    """
+    if not html or not html.strip():
+        return [""]
+    if max_tokens < 1:
+        raise ValueError("max_tokens must be at least 1")
+
+    total_tokens = get_token_count(html)
+    if total_tokens <= max_tokens:
+        return [html]
+
+    if not _HTML_TAG_RE.search(html):
+        return adaptive_chunking(
+            html,
+            target_chunks=max(1, math.ceil(total_tokens / max_tokens)),
+            min_chunk_size=min(500, max_tokens),
+            max_chunk_size=max_tokens,
+        )
+
+    soup = BeautifulSoup(html, "lxml")
+    root = soup.body if soup.body else soup
+
+    fragments: List[str] = []
+    for child in root.children:
+        if isinstance(child, Comment):
+            continue
+        if not str(child).strip():
+            continue
+        fragments.extend(_split_html_node(child, max_tokens))
+
+    if not fragments:
+        return [html]
+
+    return _pack_fragments(fragments, max_tokens, sep="\n")
 
 
 def should_skip(element):

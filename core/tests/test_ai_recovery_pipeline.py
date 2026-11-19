@@ -10,7 +10,7 @@ from django.utils import timezone
 from openai import APITimeoutError
 
 from core.management.commands.feed_updater import update_single_feed
-from core.models import Entry, Feed, Filter, FilterResult, OpenAIAgent, Tag
+from core.models import Entry, EntryTaskState, Feed, Filter, FilterResult, OpenAIAgent, Tag
 from core.tasks.translate_feeds import handle_feeds_translation
 
 
@@ -145,6 +145,7 @@ class AIRecoveryPipelineTests(TestCase):
                 self.feed.entries.update(
                     translated_title=None, translated_content=None, ai_summary=None
                 )
+                EntryTaskState.objects.filter(entry__feed=self.feed).delete()
 
                 def translate(failed=failed, **kwargs):
                     if kwargs["text_type"] == failed:
@@ -163,6 +164,12 @@ class AIRecoveryPipelineTests(TestCase):
                     self.assertFalse(update_single_feed(self.feed))
                 self.feed.refresh_from_db()
                 self.assertFalse(self.feed.translation_status)
+
+                # Once backoff elapses, the next scheduled run retries the
+                # failed stage and restores feed.translation_status to True.
+                EntryTaskState.objects.filter(entry__feed=self.feed).update(
+                    next_retry_at=timezone.now() - timedelta(seconds=1)
+                )
                 with (
                     patch.object(
                         OpenAIAgent,
@@ -182,6 +189,10 @@ class AIRecoveryPipelineTests(TestCase):
                     self.assertTrue(update_single_feed(self.feed))
                 self.feed.refresh_from_db()
                 self.assertTrue(self.feed.translation_status)
+                entry = self.feed.entries.first()
+                self.assertEqual(entry.translated_title, "Translated")
+                self.assertEqual(entry.translated_content, "Translated")
+                self.assertEqual(entry.ai_summary, "Summary")
 
     def test_blank_titles_do_not_call_provider_or_retry(self):
         self.feed.translate_title = True

@@ -106,6 +106,36 @@ This document lists all available environment variable configuration options for
   - Disabled by default to avoid resending the same request after a timeout
   - Increase it only if you explicitly want automatic retries
 
+### OPENAI_MAX_OUTPUT_TOKENS
+- **Description**: Default maximum output token cap per request when `max_completion_tokens` / `max_tokens` is not explicitly set in the agent's `advanced_params`
+- **Default**: `16384` (minimum effective value `256`)
+- **Example**: `8192`
+- **Details**:
+  - Prevents large-context models (e.g. 1M context) from deriving excessive default output/reasoning budgets that cause long timeouts
+  - If a chunk still hits `finish_reason=length`, RSSBox adaptively halves the chunk first and pauses the entry stage if truncation persists
+
+### ENTRY_MAX_RETRY_ATTEMPTS
+- **Description**: Maximum cross-cycle failure attempts per `(entry, stage)` (`title`, `content`, or `summary`) before auto-pausing that stage
+- **Default**: `3` (minimum effective value `1`)
+- **Example**: `3`
+- **Details**:
+  - Paused entries can be inspected, paused/resumed, or retried individually in the **Entry Tasks** admin view without blocking other entries in the feed
+
+### ENTRY_RETRY_BASE_DELAY_SECONDS
+- **Description**: Initial exponential backoff delay in seconds after a failed entry stage attempt (doubles on each subsequent failure)
+- **Default**: `3600` (1 hour, minimum `0`)
+- **Example**: `3600`
+
+### ENTRY_RETRY_MAX_DELAY_SECONDS
+- **Description**: Maximum exponential backoff cap in seconds between entry stage retry attempts
+- **Default**: `86400` (24 hours, clamped to at least `ENTRY_RETRY_BASE_DELAY_SECONDS`)
+- **Example**: `86400`
+
+### CHUNK_CACHE_TTL_SECONDS
+- **Description**: Retention time in seconds for database-persisted chunk resume caches before expiration and cleanup by `cleanup_entries`
+- **Default**: `259200` (72 hours, minimum `60`)
+- **Example**: `259200`
+
 ## Fetch Configuration
 
 ### RSS_FETCH_TIMEOUT

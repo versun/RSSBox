@@ -11,7 +11,7 @@ from utils.modelAdmin_utils import (
 )
 from django.shortcuts import redirect, render
 
-from core.models import Feed, Filter, Tag, Digest
+from core.models import Feed, Filter, Tag, Digest, EntryTaskState
 
 
 class CoreAdminSite(AdminSite):
@@ -76,6 +76,19 @@ class CoreAdminSite(AdminSite):
                         },
                         "admin_url": "/core/digest/",
                         "add_url": "/core/digest/add/",
+                        "view_only": False,
+                    },
+                    {
+                        "model": EntryTaskState,
+                        "name": _("Entry Tasks"),
+                        "object_name": "EntryTaskState",
+                        "perms": {
+                            "add": False,
+                            "change": True,
+                            "delete": True,
+                            "view": True,
+                        },
+                        "admin_url": "/core/entrytaskstate/",
                         "view_only": False,
                     },
                 ],
