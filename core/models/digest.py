@@ -224,6 +224,11 @@ class Digest(models.Model):
 
         end_date = timezone.now()
         start_date = end_date - timedelta(days=self.days_range+1) #由于是凌晨2点，所以包含今天影响不大
+        # Continue where the last successful digest stopped, so a digest
+        # that skips days (e.g. Mon-Fri only) neither loses the gap nor
+        # repeats entries. days_range stays the upper limit.
+        if self.last_generated and self.last_generated > start_date:
+            start_date = self.last_generated
 
         # 正确获取digest tags对应的feeds的entries
         digest_tags = self.tags.all()
