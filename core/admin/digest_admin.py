@@ -219,8 +219,7 @@ class DigestAdmin(admin.ModelAdmin):
     def show_url(self, obj):
         """Display URL with link."""
         return format_html(
-            '<a href="/rss/digest/{}">rss</a> | <a href="/rss/digest/json/{}">json</a>',
-            obj.slug,
+            '<a href="/rss/digest/{0}" target="_blank">rss</a> | <a href="/rss/digest/json/{0}" target="_blank">json</a> | <a href="/rss/digest/{0}?format=html" target="_blank">preview</a>',
             obj.slug,
         )
 

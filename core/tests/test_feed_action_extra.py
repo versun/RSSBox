@@ -351,7 +351,8 @@ class AtomFeedTests(SimpleTestCase):
 
         xml_str = _finalize_atom_feed(fg)
         self.assertIn("file.mp3", xml_str)
-        self.assertIn("rss.xsl", xml_str)
+        self.assertNotIn("xml-stylesheet", xml_str)
+        self.assertNotIn("rss.xsl", xml_str)
         self.assertIn("Tran title", xml_str)
 
     def test_enclosures_parsing_error(self):

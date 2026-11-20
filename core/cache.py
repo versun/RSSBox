@@ -458,12 +458,8 @@ def merge_feeds_into_one_atom(tag: str, feeds: list[Feed], feed_type="t"):
 def _finalize_atom_feed(fg):
     """生成最终的Atom XML字符串"""
     atom_string = fg.atom_str(pretty=False)
-    root = etree.fromstring(atom_string)
+    root = etree.fromstring(atom_string, parser=_SAFE_XML_PARSER)
     tree = etree.ElementTree(root)
-    pi = etree.ProcessingInstruction(
-        "xml-stylesheet", 'type="text/xsl" href="/static/rss.xsl"'
-    )
-    root.addprevious(pi)
     return etree.tostring(
         tree, pretty_print=True, xml_declaration=True, encoding="utf-8"
     ).decode()

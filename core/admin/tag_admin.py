@@ -51,9 +51,10 @@ class TagAdmin(admin.ModelAdmin):
         if obj.pk:
             slug = quote(obj.slug or "")
             return format_html(
-                "<a href='{0}' target='_blank'>rss</a> | <a href='{1}' target='_blank'>json</a>",
+                "<a href='{0}' target='_blank'>rss</a> | <a href='{1}' target='_blank'>json</a> | <a href='{2}' target='_blank'>preview</a>",
                 f"/rss/tag/{slug}",
                 f"/rss/tag/json/{slug}",
+                f"/rss/tag/{slug}?format=html",
             )
         else:
             return "-"

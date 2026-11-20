@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import quote
 from django.utils.http import content_disposition_header
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
@@ -14,9 +15,21 @@ from feed2json import feed2json
 import mistune
 
 from .cache import cache_rss, cache_tag, cache_digest
+from .feed_preview import PREVIEW_CSP, build_subscribe_url, render_atom_as_html
 from core.models.filter import cache_version
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_response_format(request, route_format="xml"):
+    """Return ``"html"`` when an XML feed route is requested with ``?format=html``."""
+    if (
+        route_format == "xml"
+        and request is not None
+        and (request.GET.get("format") or "").strip().lower() == "html"
+    ):
+        return "html"
+    return route_format
 
 
 def _get_modified(request, feed_slug, feed_type="t", **kwargs):
@@ -50,22 +63,35 @@ def _mix_version_into_stamp(stamp, scope, pk):
     return base + timezone.timedelta(seconds=version)
 
 
+def _append_etag_suffix(etag: str, suffix: str) -> str:
+    """Append a suffix inside a weak/quoted ETag so Django's quote_etag stays valid."""
+    if etag.endswith('"') and (
+        (etag.startswith('"') and len(etag) >= 2)
+        or (etag.startswith('W/"') and len(etag) >= 4)
+    ):
+        return f'{etag[:-1]}{suffix}"'
+    return f"{etag}{suffix}"
+
+
 def _mix_version_into_etag(base: str, scope: str, pk):
     """Append the invalidation version onto an ETag base string."""
     version = cache_version(scope, pk)
     if not base and not version:
         return None
-    return f"{base}-v{version}" if version else base
+    return _append_etag_suffix(base, f"-v{version}") if version else base
 
 
-def _get_etag(request, feed_slug, feed_type="t", **kwargs):
+def _get_etag(request, feed_slug, feed_type="t", format="xml", **kwargs):
     try:
         feed = Feed.objects.only("pk", "last_translate", "etag").get(slug=feed_slug)
         if feed_type == "t":
             base = feed.last_translate.isoformat() if feed.last_translate else ""
         else:
             base = feed.etag or ""
-        return _mix_version_into_etag(base, "rss", feed.pk)
+        etag = _mix_version_into_etag(base, "rss", feed.pk)
+        if etag and _resolve_response_format(request, format) == "html":
+            return _append_etag_suffix(etag, "-html")
+        return etag
     except Feed.DoesNotExist:
         logger.warning(
             "Feed not fetched yet, Please update it first: %s",
@@ -74,9 +100,17 @@ def _get_etag(request, feed_slug, feed_type="t", **kwargs):
         return None
 
 
-def _make_response(atom_feed, filename, format="xml"):
+def _make_response(
+    atom_feed,
+    filename,
+    format="xml",
+    *,
+    feed_url=None,
+    subscribe_url=None,
+    json_url=None,
+):
     if not atom_feed:
-        # XML and JSON agree on 404: a 200 body that just contains
+        # XML, HTML, and JSON agree on 404: a 200 body that just contains
         # "<error>" can get cached by clients/CDNs as a valid feed.
         if format == "json":
             return JsonResponse({"error": "No feed data available"}, status=404)
@@ -87,6 +121,16 @@ def _make_response(atom_feed, filename, format="xml"):
         # 如果需要返回 JSON 格式
         feed_json = feed2json(atom_feed)
         response = JsonResponse(feed_json)
+    elif format == "html":
+        html = render_atom_as_html(
+            atom_feed,
+            feed_url=feed_url,
+            subscribe_url=subscribe_url,
+            json_url=json_url,
+        )
+        response = HttpResponse(html, content_type="text/html; charset=utf-8")
+        response["Content-Security-Policy"] = PREVIEW_CSP
+        response["Referrer-Policy"] = "no-referrer"
     else:
         # 使用生成器函数实现流式传输
         def stream_content():
@@ -112,13 +156,16 @@ def _get_digest_modified(request, slug: str, **kwargs):
     return _mix_version_into_stamp(digest.last_generated, "digest", digest.pk)
 
 
-def _get_digest_etag(request, slug: str, **kwargs):
+def _get_digest_etag(request, slug: str, format="xml", **kwargs):
     try:
         digest = Digest.objects.only("pk", "last_generated").get(slug=slug)
     except Digest.DoesNotExist:
         return None
     base = digest.last_generated.isoformat() if digest.last_generated else ""
-    return _mix_version_into_etag(base, "digest", digest.pk)
+    etag = _mix_version_into_etag(base, "digest", digest.pk)
+    if etag and _resolve_response_format(request, format) == "html":
+        return _append_etag_suffix(etag, "-html")
+    return etag
 
 
 def import_opml(request):
@@ -181,13 +228,29 @@ def rss(request, feed_slug, feed_type="t", format="xml"):
         # cache_rss does its own get-or-generate on the versioned key;
         # a pre-read here would only ever hit a pre-versioning stale key.
         content = cache_rss(feed_slug, feed_type, format)
-        return _make_response(content, feed_slug, format)
     except Exception as e:
         logger.warning(f"Feed not found {feed_slug}: {str(e)}")
         return HttpResponse(
             status=404,
             content="Feed not found, Maybe it's still in progress, Please try again later.",
         )
+
+    response_format = _resolve_response_format(request, format)
+    quoted_slug = quote(feed_slug)
+    if feed_type == "o":
+        feed_url = f"/rss/proxy/{quoted_slug}"
+        json_url = None
+    else:
+        feed_url = f"/rss/{quoted_slug}"
+        json_url = f"/rss/json/{quoted_slug}"
+    return _make_response(
+        content,
+        feed_slug,
+        response_format,
+        feed_url=feed_url,
+        subscribe_url=build_subscribe_url(request, feed_url),
+        json_url=json_url,
+    )
 
 
 def tag(request, tag: str, feed_type="t", format="xml"):
@@ -197,13 +260,29 @@ def tag(request, tag: str, feed_type="t", format="xml"):
 
     try:
         content = cache_tag(tag, feed_type, format)
-        return _make_response(content, tag, format)
     except Exception as e:
         logger.warning("tag not found: %s / %s", tag, str(e))
         return HttpResponse(
             status=404,
             content="Feed not found, Maybe it's still in progress, Please try again later.",
         )
+
+    response_format = _resolve_response_format(request, format)
+    quoted_tag = quote(tag)
+    if feed_type == "o":
+        feed_url = f"/rss/tag/proxy/{quoted_tag}"
+        json_url = None
+    else:
+        feed_url = f"/rss/tag/{quoted_tag}"
+        json_url = f"/rss/tag/json/{quoted_tag}"
+    return _make_response(
+        content,
+        tag,
+        response_format,
+        feed_url=feed_url,
+        subscribe_url=build_subscribe_url(request, feed_url),
+        json_url=json_url,
+    )
 
 
 def digest_view(request, slug):
@@ -316,14 +395,25 @@ def digest_view(request, slug):
 
 @condition(etag_func=_get_digest_etag, last_modified_func=_get_digest_modified)
 def digest(request, slug, format="xml"):
-    """Return digest as ATOM/JSON feed, with caching."""
+    """Return digest as ATOM/JSON feed (or HTML preview with ?format=html)."""
     slug = smart_str(slug)
     try:
         content = cache_digest(slug, format)
-        return _make_response(content, slug, format)
     except Exception as e:
         logger.warning(f"Digest not found {slug}: {str(e)}")
         return HttpResponse(
             status=404,
             content="Digest not found, or not generated yet.",
         )
+
+    response_format = _resolve_response_format(request, format)
+    quoted_slug = quote(slug)
+    digest_feed_url = f"/rss/digest/{quoted_slug}"
+    return _make_response(
+        content,
+        slug,
+        response_format,
+        feed_url=digest_feed_url,
+        subscribe_url=build_subscribe_url(request, digest_feed_url),
+        json_url=f"/rss/digest/json/{quoted_slug}",
+    )
