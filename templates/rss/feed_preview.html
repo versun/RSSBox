@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="same-origin">
+    <meta name="referrer" content="no-referrer">
     <title>{{ feed.title }} - RSS Feed</title>
     {% if feed_url %}
     <link rel="alternate" type="application/atom+xml" title="{{ feed.title }}" href="{{ feed_url }}">
@@ -108,14 +108,14 @@
             color: var(--muted);
             font-size: 0.85rem;
         }
-        a {
+        a[href] {
             color: var(--accent);
             text-decoration: none;
         }
-        a:visited {
+        a[href]:visited {
             color: var(--accent-visited);
         }
-        a:hover {
+        a[href]:hover {
             text-decoration: underline;
         }
         main {
@@ -236,8 +236,8 @@
                 This is an HTML preview of the Atom feed{% if feed.link %} for <a href="{{ feed.link }}" target="_blank" rel="noopener noreferrer">{{ feed.title }}</a>{% endif %}.{% if subscribe_url %} Subscribe in your feed reader using <code class="feed-path">{{ subscribe_url }}</code>.{% endif %}
             </p>
             <div class="feed-meta">
-                {% if raw_feed_url %}
-                <a class="pill" href="{{ raw_feed_url }}">Atom XML</a>
+                {% if feed_url %}
+                <a class="pill" href="{{ feed_url }}">Atom XML</a>
                 {% endif %}
                 {% if json_url %}
                 <a class="pill" href="{{ json_url }}">JSON</a>

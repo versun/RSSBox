@@ -47,23 +47,18 @@ _INVALID_XML_CHARS_RE = re.compile(
 _NUMERIC_CHAR_REF_RE = re.compile(r"&#(?:(\d+)|[xX]([0-9a-fA-F]+));?")
 
 # Strict CSP for preview pages: zero JavaScript execution, no object/form/base
-# injection. Inline <style> is used exclusively by our own template; entry
-# inline styles and <style> elements are stripped during HTML sanitization.
+# injection, and opaque null-origin sandboxing isolating the preview from
+# Django Admin cookies and storage. Inline <style> is used exclusively by our
+# own template; entry inline styles, classes, IDs, and <style> elements are
+# stripped during HTML sanitization.
 PREVIEW_CSP = (
     "default-src 'none'; "
     "style-src 'unsafe-inline'; "
     "img-src http: https: data:; "
     "media-src http: https:; "
     "base-uri 'none'; "
-    "form-action 'none'"
-)
-
-PREVIEW_VARY_HEADERS = (
-    "Accept",
-    "Sec-Fetch-Site",
-    "Sec-Fetch-Mode",
-    "Sec-Fetch-Dest",
-    "Referer",
+    "form-action 'none'; "
+    "sandbox allow-popups allow-popups-to-escape-sandbox allow-downloads"
 )
 
 _HTML_CLEANER = Cleaner(
@@ -82,7 +77,10 @@ _HTML_CLEANER = Cleaner(
     annoying_tags=True,
     remove_unknown_tags=False,
     safe_attrs_only=True,
-    safe_attrs=lxml_html.defs.safe_attrs | {"controls", "poster", "loading"},
+    safe_attrs=(
+        (lxml_html.defs.safe_attrs | {"controls", "poster", "loading"})
+        - {"class", "id"}
+    ),
     remove_tags={"noscript", "xmp", "listing"},
     kill_tags={
         "script",
@@ -172,7 +170,6 @@ def _safe_url(
     url: str | None,
     *,
     allowed_schemes=_SAFE_LINK_SCHEMES,
-    allow_fragment: bool = False,
 ) -> str:
     """Return a validated URL, normalizing protocol-relative ``//`` to ``https://``."""
     if not url:
@@ -182,8 +179,6 @@ def _safe_url(
     cleaned = re.sub(r"[\x00-\x1f\x7f]+", "", url).strip()
     if not cleaned:
         return ""
-    if allow_fragment and cleaned.startswith("#"):
-        return cleaned
     try:
         parsed = urlsplit(cleaned)
     except ValueError:
@@ -312,7 +307,7 @@ def _extract_enclosures(entry_el: etree._Element) -> list[PreviewEnclosure]:
 
 
 def sanitize_entry_html(raw_html: str) -> SafeString:
-    """Sanitize untrusted entry HTML for same-origin browser rendering."""
+    """Sanitize untrusted entry HTML for browser preview rendering."""
     if not raw_html or not raw_html.strip():
         return mark_safe("")
 
@@ -331,11 +326,13 @@ def sanitize_entry_html(raw_html: str) -> SafeString:
                 continue
             tag = el.tag.lower()
 
-            # Defense-in-depth attribute pass: strip event handlers, inline styles,
-            # srcset, and validate every remaining URL-bearing attribute.
+            # Defense-in-depth attribute pass: strip event handlers, styles,
+            # classes/IDs, srcset, and validate every remaining URL-bearing attribute.
             for attr in list(el.attrib):
                 attr_lower = attr.lower()
                 if attr_lower.startswith("on") or attr_lower in {
+                    "class",
+                    "id",
                     "style",
                     "srcset",
                     "formaction",
@@ -347,7 +344,7 @@ def sanitize_entry_html(raw_html: str) -> SafeString:
                     continue
 
                 if attr_lower == "href":
-                    safe = _safe_url(el.attrib[attr], allow_fragment=(tag == "a"))
+                    safe = _safe_url(el.attrib[attr])
                     if safe:
                         el.attrib[attr] = safe
                     else:
@@ -363,13 +360,12 @@ def sanitize_entry_html(raw_html: str) -> SafeString:
                         del el.attrib[attr]
 
             if tag == "a":
-                href = el.get("href")
-                if href and href.startswith("#"):
-                    el.attrib.pop("target", None)
-                    el.attrib.pop("rel", None)
-                elif href:
+                if el.get("href"):
                     el.set("target", "_blank")
                     el.set("rel", "noopener noreferrer")
+                else:
+                    el.attrib.pop("target", None)
+                    el.attrib.pop("rel", None)
 
         parts: list[str] = []
         if cleaned.text:
@@ -458,97 +454,6 @@ def _normalize_netloc(netloc: str, scheme: str = "") -> str:
     return value
 
 
-def _is_same_host_referer(request, referer: str) -> bool:
-    """Return True when ``referer`` points to this RSSBox instance's host."""
-    try:
-        parsed = urlsplit(referer)
-    except ValueError:
-        return False
-    scheme = parsed.scheme.lower()
-    if scheme not in ("http", "https") or not parsed.netloc:
-        return False
-
-    referer_netloc = _normalize_netloc(parsed.netloc, scheme)
-    if not referer_netloc:
-        return False
-
-    allowed: set[str] = set()
-    try:
-        req_host = request.get_host()
-    except DisallowedHost:
-        req_host = ""
-    if req_host:
-        req_scheme = "https" if request.is_secure() else "http"
-        allowed.add(_normalize_netloc(req_host, req_scheme))
-        # Also match regardless of TLS termination behind a reverse proxy.
-        allowed.add(_normalize_netloc(req_host, scheme))
-
-    site_url = getattr(settings, "SITE_URL", "") or ""
-    if site_url:
-        try:
-            site_parsed = urlsplit(site_url)
-            if site_parsed.netloc:
-                allowed.add(
-                    _normalize_netloc(site_parsed.netloc, site_parsed.scheme.lower())
-                )
-        except ValueError:
-            pass
-
-    return referer_netloc in allowed
-
-
-def wants_html_preview(request) -> bool:
-    """Decide whether an XML feed endpoint should render an HTML preview.
-
-    Explicit ``?format=xml`` / ``?format=html`` query overrides always win.
-    Otherwise, returns True only for same-origin browser document navigations
-    (e.g., clicking a feed link inside RSSBox Admin), so external RSS readers
-    — including fetchers spoofing browser ``Accept`` and ``Sec-Fetch-Dest``
-    headers — always receive pure Atom XML.
-    """
-    if request is None:
-        return False
-
-    explicit = (request.GET.get("format") or "").strip().lower()
-    if explicit == "xml":
-        return False
-    if explicit == "html":
-        return True
-
-    accept = (request.META.get("HTTP_ACCEPT") or "").lower()
-    if "text/html" not in accept:
-        return False
-
-    fetch_site = (request.META.get("HTTP_SEC_FETCH_SITE") or "").strip().lower()
-    fetch_mode = (request.META.get("HTTP_SEC_FETCH_MODE") or "").strip().lower()
-    fetch_dest = (request.META.get("HTTP_SEC_FETCH_DEST") or "").strip().lower()
-
-    # Non-navigation fetches (e.g., same-origin XHR/fetch) should still get XML.
-    if fetch_mode and fetch_mode != "navigate":
-        return False
-    if fetch_dest and fetch_dest != "document":
-        return False
-
-    if (
-        fetch_site == "same-origin"
-        and fetch_mode == "navigate"
-        and fetch_dest == "document"
-    ):
-        return True
-
-    # When Fetch Metadata explicitly declares a non-same-origin/non-same-site
-    # context (e.g., "none" or "cross-site"), do not fall back to Referer so
-    # anti-hotlink RSS fetchers spoofing both headers still receive pure XML.
-    if fetch_site and fetch_site not in ("same-origin", "same-site"):
-        return False
-
-    referer = (request.META.get("HTTP_REFERER") or "").strip()
-    if referer:
-        return _is_same_host_referer(request, referer)
-
-    return False
-
-
 def build_subscribe_url(request, feed_url: str | None) -> str | None:
     """Build the full absolute subscription URL shown in the preview header.
 
@@ -611,14 +516,12 @@ def render_atom_as_html(
     resolved_subscribe_url = subscribe_url or feed_url
     if _is_self_feed_link(feed.link, feed_url, resolved_subscribe_url):
         feed.link = ""
-    raw_feed_url = f"{feed_url}?format=xml" if feed_url else None
     return render_to_string(
         "rss/feed_preview.html",
         {
             "feed": feed,
             "feed_url": feed_url,
             "subscribe_url": resolved_subscribe_url,
-            "raw_feed_url": raw_feed_url,
             "json_url": json_url,
         },
     )

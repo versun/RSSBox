@@ -356,6 +356,7 @@ class FeedAdminDisplayMethodsTest(TestCase):
         self.assertIn("-", result)
         self.assertIn(f"/rss/{self.feed.slug}", result)
         self.assertIn(f"/rss/json/{self.feed.slug}", result)
+        self.assertIn(f"/rss/{self.feed.slug}?format=html", result)
 
         # Test with translation
         mock_status_icon.return_value = "✓"
@@ -406,8 +407,10 @@ class FeedAdminDisplayMethodsTest(TestCase):
         result = self.admin.fetch_feed(self.feed)
         self.assertIn(self.feed.feed_url, result)
         self.assertIn(f"/rss/proxy/{self.feed.slug}", result)
+        self.assertIn(f"/rss/proxy/{self.feed.slug}?format=html", result)
         self.assertIn("url", result)
         self.assertIn("proxy", result)
+        self.assertIn("preview", result)
 
         # Test without pk
         new_feed = Feed(name="Unsaved Feed", feed_url="http://test.com/rss")

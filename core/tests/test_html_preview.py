@@ -1,22 +1,22 @@
-"""Tests for server-side same-origin HTML feed previews (replacing client-side XSLT)."""
+"""Tests for server-side HTML feed previews (?format=html, replacing XSLT)."""
 
 from datetime import timedelta
 from unittest.mock import patch
 from urllib.parse import quote
 
+from django.contrib.admin.sites import AdminSite
 from django.core.cache import cache
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from lxml import etree
 
+from core.admin.digest_admin import DigestAdmin
 from core.feed_preview import (
     PREVIEW_CSP,
-    PREVIEW_VARY_HEADERS,
     build_subscribe_url,
     parse_atom_for_preview,
     render_atom_as_html,
     sanitize_entry_html,
-    wants_html_preview,
 )
 from core.models import Digest, Entry, Feed, OpenAIAgent, Tag
 
@@ -81,8 +81,9 @@ class SanitizeEntryHtmlTests(TestCase):
         ):
             self.assertNotIn(forbidden, cleaned.lower())
 
-    def test_strips_event_handlers_inline_styles_and_unsafe_urls(self):
+    def test_strips_event_handlers_styles_classes_ids_and_unsafe_urls(self):
         raw = (
+            '<div class="container pill" id="hijack">'
             '<p style="position:fixed" onclick="alert(1)">Text</p>'
             '<a href="javascript:alert(1)">JS link</a>'
             '<a href="java\tscript:alert(1)">Obfuscated JS</a>'
@@ -90,12 +91,15 @@ class SanitizeEntryHtmlTests(TestCase):
             '<img src="https://example.com/a.jpg" onerror="alert(1)" srcset="javascript:alert(1)">'
             '<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="svg">'
             '<video controls poster="javascript:alert(1)" src="javascript:alert(2)"></video>'
+            "</div>"
         )
         cleaned = str(sanitize_entry_html(raw))
-        self.assertIn("Text", cleaned)
+        self.assertIn("<div><p>Text</p>", cleaned)
         self.assertIn("JS link", cleaned)
         self.assertIn('src="https://example.com/a.jpg"', cleaned)
         for forbidden in (
+            "class=",
+            "id=",
             "onclick",
             "onerror",
             "style=",
@@ -163,7 +167,7 @@ class SanitizeEntryHtmlTests(TestCase):
         ):
             self.assertNotIn(forbidden, cleaned.lower())
 
-    def test_normalizes_protocol_relative_urls_and_preserves_fragment_anchors(self):
+    def test_normalizes_protocol_relative_urls_and_strips_fragment_anchors(self):
         raw = (
             '<img src="//cdn.example.com/a.png" alt="cdn">'
             '<img src="///evil.example/bad.png" alt="bad">'
@@ -171,7 +175,6 @@ class SanitizeEntryHtmlTests(TestCase):
             '<a href="//example.com/path">Proto link</a>'
             '<a href="///bad">Bad proto</a>'
             '<a href="#fn1" target="_blank">[1]</a>'
-            '<p id="fn1">Footnote</p>'
         )
         cleaned = str(sanitize_entry_html(raw))
         self.assertIn('src="https://cdn.example.com/a.png"', cleaned)
@@ -179,120 +182,11 @@ class SanitizeEntryHtmlTests(TestCase):
         self.assertNotIn('src="#not-an-image"', cleaned)
         self.assertIn('href="https://example.com/path"', cleaned)
         self.assertNotIn('href="///bad"', cleaned)
-        self.assertIn('<a href="#fn1">[1]</a>', cleaned)
-        self.assertIn('<p id="fn1">Footnote</p>', cleaned)
+        self.assertNotIn('href="#fn1"', cleaned)
+        self.assertIn("<a>[1]</a>", cleaned)
 
 
-class WantsHtmlPreviewTests(TestCase):
-    def setUp(self):
-        self.factory = RequestFactory()
-
-    def test_same_origin_fetch_metadata_triggers_preview(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_ACCEPT="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            HTTP_SEC_FETCH_SITE="same-origin",
-            HTTP_SEC_FETCH_MODE="navigate",
-            HTTP_SEC_FETCH_DEST="document",
-        )
-        self.assertTrue(wants_html_preview(req))
-
-    def test_same_host_referer_triggers_preview_without_fetch_metadata(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_HOST="rssbox.local:8080",
-            HTTP_ACCEPT="text/html,application/xhtml+xml,*/*;q=0.8",
-            HTTP_REFERER="http://rssbox.local:8080/core/feed/",
-        )
-        self.assertTrue(wants_html_preview(req))
-
-    @override_settings(SITE_URL="https://rss.example.com")
-    def test_referer_matching_site_url_behind_proxy_triggers_preview(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_HOST="127.0.0.1:8000",
-            HTTP_ACCEPT="text/html,*/*;q=0.8",
-            HTTP_REFERER="https://rss.example.com/core/feed/",
-        )
-        self.assertTrue(wants_html_preview(req))
-
-    def test_spoofed_browser_rss_fetcher_receives_xml(self):
-        # Mirrors the exact browser-like headers sent by core/tasks/fetch_feeds.py
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_ACCEPT="text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            HTTP_SEC_FETCH_DEST="document",
-            HTTP_SEC_FETCH_MODE="navigate",
-            HTTP_SEC_FETCH_SITE="none",
-            HTTP_SEC_FETCH_USER="?1",
-        )
-        self.assertFalse(wants_html_preview(req))
-
-    def test_explicit_non_same_origin_fetch_site_does_not_fallback_to_referer(self):
-        # Anti-hotlink scrapers may forge same-host Referer while sending
-        # Sec-Fetch-Site: none (or cross-site).
-        for fetch_site in ("none", "cross-site"):
-            with self.subTest(fetch_site=fetch_site):
-                req = self.factory.get(
-                    "/rss/example-feed",
-                    HTTP_HOST="rssbox.local:8000",
-                    HTTP_ACCEPT="text/html,application/xml;q=0.9,*/*;q=0.8",
-                    HTTP_REFERER="http://rssbox.local:8000/core/feed/",
-                    HTTP_SEC_FETCH_SITE=fetch_site,
-                    HTTP_SEC_FETCH_MODE="navigate",
-                    HTTP_SEC_FETCH_DEST="document",
-                )
-                self.assertFalse(wants_html_preview(req))
-
-    def test_cross_origin_referer_receives_xml(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_HOST="rssbox.local:8000",
-            HTTP_ACCEPT="text/html,application/xml;q=0.9,*/*;q=0.8",
-            HTTP_REFERER="https://inoreader.com/feed/123",
-            HTTP_SEC_FETCH_SITE="cross-site",
-            HTTP_SEC_FETCH_MODE="navigate",
-            HTTP_SEC_FETCH_DEST="document",
-        )
-        self.assertFalse(wants_html_preview(req))
-
-    def test_same_origin_xhr_or_fetch_receives_xml(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_HOST="rssbox.local:8000",
-            HTTP_ACCEPT="text/html,*/*",
-            HTTP_REFERER="http://rssbox.local:8000/core/feed/",
-            HTTP_SEC_FETCH_SITE="same-origin",
-            HTTP_SEC_FETCH_MODE="cors",
-            HTTP_SEC_FETCH_DEST="empty",
-        )
-        self.assertFalse(wants_html_preview(req))
-
-    def test_plain_rss_reader_receives_xml(self):
-        req = self.factory.get(
-            "/rss/example-feed",
-            HTTP_ACCEPT="application/atom+xml, application/xml, */*",
-        )
-        self.assertFalse(wants_html_preview(req))
-
-    def test_explicit_query_overrides_always_win(self):
-        # ?format=xml forces XML even on same-origin admin click
-        req_xml = self.factory.get(
-            "/rss/example-feed?format=xml",
-            HTTP_HOST="rssbox.local:8000",
-            HTTP_ACCEPT="text/html,*/*",
-            HTTP_REFERER="http://rssbox.local:8000/core/feed/",
-            HTTP_SEC_FETCH_SITE="same-origin",
-            HTTP_SEC_FETCH_MODE="navigate",
-            HTTP_SEC_FETCH_DEST="document",
-        )
-        self.assertFalse(wants_html_preview(req_xml))
-
-        # ?format=html forces HTML even without Referer or Accept: text/html
-        req_html = self.factory.get("/rss/example-feed?format=html")
-        self.assertTrue(wants_html_preview(req_html))
-
-
+@override_settings(TIME_ZONE="UTC")
 class ParseAtomPreviewTests(TestCase):
     def test_parses_metadata_entries_and_enclosures(self):
         atom_xml = """<?xml version='1.0' encoding='utf-8'?>
@@ -359,7 +253,7 @@ class ParseAtomPreviewTests(TestCase):
                 <title>XHTML Entry</title>
                 <content type="xhtml">
                     <div xmlns="http://www.w3.org/1999/xhtml">
-                        <p>Clean paragraph</p>
+                        <p class="container">Clean paragraph</p>
                         <script>alert(1)</script>
                     </div>
                 </content>
@@ -367,23 +261,18 @@ class ParseAtomPreviewTests(TestCase):
         </feed>"""
         feed = parse_atom_for_preview(atom_xml)
         content = str(feed.entries[0].content_html)
-        self.assertIn("Clean paragraph", content)
+        self.assertIn("<p>Clean paragraph</p>", content)
+        self.assertNotIn("class=", content)
         self.assertNotIn("<script", content.lower())
         self.assertNotIn("alert(", content)
 
 
-_ADMIN_CLICK_HEADERS = {
+_BROWSER_HEADERS = {
     "HTTP_ACCEPT": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "HTTP_SEC_FETCH_SITE": "same-origin",
     "HTTP_SEC_FETCH_MODE": "navigate",
     "HTTP_SEC_FETCH_DEST": "document",
     "HTTP_REFERER": "http://testserver/core/feed/",
-}
-_SPOOFED_FETCHER_HEADERS = {
-    "HTTP_ACCEPT": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "HTTP_SEC_FETCH_SITE": "none",
-    "HTTP_SEC_FETCH_MODE": "navigate",
-    "HTTP_SEC_FETCH_DEST": "document",
 }
 
 
@@ -417,7 +306,8 @@ class HtmlPreviewRoutesTests(TestCase):
             translated_title="翻译标题",
             original_content='<p>Original body</p><script>alert("xss")</script>',
             translated_content=(
-                '<p>翻译正文</p><img src="https://example.com/img.png" onerror="alert(1)">'
+                '<p class="pill">翻译正文</p>'
+                '<img src="https://example.com/img.png" onerror="alert(1)">'
                 '<a href="javascript:alert(1)">bad</a>'
             ),
             enclosures_xml=(
@@ -429,38 +319,32 @@ class HtmlPreviewRoutesTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _assert_vary_contains_preview_headers(self, response):
-        vary_tokens = {
-            token.strip().lower() for token in response.get("Vary", "").split(",")
-        }
-        for header in PREVIEW_VARY_HEADERS:
-            self.assertIn(header.lower(), vary_tokens)
-
     def _assert_preview_headers(self, response):
         self.assertEqual(response["Content-Type"], "text/html; charset=utf-8")
         self.assertEqual(response["Content-Security-Policy"], PREVIEW_CSP)
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-        self.assertEqual(response["Cache-Control"], "private, no-store")
-        self.assertNotIn("ETag", response)
-        self.assertNotIn("Last-Modified", response)
-        self._assert_vary_contains_preview_headers(response)
+        self.assertIn(
+            "sandbox allow-popups allow-popups-to-escape-sandbox allow-downloads",
+            response["Content-Security-Policy"],
+        )
+        self.assertEqual(response["Referrer-Policy"], "no-referrer")
 
-    def test_xml_feed_has_no_xslt_and_sets_vary(self):
-        for headers in ({}, _SPOOFED_FETCHER_HEADERS):
+    def test_bare_xml_endpoint_always_returns_pure_atom_xml(self):
+        # Even with full browser / same-origin headers, bare /rss/<slug> always
+        # serves pure Atom XML without xml-stylesheet.
+        for headers in ({}, _BROWSER_HEADERS):
             with self.subTest(headers=headers):
                 response = self.client.get(f"/rss/{self.feed.slug}", **headers)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(
                     response["Content-Type"], "application/xml; charset=utf-8"
                 )
-                self._assert_vary_contains_preview_headers(response)
                 body = b"".join(response.streaming_content).decode("utf-8")
                 self.assertNotIn("xml-stylesheet", body)
                 self.assertNotIn("rss.xsl", body)
                 self.assertIn("翻译标题", body)
 
-    def test_same_origin_click_renders_sanitized_html_preview(self):
-        response = self.client.get(f"/rss/{self.feed.slug}", **_ADMIN_CLICK_HEADERS)
+    def test_explicit_format_html_renders_sanitized_preview(self):
+        response = self.client.get(f"/rss/{self.feed.slug}?format=html")
         self.assertEqual(response.status_code, 200)
         self._assert_preview_headers(response)
         html = response.content.decode("utf-8")
@@ -471,35 +355,22 @@ class HtmlPreviewRoutesTests(TestCase):
         self.assertIn("ep1.mp3", html)
         self.assertIn("1 MB", html)
         self.assertIn(
-            f'rel="alternate" type="application/atom+xml" title="Example Feed" href="/rss/{self.feed.slug}"',
-            html,
-        )
-        self.assertIn(f'href="/rss/{self.feed.slug}?format=xml"', html)
-        self.assertIn(f'href="/rss/json/{self.feed.slug}"', html)
-        self.assertNotIn("<script", html.lower())
-        self.assertNotIn("onerror", html.lower())
-        self.assertNotIn("javascript:", html.lower())
-
-    def test_query_format_overrides_on_same_url(self):
-        # Clicking "Atom XML" (?format=xml) from inside the HTML preview returns XML
-        xml_resp = self.client.get(
-            f"/rss/{self.feed.slug}?format=xml", **_ADMIN_CLICK_HEADERS
-        )
-        self.assertEqual(xml_resp.status_code, 200)
-        self.assertEqual(xml_resp["Content-Type"], "application/xml; charset=utf-8")
-
-        # Direct bookmark with ?format=html renders HTML without Referer, and
-        # shows a copyable full absolute URL without ?format=html.
-        html_resp = self.client.get(f"/rss/{self.feed.slug}?format=html")
-        self.assertEqual(html_resp.status_code, 200)
-        self._assert_preview_headers(html_resp)
-        html = html_resp.content.decode("utf-8")
-        self.assertIn(
             f'<code class="feed-path">http://testserver/rss/{self.feed.slug}</code>',
             html,
         )
+        self.assertIn(
+            f'rel="alternate" type="application/atom+xml" title="Example Feed" href="/rss/{self.feed.slug}"',
+            html,
+        )
+        self.assertIn(
+            f'<a class="pill" href="/rss/{self.feed.slug}">Atom XML</a>', html
+        )
+        self.assertIn(f'href="/rss/json/{self.feed.slug}"', html)
         self.assertIn(">Website</a>", html)
-        self.assertIn('<meta name="referrer" content="same-origin">', html)
+        self.assertIn('<meta name="referrer" content="no-referrer">', html)
+        self.assertNotIn("<script", html.lower())
+        self.assertNotIn("onerror", html.lower())
+        self.assertNotIn("javascript:", html.lower())
 
     @override_settings(SITE_URL="https://rss.example.com/")
     def test_subscribe_url_prefers_configured_site_url(self):
@@ -527,91 +398,124 @@ class HtmlPreviewRoutesTests(TestCase):
             translated_content="Page 1 &#12; Page 2 <plaintext>should not eat footer",
         )
         cache.clear()
-        resp = self.client.get(f"/rss/{self.feed.slug}", **_ADMIN_CLICK_HEADERS)
+        resp = self.client.get(f"/rss/{self.feed.slug}?format=html")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode("utf-8")
         self.assertIn("Page 1  Page 2", html)
         self.assertIn("</html>", html)
         self.assertNotIn("<plaintext", html.lower())
 
-    def test_conditional_headers_from_xml_never_short_circuit_html_preview(self):
+    def test_distinct_html_etag_supports_conditional_requests_without_collision(self):
         xml_resp = self.client.get(f"/rss/{self.feed.slug}")
         self.assertEqual(xml_resp.status_code, 200)
-        etag = xml_resp["ETag"]
-        last_modified = xml_resp["Last-Modified"]
+        xml_etag = xml_resp["ETag"]
 
-        # Same-origin HTML preview with XML's ETag & Last-Modified must NOT get 304
+        # HTML preview has its own -html ETag and does not 304 on XML's ETag
         html_resp = self.client.get(
-            f"/rss/{self.feed.slug}",
-            HTTP_IF_NONE_MATCH=etag,
-            HTTP_IF_MODIFIED_SINCE=last_modified,
-            **_ADMIN_CLICK_HEADERS,
+            f"/rss/{self.feed.slug}?format=html",
+            HTTP_IF_NONE_MATCH=xml_etag,
         )
         self.assertEqual(html_resp.status_code, 200)
         self._assert_preview_headers(html_resp)
+        html_etag = html_resp["ETag"]
+        self.assertNotEqual(html_etag, xml_etag)
+        self.assertTrue(html_etag.strip('"').endswith("-html"))
 
-        # RSS reader revalidating XML with the same ETag still gets 304
-        reval_resp = self.client.get(
-            f"/rss/{self.feed.slug}",
-            HTTP_IF_NONE_MATCH=etag,
+        # Revalidating HTML preview with its own ETag returns 304
+        html_304 = self.client.get(
+            f"/rss/{self.feed.slug}?format=html",
+            HTTP_IF_NONE_MATCH=html_etag,
         )
-        self.assertEqual(reval_resp.status_code, 304)
+        self.assertEqual(html_304.status_code, 304)
+
+        # Revalidating XML with XML's ETag returns 304
+        xml_304 = self.client.get(
+            f"/rss/{self.feed.slug}",
+            HTTP_IF_NONE_MATCH=xml_etag,
+        )
+        self.assertEqual(xml_304.status_code, 304)
+
+    def test_weak_and_quoted_proxy_etags_stay_valid_for_html_preview(self):
+        for upstream_etag, expected_html_etag in (
+            ('W/"abc123"', 'W/"abc123-html"'),
+            ('"abc123"', '"abc123-html"'),
+        ):
+            with self.subTest(upstream_etag=upstream_etag):
+                self.feed.etag = upstream_etag
+                self.feed.save(update_fields=["etag"])
+                html_resp = self.client.get(f"/rss/proxy/{self.feed.slug}?format=html")
+                self.assertEqual(html_resp.status_code, 200)
+                self.assertEqual(html_resp["ETag"], expected_html_etag)
+                revalidated = self.client.get(
+                    f"/rss/proxy/{self.feed.slug}?format=html",
+                    HTTP_IF_NONE_MATCH=expected_html_etag,
+                )
+                self.assertEqual(revalidated.status_code, 304)
+
+    def test_render_error_is_not_masked_as_404(self):
+        with (
+            patch(
+                "core.views.render_atom_as_html",
+                side_effect=RuntimeError("template boom"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.get(f"/rss/{self.feed.slug}?format=html")
 
     def test_json_endpoint_never_returns_html(self):
-        response = self.client.get(
-            f"/rss/json/{self.feed.slug}?format=html", **_ADMIN_CLICK_HEADERS
-        )
+        response = self.client.get(f"/rss/json/{self.feed.slug}?format=html")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
 
     def test_proxy_feed_preview_and_xml(self):
-        # Reader gets XML
-        xml_resp = self.client.get(f"/rss/proxy/{self.feed.slug}")
+        xml_resp = self.client.get(f"/rss/proxy/{self.feed.slug}", **_BROWSER_HEADERS)
         self.assertEqual(xml_resp.status_code, 200)
         self.assertEqual(xml_resp["Content-Type"], "application/xml; charset=utf-8")
 
-        # Admin click gets HTML preview
-        html_resp = self.client.get(
-            f"/rss/proxy/{self.feed.slug}", **_ADMIN_CLICK_HEADERS
-        )
+        html_resp = self.client.get(f"/rss/proxy/{self.feed.slug}?format=html")
         self.assertEqual(html_resp.status_code, 200)
         self._assert_preview_headers(html_resp)
         html = html_resp.content.decode("utf-8")
         self.assertIn("Original &lt;script&gt;alert(1)&lt;/script&gt; Title", html)
         self.assertIn("<p>Original body</p>", html)
         self.assertNotIn("<script", html.lower())
-        self.assertIn(f'href="/rss/proxy/{self.feed.slug}?format=xml"', html)
+        self.assertIn(
+            f'<a class="pill" href="/rss/proxy/{self.feed.slug}">Atom XML</a>', html
+        )
         self.assertNotIn(f"/rss/json/{self.feed.slug}", html)
 
     def test_tag_and_tag_proxy_previews(self):
-        resp = self.client.get(f"/rss/tag/{self.tag.slug}", **_ADMIN_CLICK_HEADERS)
+        resp = self.client.get(f"/rss/tag/{self.tag.slug}?format=html")
         self.assertEqual(resp.status_code, 200)
         self._assert_preview_headers(resp)
         html = resp.content.decode("utf-8")
         self.assertIn("翻译标题", html)
-        self.assertIn(f'href="/rss/tag/{self.tag.slug}?format=xml"', html)
+        self.assertIn(
+            f'<a class="pill" href="/rss/tag/{self.tag.slug}">Atom XML</a>', html
+        )
         self.assertIn(f'href="/rss/tag/json/{self.tag.slug}"', html)
 
-        proxy_resp = self.client.get(
-            f"/rss/tag/proxy/{self.tag.slug}", **_ADMIN_CLICK_HEADERS
-        )
+        proxy_resp = self.client.get(f"/rss/tag/proxy/{self.tag.slug}?format=html")
         self.assertEqual(proxy_resp.status_code, 200)
         self._assert_preview_headers(proxy_resp)
         proxy_html = proxy_resp.content.decode("utf-8")
         self.assertIn("<p>Original body</p>", proxy_html)
-        self.assertIn(f'href="/rss/tag/proxy/{self.tag.slug}?format=xml"', proxy_html)
+        self.assertIn(
+            f'<a class="pill" href="/rss/tag/proxy/{self.tag.slug}">Atom XML</a>',
+            proxy_html,
+        )
         self.assertNotIn(f"/rss/tag/json/{self.tag.slug}", proxy_html)
 
     def test_chinese_tag_preview(self):
         encoded = quote(self.chinese_tag.slug)
-        resp = self.client.get(f"/rss/tag/{encoded}", **_ADMIN_CLICK_HEADERS)
+        resp = self.client.get(f"/rss/tag/{encoded}?format=html")
         self.assertEqual(resp.status_code, 200)
         self._assert_preview_headers(resp)
         html = resp.content.decode("utf-8")
-        self.assertIn(f'href="/rss/tag/{encoded}?format=xml"', html)
+        self.assertIn(f'<a class="pill" href="/rss/tag/{encoded}">Atom XML</a>', html)
         self.assertIn(f'href="/rss/tag/json/{encoded}"', html)
 
-    def test_digest_preview_and_public_view_intact(self):
+    def test_digest_preview_admin_link_and_public_view_intact(self):
         agent = OpenAIAgent.objects.create(
             name="Summarizer", api_key="test", valid=True
         )
@@ -632,24 +536,26 @@ class HtmlPreviewRoutesTests(TestCase):
             pubdate=self.now,
         )
 
-        # RSS reader gets XML
-        xml_resp = self.client.get(f"/rss/digest/{digest.slug}")
+        # Bare digest URL always returns XML
+        xml_resp = self.client.get(f"/rss/digest/{digest.slug}", **_BROWSER_HEADERS)
         self.assertEqual(xml_resp.status_code, 200)
         self.assertEqual(xml_resp["Content-Type"], "application/xml; charset=utf-8")
         digest_etag = xml_resp["ETag"]
 
-        # Same-origin click gets HTML preview (not 304 even with XML ETag)
+        # Explicit ?format=html renders preview with its own -html ETag
         html_resp = self.client.get(
-            f"/rss/digest/{digest.slug}",
+            f"/rss/digest/{digest.slug}?format=html",
             HTTP_IF_NONE_MATCH=digest_etag,
-            **_ADMIN_CLICK_HEADERS,
         )
         self.assertEqual(html_resp.status_code, 200)
         self._assert_preview_headers(html_resp)
+        self.assertTrue(html_resp["ETag"].strip('"').endswith("-html"))
         html = html_resp.content.decode("utf-8")
         self.assertIn("Daily Briefing", html)
         self.assertIn("Important news", html)
-        self.assertIn(f'href="/rss/digest/{digest.slug}?format=xml"', html)
+        self.assertIn(
+            f'<a class="pill" href="/rss/digest/{digest.slug}">Atom XML</a>', html
+        )
         self.assertIn(f'href="/rss/digest/json/{digest.slug}"', html)
         self.assertIn(
             f'<code class="feed-path">http://testserver/rss/digest/{digest.slug}</code>',
@@ -658,6 +564,14 @@ class HtmlPreviewRoutesTests(TestCase):
         # Digest's feed.link points back to /rss/digest/<slug> itself, so the
         # redundant self-referencing Website button must be omitted.
         self.assertNotIn(">Website</a>", html)
+
+        # DigestAdmin.show_url exposes rss | json | preview
+        digest_admin = DigestAdmin(Digest, AdminSite())
+        admin_links = digest_admin.show_url(digest)
+        self.assertIn(f"/rss/digest/{digest.slug}", admin_links)
+        self.assertIn(f"/rss/digest/json/{digest.slug}", admin_links)
+        self.assertIn(f"/rss/digest/{digest.slug}?format=html", admin_links)
+        self.assertIn("preview", admin_links)
 
         # Existing /rss/digest/view/<slug> continues to work unchanged
         view_resp = self.client.get(f"/rss/digest/view/{digest.slug}")

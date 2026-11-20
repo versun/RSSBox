@@ -43,8 +43,10 @@ class TagAdminTestCase(TestCase):
         result = self.admin.show_url(self.tag)
         self.assertIn("rss", result)
         self.assertIn("json", result)
+        self.assertIn("preview", result)
         self.assertIn(f"/rss/tag/{self.tag.slug}", result)
         self.assertIn(f"/rss/tag/json/{self.tag.slug}", result)
+        self.assertIn(f"/rss/tag/{self.tag.slug}?format=html", result)
         self.assertIn("target='_blank'", result)
 
         # Test with unsaved tag (no pk)
@@ -57,3 +59,7 @@ class TagAdminTestCase(TestCase):
         result_chinese = self.admin.show_url(chinese_tag)
         self.assertIn("/rss/tag/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0", result_chinese)
         self.assertIn("/rss/tag/json/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0", result_chinese)
+        self.assertIn(
+            "/rss/tag/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0?format=html",
+            result_chinese,
+        )

@@ -354,33 +354,37 @@ class FeedAdmin(admin.ModelAdmin):
         return obj.translator
 
     @admin.display(description=_("Generate"))
-    def generate_feed(self, obj):  # 显示3个元素：translated_status、feed_url、json_url
+    def generate_feed(self, obj):  # 显示4个元素：translated_status、feed_url、json_url、preview_url
         if not obj.translate_title and not obj.translate_content and not obj.summary:
             translation_status_icon = "-"
         else:
             translation_status_icon = status_icon(obj.translation_status)
         return format_html(
-            "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
+            "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a> | <a href='{5}' target='_blank'>{6}</a>",
             translation_status_icon,  # 0
             f"/rss/{obj.slug}",  # 1
             "rss",  # 2
             f"/rss/json/{obj.slug}",  # 3
             "json",  # 4
+            f"/rss/{obj.slug}?format=html",  # 5
+            "preview",  # 6
         )
 
     @admin.display(description=_("Fetch"))
-    def fetch_feed(self, obj):  # 显示3个元素：fetch状态、原url、代理feed
+    def fetch_feed(self, obj):  # 显示4个元素：fetch状态、原url、代理feed、preview_url
         if obj.pk:
             status = status_icon(obj.fetch_status)
         else:
             status = "-"
         return format_html(
-            "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a>",
+            "<span>{0}</span><br><a href='{1}' target='_blank'>{2}</a> | <a href='{3}' target='_blank'>{4}</a> | <a href='{5}' target='_blank'>{6}</a>",
             status,  # 0
             obj.feed_url,  # 1
             "url",  # 2
             f"/rss/proxy/{obj.slug}",  # 3
             "proxy",  # 4
+            f"/rss/proxy/{obj.slug}?format=html",  # 5
+            "preview",  # 6
         )
 
     @admin.display(description=_("Tasks"))
