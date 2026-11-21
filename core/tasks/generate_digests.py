@@ -13,6 +13,11 @@ from core.tasks.utils import PERSISTENCE_ERRORS, add_tokens, record_spent_tokens
 logger = logging.getLogger(__name__)
 
 
+def digest_entry_link(slug: str, entry_id: int) -> str:
+    """Public page of one digest entry (see core.views.digest_view)."""
+    return f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{slug}/{entry_id}"
+
+
 class DigestGenerator:
     """
     AI-powered digest content generator.
@@ -194,7 +199,7 @@ Summary: {article["summary"]}
             # 创建一条新的摘要 Entry
             entry = Entry.objects.create(
                 feed=digest_feed,
-                link=f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{self.digest.slug}",
+                link="",  # set below: the permalink needs the entry id
                 author=self.digest.name or "Digest",
                 pubdate=now,
                 updated=now,
@@ -206,6 +211,8 @@ Summary: {article["summary"]}
                 original_summary=None,
                 ai_summary=final_digest,
             )
+            entry.link = digest_entry_link(self.digest.slug, entry.pk)
+            entry.save(update_fields=["link"])
 
             self.digest.status = True  # Set status to success
             # A fresh entry was written: bump the version so the cache_digest
