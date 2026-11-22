@@ -3,6 +3,7 @@ import hashlib
 import logging
 import time
 from functools import lru_cache
+from urllib.parse import urlsplit
 from urllib.request import BaseHandler
 from django.conf import settings
 from django.utils import timezone
@@ -287,12 +288,33 @@ def _add_youtube_thumbnail(root, entry_data):
     if any((e.get("type") or "").startswith("image/") for e in root):
         return
     for thumbnail in entry_data.get("media_thumbnail") or []:
-        url = thumbnail.get("url")
-        if not url or not url.startswith("http"):
+        if not isinstance(thumbnail, dict):
             continue
-        if "ytimg.com/" in url and url.endswith("/hqdefault.jpg"):
+        url = thumbnail.get("url")
+        if not isinstance(url, str):
+            continue
+        url = url.strip()
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            continue
+        host = (parsed.hostname or "").lower()
+        if (
+            (host == "ytimg.com" or host.endswith(".ytimg.com"))
+            and parsed.path.endswith("/hqdefault.jpg")
+            and not parsed.query
+            and not parsed.fragment
+        ):
             url = url[: -len("hqdefault.jpg")] + "mqdefault.jpg"
-        etree.SubElement(root, "enclosure", href=url, type="image/jpeg")
+        try:
+            element = etree.Element("enclosure", href=url, type="image/jpeg")
+        except ValueError:
+            # Control characters from a malformed source are not valid XML;
+            # skip that thumbnail instead of aborting the whole fetch.
+            continue
+        root.append(element)
         return
 
 
