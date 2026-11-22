@@ -303,7 +303,9 @@ class DigestAdmin(admin.ModelAdmin):
                 # Submit task to background execution
                 digest.status = None
                 digest.save()
-                future = task_manager.submit_task(task_name, digest_generator.generate)
+                future = task_manager.submit_task(
+                    task_name, digest_generator.generate, force=True
+                )
 
                 success_count += 1
 

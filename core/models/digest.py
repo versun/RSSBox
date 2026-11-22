@@ -212,9 +212,17 @@ class Digest(models.Model):
 
         return enabled_days
 
-    def get_articles_for_digest(self):
+    def get_articles_for_digest(self, *, end_date=None, force: bool = False):
         """
         Get articles that should be included in this digest.
+
+        Args:
+            end_date: Upper bound for the article window (defaults to now).
+                Pinning this keeps summary preparation and digest rendering on
+                the same window.
+            force: When True, ignore ``last_generated`` and fall back to the
+                full ``days_range + 1`` lookback window (used for manual
+                re-runs).
 
         Returns:
             QuerySet: Entry objects filtered by tags and date range
@@ -222,13 +230,16 @@ class Digest(models.Model):
         from core.models.entry import Entry
         from datetime import timedelta
 
-        end_date = timezone.now()
+        end_date = end_date or timezone.now()
         start_date = end_date - timedelta(days=self.days_range+1) #由于是凌晨2点，所以包含今天影响不大
         # Continue where the last successful digest stopped, so a digest
         # that skips days (e.g. Mon-Fri only) neither loses the gap nor
         # repeats entries. days_range stays the upper limit.
-        if self.last_generated and self.last_generated > start_date:
-            start_date = self.last_generated
+        use_last_generated = (
+            not force
+            and self.last_generated is not None
+            and self.last_generated >= start_date
+        )
 
         # 正确获取digest tags对应的feeds的entries
         digest_tags = self.tags.all()
@@ -244,11 +255,15 @@ class Digest(models.Model):
         if not feed_ids:
             return Entry.objects.none()
 
+        date_filter = (
+            {"pubdate__gt": self.last_generated, "pubdate__lte": end_date}
+            if use_last_generated
+            else {"pubdate__gte": start_date, "pubdate__lte": end_date}
+        )
+
         # 从这些feeds获取entries
         entries = (
-            Entry.objects.filter(
-                feed_id__in=feed_ids, pubdate__gte=start_date, pubdate__lte=end_date
-            )
+            Entry.objects.filter(feed_id__in=feed_ids, **date_filter)
             .distinct()
             .order_by("-pubdate")
         )

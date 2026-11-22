@@ -24,6 +24,7 @@ class DigestGenerator:
     def __init__(self, digest: Digest):
         self.digest = digest
         self.articles = []
+        self._snapshot_entries = None
 
     def prepare_articles(self):
         """
@@ -33,8 +34,13 @@ class DigestGenerator:
             list: Processed article data
         """
         logger.info(f"Preparing articles for digest '{self.digest.name}'")
-        # Get articles based on digest configuration
-        articles = self.digest.get_articles_for_digest()
+        # Reuse the entry snapshot captured at the start of generate() so
+        # summary preparation and digest rendering operate on the exact same
+        # entries. Direct callers still fall back to a live query.
+        if self._snapshot_entries is not None:
+            articles = self._snapshot_entries
+        else:
+            articles = self.digest.get_articles_for_digest()
 
         processed_articles = []
         for entry in articles:
@@ -111,9 +117,17 @@ Summary: {article["summary"]}
         """
         logger.info(f"Generating digest '{self.digest.name}'")
         try:
-            # Ensure all entries have AI summaries before generating digest
+            # Pin the window upper bound once and snapshot the candidate
+            # entries so summary preparation and digest rendering operate on
+            # the exact same set (no mid-run window drift or empty summaries).
             now = timezone.now()
-            failed_entry_ids = _ensure_entries_have_summaries(self.digest)
+            snapshot_entries = list(
+                self.digest.get_articles_for_digest(end_date=now, force=force)
+            )
+            self._snapshot_entries = snapshot_entries
+            failed_entry_ids = _ensure_entries_have_summaries(
+                self.digest, articles=snapshot_entries
+            )
             if failed_entry_ids:
                 # Never publish a digest built on missing summaries.
                 raise RuntimeError(f"Summaries failed for entries {failed_entry_ids}")
@@ -186,9 +200,6 @@ Summary: {article["summary"]}
                     final_digest = final_digest.replace(placeholder, real_url)
                     logger.info(f"Replaced placeholder {placeholder} with URL")
 
-            # 将生成内容保存为一个 Entry，写入 ai_summary
-            self.digest.last_generated = now
-
             # 获取/创建 Digest 专用 Feed
             digest_feed = self.digest.get_digest_feed()
 
@@ -208,6 +219,9 @@ Summary: {article["summary"]}
                 ai_summary=final_digest,
             )
 
+            # Advance last_generated only after the digest Entry is persisted,
+            # so a DB error during creation never skips the window via finally.
+            self.digest.last_generated = now
             self.digest.status = True  # Set status to success
             # A fresh entry was written: bump the version so the cache_digest
             # warm-up below rebuilds instead of hitting the stale cached feed.
@@ -240,6 +254,7 @@ Summary: {article["summary"]}
             self.digest.status = False
             return {"success": False, "error": str(e)}
         finally:
+            self._snapshot_entries = None
             self.digest.save()
 
     def _chunk_articles_by_token_limit(
@@ -285,7 +300,7 @@ Summary: {article["summary"]}
         return chunks
 
 
-def _ensure_entries_have_summaries(digest: Digest):
+def _ensure_entries_have_summaries(digest: Digest, articles=None):
     """
     Ensure all entries that will be included in the digest have AI summaries.
 
@@ -297,6 +312,7 @@ def _ensure_entries_have_summaries(digest: Digest):
 
     Args:
         digest: The Digest instance
+        articles: Optional pre-fetched iterable of Entry objects to summarize
 
     Returns:
         list[int]: IDs of entries whose summary failed (left as ai_summary=None).
@@ -305,7 +321,10 @@ def _ensure_entries_have_summaries(digest: Digest):
     import gc
 
     # Get articles for digest within the specified days_range
-    all_articles = list(digest.get_articles_for_digest())
+    if articles is None:
+        all_articles = list(digest.get_articles_for_digest())
+    else:
+        all_articles = list(articles)
 
     if not all_articles:
         logger.info(f"No articles found for digest '{digest.name}'")
