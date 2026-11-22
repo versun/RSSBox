@@ -4,6 +4,7 @@ from django.utils.http import content_disposition_header
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
 from django.utils import timezone
+from django.utils.html import escape
 from django.views.decorators.http import condition
 from .models import Feed, Tag, Digest
 from django.shortcuts import redirect, get_object_or_404
@@ -15,7 +16,12 @@ from feed2json import feed2json
 import mistune
 
 from .cache import cache_rss, cache_tag, cache_digest
-from .feed_preview import PREVIEW_CSP, build_subscribe_url, render_atom_as_html
+from .feed_preview import (
+    PREVIEW_CSP,
+    build_subscribe_url,
+    render_atom_as_html,
+    sanitize_entry_html,
+)
 from core.models.filter import cache_version
 
 logger = logging.getLogger(__name__)
@@ -300,7 +306,9 @@ def digest_view(request, slug):
 
     # Convert markdown to HTML
     # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
-    html_content = mistune.html(latest.ai_summary)
+    # mistune passes raw HTML (<script>, onerror=...) through; sanitize it
+    # like the feed preview does: the summary is model output.
+    html_content = sanitize_entry_html(mistune.html(latest.ai_summary))
     
     # Format last_generated time with timezone conversion
     if digest.last_generated:
@@ -316,7 +324,7 @@ def digest_view(request, slug):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{digest.name}</title>
+        <title>{escape(digest.name)}</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -379,7 +387,7 @@ def digest_view(request, slug):
         <div class="container">
             <div class="meta">
                 <strong>Generated:</strong> {generated_time}<br>
-                <strong>Tags:</strong> {", ".join([tag.name for tag in digest.tags.all()])}<br>
+                <strong>Tags:</strong> {", ".join(escape(tag.name) for tag in digest.tags.all())}<br>
                 <strong>Days Range:</strong> {digest.days_range} days
             </div>
             <div class="content">
@@ -390,7 +398,9 @@ def digest_view(request, slug):
     </html>
     """
 
-    return HttpResponse(html_response, content_type="text/html; charset=utf-8")
+    response = HttpResponse(html_response, content_type="text/html; charset=utf-8")
+    response["Content-Security-Policy"] = PREVIEW_CSP
+    return response
 
 
 @condition(etag_func=_get_digest_etag, last_modified_func=_get_digest_modified)
