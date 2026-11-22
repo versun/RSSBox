@@ -1,6 +1,6 @@
 import time
 from types import SimpleNamespace
-from unittest import mock
+from unittest import mock, skipUnless
 
 import httpx
 from django.test import SimpleTestCase, override_settings
@@ -33,6 +33,7 @@ class ConvertStructTimeTests(SimpleTestCase):
         # Test None handling
         self.assertIsNone(convert_struct_time_to_datetime(None))
 
+    @skipUnless(hasattr(time, "tzset"), "time.tzset() is Unix-only")
     def test_struct_time_is_utc_whatever_the_local_timezone(self):
         """feedparser's struct_time is UTC; a non-UTC TZ must not shift it."""
         import os
