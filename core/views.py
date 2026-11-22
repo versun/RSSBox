@@ -310,8 +310,9 @@ def digest_view(request, slug, entry_id=None):
     # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
     html_content = mistune.html(latest.ai_summary)
     
-    # Format last_generated time with timezone conversion
-    generated_at = latest.pubdate if entry_id is not None else digest.last_generated
+    # Show the date of the digest on the page. It can differ from
+    # digest.last_generated, e.g. on an older entry's own page.
+    generated_at = latest.pubdate or digest.last_generated
     if generated_at:
         local_time = timezone.localtime(generated_at)
         generated_time = local_time.strftime("%Y-%m-%d %H:%M:%S")

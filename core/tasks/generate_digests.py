@@ -197,22 +197,26 @@ Summary: {article["summary"]}
             digest_feed = self.digest.get_digest_feed()
 
             # 创建一条新的摘要 Entry
-            entry = Entry.objects.create(
-                feed=digest_feed,
-                link="",  # set below: the permalink needs the entry id
-                author=self.digest.name or "Digest",
-                pubdate=now,
-                updated=now,
-                guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
-                original_title=f"{self.digest.name} | {timezone.localtime(now).strftime('%Y-%m-%d %H:%M')}",
-                translated_title=None,
-                original_content=None,
-                translated_content=None,
-                original_summary=None,
-                ai_summary=final_digest,
-            )
-            entry.link = digest_entry_link(self.digest.slug, entry.pk)
-            entry.save(update_fields=["link"])
+            # The permalink needs the entry id, so the link is written in a
+            # second step. Both writes commit together: if the second one
+            # fails, no entry with an empty link is left behind.
+            with transaction.atomic():
+                entry = Entry.objects.create(
+                    feed=digest_feed,
+                    link="",
+                    author=self.digest.name or "Digest",
+                    pubdate=now,
+                    updated=now,
+                    guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
+                    original_title=f"{self.digest.name} | {timezone.localtime(now).strftime('%Y-%m-%d %H:%M')}",
+                    translated_title=None,
+                    original_content=None,
+                    translated_content=None,
+                    original_summary=None,
+                    ai_summary=final_digest,
+                )
+                entry.link = digest_entry_link(self.digest.slug, entry.pk)
+                entry.save(update_fields=["link"])
 
             self.digest.status = True  # Set status to success
             # A fresh entry was written: bump the version so the cache_digest
