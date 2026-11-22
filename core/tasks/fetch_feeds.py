@@ -267,9 +267,33 @@ def _serialize_enclosures(entry_data):
             # drop that attachment instead of aborting the whole fetch.
             continue
         root.append(element)
+    _add_youtube_thumbnail(root, entry_data)
     if not len(root):
         return None
     return etree.tostring(root, encoding="unicode")
+
+
+def _add_youtube_thumbnail(root, entry_data):
+    """Give YouTube videos a picture.
+
+    A YouTube feed entry (one with <yt:videoId>) has no attachment, only a
+    <media:thumbnail>; add it as an image enclosure so readers show it. The
+    letterboxed 4:3 "hqdefault" becomes the 16:9 "mqdefault", which exists for
+    every video. YouTube only on purpose: elsewhere media:thumbnail is not
+    reliable (The Intercept's is often a related article's picture).
+    """
+    if not entry_data.get("yt_videoid"):
+        return
+    if any((e.get("type") or "").startswith("image/") for e in root):
+        return
+    for thumbnail in entry_data.get("media_thumbnail") or []:
+        url = thumbnail.get("url")
+        if not url or not url.startswith("http"):
+            continue
+        if "ytimg.com/" in url and url.endswith("/hqdefault.jpg"):
+            url = url[: -len("hqdefault.jpg")] + "mqdefault.jpg"
+        etree.SubElement(root, "enclosure", href=url, type="image/jpeg")
+        return
 
 
 def _source_hash(content: str) -> str:
