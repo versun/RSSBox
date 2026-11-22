@@ -204,7 +204,12 @@ def cache_digest(slug: str, format: str = "xml"):
 
 
 def _build_digest(digest, cache_key):
-    digest_feed = digest.get_digest_feed()
+    # Runs on GET (cache miss): look the feed up, never create or update it.
+    # No feed yet means no digest has been generated: the view returns 404.
+    digest_feed = digest.find_digest_feed()
+    if digest_feed is None:
+        logger.debug(f"No digest feed yet for {digest.slug}")
+        return None
 
     atom_feed = generate_atom_feed(digest_feed, "t")
     if not atom_feed:

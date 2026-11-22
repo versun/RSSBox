@@ -301,8 +301,12 @@ def digest_view(request, slug, entry_id=None):
     """
     digest = get_object_or_404(Digest, slug=slug)
 
-    digest_feed = digest.get_digest_feed()
-    if entry_id is not None:
+    # find_digest_feed(): a GET must not create or update the feed row.
+    # No feed yet means no digest yet: 404 below, for the per-entry page too.
+    digest_feed = digest.find_digest_feed()
+    if digest_feed is None:
+        latest = None
+    elif entry_id is not None:
         latest = get_object_or_404(digest_feed.entries, pk=entry_id)
     else:
         latest = digest_feed.entries.order_by("-pubdate", "-id").first()

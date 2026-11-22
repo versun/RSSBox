@@ -385,7 +385,8 @@ class DigestAdminInvalidationTest(TestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 self.admin.save_related(self.request, form, [], True)
 
-            feed_after = self.digest.get_digest_feed()
+            # find_digest_feed() does not sync: the admin save did.
+            feed_after = self.digest.find_digest_feed()
             self.assertEqual(feed_after.pk, feed_before.pk)
             self.assertEqual(feed_after.name, "Renamed Digest")
             self.assertEqual(feed_after.subtitle, "Updated description")
