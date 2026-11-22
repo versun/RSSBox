@@ -76,21 +76,22 @@ class DigestGenerator:
 
             articles_list.append(f"""
 Original Title: {article["title"]}
+Author: {article["author"]}
 Link: {url_placeholder}
 Published: {article["published"]}
 Summary: {article["summary"]}
 """)
 
-        # Replace placeholders in system prompt using simple string replacement
-        output_format_for_digest_prompt = (
-            settings.output_format_for_digest_prompt.replace(
-                "{digest_name}", self.digest.name
-            )
-            .replace("{date}", timezone.now().strftime("%Y-%m-%d"))
+        # Replace placeholders in the whole system prompt (the digest's own
+        # prompt included, as its help text promises), not only in the
+        # appended output format.
+        system_prompt = (
+            (self.digest.prompt + settings.output_format_for_digest_prompt)
+            .replace("{digest_name}", self.digest.name)
+            .replace("{date}", timezone.localdate().strftime("%Y-%m-%d"))
             .replace("{target_language}", self.digest.target_language)
-            .replace("{description}",self.digest.description)
+            .replace("{description}", self.digest.description)
         )
-        system_prompt = self.digest.prompt + output_format_for_digest_prompt
 
         # 计算token消耗，如果超出限制，则进行分块
         safe_tokens = self.digest.summarizer.max_tokens * 0.65
