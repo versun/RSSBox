@@ -13,6 +13,11 @@ from core.tasks.utils import PERSISTENCE_ERRORS, add_tokens, record_spent_tokens
 logger = logging.getLogger(__name__)
 
 
+def digest_entry_link(slug: str, entry_id: int) -> str:
+    """Public page of one digest entry (see core.views.digest_view)."""
+    return f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{slug}/{entry_id}"
+
+
 class DigestGenerator:
     """
     AI-powered digest content generator.
@@ -204,20 +209,26 @@ Summary: {article["summary"]}
             digest_feed = self.digest.get_digest_feed()
 
             # 创建一条新的摘要 Entry
-            entry = Entry.objects.create(
-                feed=digest_feed,
-                link=f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{self.digest.slug}",
-                author=self.digest.name or "Digest",
-                pubdate=now,
-                updated=now,
-                guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
-                original_title=f"{self.digest.name} | {timezone.localtime(now).strftime('%Y-%m-%d %H:%M')}",
-                translated_title=None,
-                original_content=None,
-                translated_content=None,
-                original_summary=None,
-                ai_summary=final_digest,
-            )
+            # The permalink needs the entry id, so the link is written in a
+            # second step. Both writes commit together: if the second one
+            # fails, no entry with an empty link is left behind.
+            with transaction.atomic():
+                entry = Entry.objects.create(
+                    feed=digest_feed,
+                    link="",
+                    author=self.digest.name or "Digest",
+                    pubdate=now,
+                    updated=now,
+                    guid=f"digest:{self.digest.id}:{int(now.timestamp())}",
+                    original_title=f"{self.digest.name} | {timezone.localtime(now).strftime('%Y-%m-%d %H:%M')}",
+                    translated_title=None,
+                    original_content=None,
+                    translated_content=None,
+                    original_summary=None,
+                    ai_summary=final_digest,
+                )
+                entry.link = digest_entry_link(self.digest.slug, entry.pk)
+                entry.save(update_fields=["link"])
 
             # Advance last_generated only after the digest Entry is persisted,
             # so a DB error during creation never skips the window via finally.

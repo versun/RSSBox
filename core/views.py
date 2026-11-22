@@ -285,13 +285,21 @@ def tag(request, tag: str, feed_type="t", format="xml"):
     )
 
 
-def digest_view(request, slug):
-    """Display digest content as HTML page."""
+def digest_view(request, slug, entry_id=None):
+    """Display a digest as an HTML page.
+
+    Without ``entry_id`` the latest digest is shown. With it, that one
+    digest: each digest entry links here so that a reader which fetches
+    the entry link (full-text scrapers) gets the digest it is showing,
+    not whichever one is newest.
+    """
     digest = get_object_or_404(Digest, slug=slug)
 
-    # 获取最新一条摘要 Entry
     digest_feed = digest.get_digest_feed()
-    latest = digest_feed.entries.order_by("-pubdate", "-id").first()
+    if entry_id is not None:
+        latest = get_object_or_404(digest_feed.entries, pk=entry_id)
+    else:
+        latest = digest_feed.entries.order_by("-pubdate", "-id").first()
     if not latest or not latest.ai_summary:
         return HttpResponse(
             status=404,
@@ -302,9 +310,11 @@ def digest_view(request, slug):
     # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
     html_content = mistune.html(latest.ai_summary)
     
-    # Format last_generated time with timezone conversion
-    if digest.last_generated:
-        local_time = timezone.localtime(digest.last_generated)
+    # Show the date of the digest on the page. It can differ from
+    # digest.last_generated, e.g. on an older entry's own page.
+    generated_at = latest.pubdate or digest.last_generated
+    if generated_at:
+        local_time = timezone.localtime(generated_at)
         generated_time = local_time.strftime("%Y-%m-%d %H:%M:%S")
     else:
         generated_time = "Never"

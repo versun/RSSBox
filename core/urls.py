@@ -51,6 +51,16 @@ urlpatterns = [
     path("digest/view/<str:slug>", views.digest_view, name="digest_view"),
     path("digest/view/<str:slug>/", views.digest_view, name="digest_view"),
     path(
+        "digest/view/<str:slug>/<int:entry_id>",
+        views.digest_view,
+        name="digest_entry_view",
+    ),
+    path(
+        "digest/view/<str:slug>/<int:entry_id>/",
+        views.digest_view,
+        name="digest_entry_view",
+    ),
+    path(
         "digest/json/<str:slug>",
         views.digest,
         kwargs={"format": "json"},
