@@ -32,6 +32,7 @@ class DigestViewEscapingTests(TestCase):
             "<script>alert('script')</script>\n\n"
             '<img src="x" onerror="alert(\'img\')">\n\n'
             "[bad link](javascript:alert('link')) and "
+            "<a href=\"javascript:alert('raw')\">raw bad link</a> and "
             "[good link](https://example.com/post)\n"
         )
         self.assertEqual(response.status_code, 200)
@@ -40,9 +41,13 @@ class DigestViewEscapingTests(TestCase):
         self.assertNotIn("alert(", body)
         self.assertNotIn("onerror", body)
         self.assertNotIn("javascript:", body)
-        # Ordinary Markdown output survives.
+        # Ordinary Markdown output survives, and external links open safely.
         self.assertIn("<h2>Heading</h2>", body)
-        self.assertIn('href="https://example.com/post"', body)
+        self.assertIn(
+            '<a href="https://example.com/post" target="_blank" rel="noopener noreferrer">good link</a>',
+            body,
+        )
+        self.assertIn("<a>raw bad link</a>", body)
 
     def test_digest_and_tag_names_are_escaped(self):
         self.digest.name = "<script>alert('name')</script>"
@@ -54,6 +59,10 @@ class DigestViewEscapingTests(TestCase):
         self.assertNotIn("<script", body)
         self.assertIn("&lt;b onmouseover=x&gt;tag&lt;/b&gt;", body)
 
-    def test_page_sends_the_preview_csp(self):
+    def test_page_sends_the_preview_security_headers(self):
         response = self._page("Body")
         self.assertEqual(response["Content-Security-Policy"], PREVIEW_CSP)
+        self.assertEqual(response["Referrer-Policy"], "no-referrer")
+        self.assertIn(
+            '<meta name="referrer" content="no-referrer">', response.content.decode()
+        )

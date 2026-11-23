@@ -334,6 +334,7 @@ def digest_view(request, slug, entry_id=None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="referrer" content="no-referrer">
         <title>{escape(digest.name)}</title>
         <style>
             body {{
@@ -366,11 +367,11 @@ def digest_view(request, slug, entry_id=None):
                 background-color: #f8f9fa;
                 border-radius: 4px;
             }}
-            a {{
+            a[href] {{
                 color: #3498db;
                 text-decoration: none;
             }}
-            a:hover {{
+            a[href]:hover {{
                 text-decoration: underline;
             }}
             blockquote {{
@@ -410,6 +411,7 @@ def digest_view(request, slug, entry_id=None):
 
     response = HttpResponse(html_response, content_type="text/html; charset=utf-8")
     response["Content-Security-Policy"] = PREVIEW_CSP
+    response["Referrer-Policy"] = "no-referrer"
     return response
 
 
