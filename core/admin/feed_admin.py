@@ -4,7 +4,7 @@ from django.utils.html import format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from django.urls import path, reverse
-from django.db import transaction
+from django.db import models, transaction
 from core.models import EntryTaskState, Feed, TranslationChunkCache
 from core.forms import FeedForm
 from core.actions import (
@@ -159,11 +159,12 @@ class FeedAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """
         过滤掉系统生成的 Digest Feed，只显示用户添加的普通 Feed。
-        Digest Feed 的 feed_url 包含 '/core/digest/rss/' 路径。
         """
         queryset = super().get_queryset(request)
-        # 过滤掉 Digest Feed
-        return queryset.exclude(author="RSSBox Digest")
+        # 过滤掉 Digest Feed（显式外键或历史 author 标记）
+        return queryset.exclude(
+            models.Q(author="RSSBox Digest") | models.Q(digest__isnull=False)
+        )
 
     def get_urls(self):
         urls = super().get_urls()

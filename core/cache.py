@@ -196,7 +196,7 @@ def cache_digest(slug: str, format: str = "xml"):
 
     from .models import Digest
 
-    digest = Digest.objects.get(slug=slug)
+    digest = Digest.objects.select_related("feed").get(slug=slug)
     cache_key = f"cache_digest_{slug}_{format}_v{cache_version('digest', digest.pk)}"
     return _generate_once(
         "digest", digest.pk, cache_key, lambda: _build_digest(digest, cache_key)

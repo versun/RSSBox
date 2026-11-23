@@ -426,7 +426,13 @@ class DigestAdminInvalidationTest(TestCase):
         )
 
     def test_get_digest_feed_and_delete_handle_legacy_duplicate_feeds(self):
-        first_feed = self.digest.get_digest_feed()
+        # Simulate legacy unlinked duplicate feeds sharing the same feed_url.
+        feed_url = self.digest._digest_feed_url()
+        first_feed = Feed.objects.create(
+            feed_url=feed_url,
+            target_language=self.digest.target_language,
+            name="Legacy First",
+        )
         other_lang = (
             "English" if self.digest.target_language != "English" else "Japanese"
         )
@@ -441,6 +447,8 @@ class DigestAdminInvalidationTest(TestCase):
         # Must not raise MultipleObjectsReturned when legacy duplicates exist.
         picked = self.digest.get_digest_feed()
         self.assertEqual(picked.pk, second_feed.pk)
+        self.digest.refresh_from_db()
+        self.assertEqual(self.digest.feed_id, second_feed.pk)
 
         with (
             patch("core.models.filter.bump_cache_version") as bump,

@@ -100,10 +100,17 @@ class DigestGetIsReadOnlyTests(TestCase):
         self.assertEqual(feed.name, "Daily digest")
 
     def test_find_digest_feed_prefers_the_target_language_row(self):
-        first = self.digest.get_digest_feed()
+        # Legacy unlinked duplicate rows (before Digest.feed FK is populated)
+        # fall back to matching feed_url and prefer target_language.
+        feed_url = self.digest._digest_feed_url()
+        first = Feed.objects.create(
+            name="Daily digest",
+            feed_url=feed_url,
+            target_language=self.digest.target_language,
+        )
         second = Feed.objects.create(
             name="Daily digest",
-            feed_url=first.feed_url,
+            feed_url=feed_url,
             target_language="German",
         )
         self.assertEqual(self.digest.find_digest_feed(), first)

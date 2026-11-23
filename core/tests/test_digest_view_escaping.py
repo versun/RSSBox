@@ -61,8 +61,21 @@ class DigestViewEscapingTests(TestCase):
 
     def test_page_sends_the_preview_security_headers(self):
         response = self._page("Body")
+        self.assertTemplateUsed(response, "rss/digest_view.html")
         self.assertEqual(response["Content-Security-Policy"], PREVIEW_CSP)
         self.assertEqual(response["Referrer-Policy"], "no-referrer")
         self.assertIn(
             '<meta name="referrer" content="no-referrer">', response.content.decode()
         )
+
+    def test_ungenerated_digest_etag_stays_none_after_cache_bump(self):
+        from django.core.cache import cache
+        from django.test import RequestFactory
+        from core.models.filter import bump_cache_version
+        from core.views import _get_digest_etag
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        bump_cache_version("digest", self.digest.pk)
+        request = RequestFactory().get(f"/rss/digest/{self.digest.slug}")
+        self.assertIsNone(_get_digest_etag(request, self.digest.slug))

@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from config import settings
@@ -62,6 +62,16 @@ class Digest(models.Model):
         help_text=_(
             "OpenAI agent to use for generating digest content (only valid agents are shown)"
         ),
+    )
+
+    feed = models.OneToOneField(
+        Feed,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="digest",
+        verbose_name=_("Digest Feed"),
     )
 
     days_range = models.IntegerField(
@@ -142,6 +152,15 @@ class Digest(models.Model):
                 f"{self.name}:{self.target_language}:{settings.SECRET_KEY}",
             ).hex
         super(Digest, self).save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        if self.feed_id is not None and (
+            update_fields is None
+            or bool(
+                set(update_fields)
+                & {"name", "description", "slug", "target_language"}
+            )
+        ):
+            self.sync_digest_feed()
 
     def should_generate_today(self):
         """
@@ -279,6 +298,11 @@ class Digest(models.Model):
         For read-only paths (the public digest page and feed): a GET must
         not write to the database. Returns None before the first digest.
         """
+        if self.feed_id is not None:
+            try:
+                return self.feed
+            except Feed.DoesNotExist:
+                pass
         feeds = list(
             Feed.objects.filter(feed_url=self._digest_feed_url()).order_by("pk")
         )
@@ -292,17 +316,62 @@ class Digest(models.Model):
             feeds[0],
         )
 
+    def _attach_digest_feed(self, feed: Feed) -> Feed:
+        """Persist the explicit Digest -> Feed link when not yet linked."""
+        if self.pk is None or self.feed_id == feed.pk:
+            return feed
+        try:
+            with transaction.atomic():
+                updated = Digest.objects.filter(
+                    pk=self.pk, feed__isnull=True
+                ).update(feed=feed)
+        except IntegrityError:
+            updated = 0
+        if updated:
+            self.feed = feed
+            return feed
+        existing = (
+            Digest.objects.select_related("feed")
+            .filter(pk=self.pk)
+            .first()
+        )
+        if existing is not None and existing.feed is not None:
+            self.feed = existing.feed
+            return existing.feed
+        return feed
+
     def sync_digest_feed(self) -> Feed | None:
-        """Copy name, description and language to an existing digest feed.
+        """Copy name, description, slug URL and language to an existing digest feed.
 
         Does not create the feed. Returns it, or None if there is none yet.
         """
         feed = self.find_digest_feed()
         if feed is not None:
             self._sync_feed_fields(feed)
+            if self.feed_id != feed.pk:
+                feed = self._attach_digest_feed(feed)
         return feed
 
+    def _sync_entry_links(self, feed: Feed) -> None:
+        """Rewrite existing digest entry permalinks when slug or SITE_URL changes."""
+        if not self.slug:
+            return
+        from core.models.entry import Entry
+
+        prefix = f"{settings.SITE_URL.rstrip('/')}/rss/digest/view/{self.slug}/"
+        to_update = []
+        for entry in feed.entries.only("pk", "link"):
+            if "/rss/digest/view/" not in (entry.link or ""):
+                continue
+            target_link = f"{prefix}{entry.pk}"
+            if entry.link != target_link:
+                entry.link = target_link
+                to_update.append(entry)
+        if to_update:
+            Entry.objects.bulk_update(to_update, ["link"])
+
     def _sync_feed_fields(self, feed: Feed) -> None:
+        feed_url = self._digest_feed_url()
         subtitle = (self.description or "")[:255]
         update_fields = []
         if feed.name != self.name:
@@ -311,14 +380,37 @@ class Digest(models.Model):
         if feed.subtitle != subtitle:
             feed.subtitle = subtitle
             update_fields.append("subtitle")
-        if feed.target_language != self.target_language:
-            feed.target_language = self.target_language
-            update_fields.append("target_language")
+        link_changed = feed.link != feed_url
+        if link_changed:
+            feed.link = feed_url
+            update_fields.append("link")
         if feed.language != self.target_language:
             feed.language = self.target_language
             update_fields.append("language")
+
+        url_changed = feed.feed_url != feed_url
+        lang_changed = feed.target_language != self.target_language
+        if url_changed or lang_changed:
+            collision = (
+                Feed.objects.filter(
+                    feed_url=feed_url,
+                    target_language=self.target_language,
+                )
+                .exclude(pk=feed.pk)
+                .exists()
+            )
+            if not collision:
+                if url_changed:
+                    feed.feed_url = feed_url
+                    update_fields.append("feed_url")
+                if lang_changed:
+                    feed.target_language = self.target_language
+                    update_fields.append("target_language")
+
         if update_fields:
             feed.save(update_fields=update_fields)
+        if url_changed or link_changed:
+            self._sync_entry_links(feed)
 
     def get_digest_feed(self) -> Feed:
         """获取或创建 Digest 专用 Feed
@@ -346,11 +438,13 @@ class Digest(models.Model):
             "summary": False,
         }
 
-        feed, _ = Feed.objects.get_or_create(
-            feed_url=feed_url,
-            target_language=self.target_language,
-            defaults=defaults,
-        )
+        with transaction.atomic():
+            feed, _ = Feed.objects.get_or_create(
+                feed_url=feed_url,
+                target_language=self.target_language,
+                defaults=defaults,
+            )
+            feed = self._attach_digest_feed(feed)
         return feed
 
 
@@ -364,7 +458,13 @@ def delete_associated_feed_and_entries(sender, instance: "Digest", **kwargs):
 
     bump_cache_versions_on_commit([("digest", instance.pk)])
     try:
-        Feed.objects.filter(feed_url=instance._digest_feed_url()).delete()
+        query = models.Q()
+        if instance.slug:
+            query |= models.Q(feed_url=instance._digest_feed_url())
+        if instance.feed_id is not None:
+            query |= models.Q(pk=instance.feed_id)
+        if query:
+            Feed.objects.filter(query).delete()
     except Exception:
         # 静默失败以避免阻断 Digest 删除流程；实际错误会在上层日志中体现
         pass

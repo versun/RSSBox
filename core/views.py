@@ -4,10 +4,9 @@ from django.utils.http import content_disposition_header
 from django.http import HttpResponse, StreamingHttpResponse, JsonResponse
 from django.utils.encoding import smart_str
 from django.utils import timezone
-from django.utils.html import escape
 from django.views.decorators.http import condition
 from .models import Feed, Tag, Digest
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib import messages
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from lxml import etree
@@ -159,6 +158,8 @@ def _get_digest_modified(request, slug: str, **kwargs):
         digest = Digest.objects.only("pk", "last_generated").get(slug=slug)
     except Digest.DoesNotExist:
         return None
+    if digest.last_generated is None:
+        return None
     return _mix_version_into_stamp(digest.last_generated, "digest", digest.pk)
 
 
@@ -167,7 +168,9 @@ def _get_digest_etag(request, slug: str, format="xml", **kwargs):
         digest = Digest.objects.only("pk", "last_generated").get(slug=slug)
     except Digest.DoesNotExist:
         return None
-    base = digest.last_generated.isoformat() if digest.last_generated else ""
+    if digest.last_generated is None:
+        return None
+    base = digest.last_generated.isoformat()
     etag = _mix_version_into_etag(base, "digest", digest.pk)
     if etag and _resolve_response_format(request, format) == "html":
         return _append_etag_suffix(etag, "-html")
@@ -299,7 +302,7 @@ def digest_view(request, slug, entry_id=None):
     the entry link (full-text scrapers) gets the digest it is showing,
     not whichever one is newest.
     """
-    digest = get_object_or_404(Digest, slug=slug)
+    digest = get_object_or_404(Digest.objects.select_related("feed"), slug=slug)
 
     # find_digest_feed(): a GET must not create or update the feed row.
     # No feed yet means no digest yet: 404 below, for the per-entry page too.
@@ -317,11 +320,10 @@ def digest_view(request, slug, entry_id=None):
         )
 
     # Convert markdown to HTML
-    # md = markdown.Markdown(extensions=['extra', 'codehilite', 'tables', 'toc'])
     # mistune passes raw HTML (<script>, onerror=...) through; sanitize it
     # like the feed preview does: the summary is model output.
     html_content = sanitize_entry_html(mistune.html(latest.ai_summary))
-    
+
     # Show the date of the digest on the page. It can differ from
     # digest.last_generated, e.g. on an older entry's own page.
     generated_at = latest.pubdate or digest.last_generated
@@ -331,89 +333,17 @@ def digest_view(request, slug, entry_id=None):
     else:
         generated_time = "Never"
 
-    # Create HTML response
-    html_response = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="referrer" content="no-referrer">
-        <title>{escape(digest.name)}</title>
-        <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                background-color: #f5f5f5;
-            }}
-            .container {{
-                background-color: white;
-                padding: 30px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }}
-            h1, h2, h3 {{
-                color: #2c3e50;
-            }}
-            h1 {{
-                border-bottom: 2px solid #3498db;
-                padding-bottom: 10px;
-            }}
-            .meta {{
-                color: #666;
-                font-size: 14px;
-                margin-bottom: 20px;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-            }}
-            a[href] {{
-                color: #3498db;
-                text-decoration: none;
-            }}
-            a[href]:hover {{
-                text-decoration: underline;
-            }}
-            blockquote {{
-                border-left: 4px solid #3498db;
-                padding-left: 15px;
-                margin-left: 0;
-                color: #555;
-            }}
-            code {{
-                background-color: #f4f4f4;
-                padding: 2px 4px;
-                border-radius: 3px;
-                font-family: Consolas, Monaco, monospace;
-            }}
-            pre {{
-                background-color: #f4f4f4;
-                padding: 15px;
-                border-radius: 5px;
-                overflow-x: auto;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="meta">
-                <strong>Generated:</strong> {generated_time}<br>
-                <strong>Tags:</strong> {", ".join(escape(tag.name) for tag in digest.tags.all())}<br>
-                <strong>Days Range:</strong> {digest.days_range} days
-            </div>
-            <div class="content">
-                {html_content}
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-    response = HttpResponse(html_response, content_type="text/html; charset=utf-8")
+    response = render(
+        request,
+        "rss/digest_view.html",
+        {
+            "digest": digest,
+            "generated_time": generated_time,
+            "tags": digest.tags.all(),
+            "html_content": html_content,
+        },
+        content_type="text/html; charset=utf-8",
+    )
     response["Content-Security-Policy"] = PREVIEW_CSP
     response["Referrer-Policy"] = "no-referrer"
     return response
