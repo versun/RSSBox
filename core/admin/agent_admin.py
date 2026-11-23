@@ -133,6 +133,7 @@ class OpenAIAgentAdmin(AgentAdmin):
             {
                 "fields": (
                     "advanced_params",
+                    "custom_headers",
                     "rate_limit_rpm",
                     # "show_max_tokens",
                     "max_tokens",

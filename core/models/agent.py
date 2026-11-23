@@ -8,6 +8,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from config import settings as app_settings
 from openai import OpenAI
+from openai.types.chat import ChatCompletion
 from django.utils import timezone
 from encrypted_model_fields.fields import EncryptedCharField
 import time
@@ -104,6 +105,14 @@ class OpenAIAgent(Agent):
         default=openai_advanced_default,
         help_text=("Advanced OpenAI chat params as JSON."),
     )
+    custom_headers = models.JSONField(
+        _("Custom HTTP Headers"),
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Custom HTTP headers as a JSON object, e.g. {"X-Custom-Header": "value"}.'
+        ),
+    )
     max_tokens = models.IntegerField(
         default=0, help_text="0 means detect automatically"
     )
@@ -158,8 +167,20 @@ class OpenAIAgent(Agent):
             errors["request_timeout"] = _(
                 "Request timeout must be a finite number greater than 0."
             )
+        if self.custom_headers is None:
+            self.custom_headers = {}
+        if not isinstance(self.custom_headers, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in self.custom_headers.items()
+        ):
+            errors["custom_headers"] = _(
+                "Custom HTTP headers must be a JSON object with string values."
+            )
         if errors:
             raise ValidationError(errors)
+
+    def _get_request_headers(self):
+        return {**self.EXTRA_HEADERS, **(self.custom_headers or {})}
 
     def effective_chunk_limit(self) -> int:
         """Per-call input token budget bounded by both max_tokens and max_chunk_tokens."""
@@ -218,7 +239,7 @@ class OpenAIAgent(Agent):
                 res = client.with_options(
                     max_retries=settings.OPENAI_API_MAX_RETRIES
                 ).chat.completions.create(
-                    extra_headers=self.EXTRA_HEADERS,
+                    extra_headers=self._get_request_headers(),
                     model=self.model,
                     messages=messages,
                     # max_tokens=50,
@@ -268,7 +289,7 @@ class OpenAIAgent(Agent):
                 self._wait_for_rate_limit()
                 # 使用最小的测试内容减少token消耗
                 response = self._init().chat.completions.create(
-                    extra_headers=self.EXTRA_HEADERS,
+                    extra_headers=self._get_request_headers(),
                     model=self.model,
                     messages=[
                         {
@@ -376,6 +397,7 @@ class OpenAIAgent(Agent):
                 "system_prompt": system_prompt or "",
                 "merge_system_prompt": bool(self.merge_system_prompt),
                 "advanced_params": adv_params,
+                "custom_headers": self.custom_headers,
                 "chunk": chunk_text,
             },
             sort_keys=True,
@@ -701,14 +723,28 @@ class OpenAIAgent(Agent):
                 call_kwargs["max_completion_tokens"] = output_token_limit
 
             provider_call_started_at = time.monotonic()
-            res = client.with_options(
+            request_client = client.with_options(
                 max_retries=settings.OPENAI_API_MAX_RETRIES
-            ).chat.completions.create(
-                extra_headers=self.EXTRA_HEADERS,
-                model=self.model,
-                messages=messages,
-                **call_kwargs,
             )
+            if "reasoning" in call_kwargs:
+                res = request_client.with_options(
+                    default_headers=self._get_request_headers()
+                ).post(
+                    "/chat/completions",
+                    body={
+                        "model": self.model,
+                        "messages": messages,
+                        **call_kwargs,
+                    },
+                    cast_to=ChatCompletion,
+                )
+            else:
+                res = request_client.chat.completions.create(
+                    extra_headers=self._get_request_headers(),
+                    model=self.model,
+                    messages=messages,
+                    **call_kwargs,
+                )
             elapsed = time.monotonic() - provider_call_started_at
             provider_call_started_at = None
 

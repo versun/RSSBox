@@ -3,6 +3,7 @@ from django.utils import timezone
 from unittest.mock import patch, MagicMock, Mock
 from config import settings
 from django.db import IntegrityError
+from django.core.exceptions import ValidationError
 from django.core.cache import cache
 import datetime
 import time
@@ -1305,6 +1306,21 @@ class OpenAIAgentAdvancedTest(TestCase):
                 max_retries=0,
             )
 
+    def test_custom_headers_validation(self):
+        self.agent.custom_headers = {"X-Custom-One": "one", "X-Custom-Two": "two"}
+        self.agent.full_clean(exclude=["valid"])
+
+        self.agent.custom_headers = None
+        self.agent.full_clean(exclude=["valid"])
+        self.assertEqual(self.agent.custom_headers, {})
+
+        for invalid_headers in (["X-Custom-One", "one"], {"X-Custom-One": 1}):
+            with self.subTest(invalid_headers=invalid_headers):
+                self.agent.custom_headers = invalid_headers
+                with self.assertRaises(ValidationError) as context:
+                    self.agent.full_clean(exclude=["valid"])
+                self.assertIn("custom_headers", context.exception.message_dict)
+
     @patch("core.models.agent.OpenAI")
     def test_validate_no_api_key(self, mock_openai):
         """Test validate method when api_key is empty to cover line 106."""
@@ -1514,6 +1530,10 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
             "frequency_penalty": 0.1,
             "presence_penalty": 0.2,
         }
+        self.agent.custom_headers = {
+            "X-Custom-One": "one",
+            "X-Custom-Two": "two",
+        }
 
         self.agent.completions("test text", system_prompt="system")
 
@@ -1534,21 +1554,59 @@ class OpenAIAgentCompletionsAdvancedTest(TestCase):
         ):
             self.assertEqual(with_options_call_args[1]["max_retries"], 0)
 
-        # Check if extra_headers is in keyword arguments
-        if (
-            len(with_options_call_args) > 1
-            and "extra_headers" in with_options_call_args[1]
-        ):
-            expected_headers = {
-                "HTTP-Referer": "https://www.rssbox.app",
-                "X-Title": "RSSBox",
-            }
-            self.assertEqual(
-                with_options_call_args[1]["extra_headers"], expected_headers
-            )
+        expected_headers = {
+            "HTTP-Referer": "https://www.rssbox.app",
+            "X-Title": "RSSBox",
+            "X-Custom-One": "one",
+            "X-Custom-Two": "two",
+        }
+        self.assertEqual(call_args[1]["extra_headers"], expected_headers)
 
         # At minimum, verify that with_options was called
         mock_client.with_options.assert_called_once()
+
+    @patch("core.models.agent.get_token_count", return_value=10)
+    @patch("core.models.agent.OpenAI")
+    def test_completions_reasoning_uses_raw_chat_completions_post(
+        self, mock_openai_class, mock_get_token_count
+    ):
+        mock_client = MagicMock()
+        mock_request_client = MagicMock()
+        mock_openai_class.return_value = mock_client
+        mock_client.with_options.return_value = mock_request_client
+        mock_request_client.with_options.return_value = mock_request_client
+
+        mock_completion = MagicMock()
+        mock_completion.choices = [
+            MagicMock(message=MagicMock(content="Response"), finish_reason="stop")
+        ]
+        mock_completion.usage = MagicMock(total_tokens=50)
+        mock_request_client.post.return_value = mock_completion
+
+        self.agent.advanced_params = {
+            "temperature": 0.2,
+            "reasoning": {"enabled": False},
+        }
+        self.agent.custom_headers = {"X-Custom-Header": "value"}
+
+        result = self.agent.completions("test text", system_prompt="system")
+
+        mock_request_client.chat.completions.create.assert_not_called()
+        mock_request_client.with_options.assert_called_once_with(
+            default_headers={
+                "HTTP-Referer": "https://www.rssbox.app",
+                "X-Title": "RSSBox",
+                "X-Custom-Header": "value",
+            }
+        )
+        call_args = mock_request_client.post.call_args
+        self.assertEqual(call_args[0], ("/chat/completions",))
+        body = call_args[1]["body"]
+        self.assertEqual(body["model"], self.agent.model)
+        self.assertEqual(body["temperature"], 0.2)
+        self.assertEqual(body["reasoning"], {"enabled": False})
+        self.assertNotIn("extra_body", body)
+        self.assertEqual(result["text"], "Response")
 
     @patch("core.models.agent.get_token_count", return_value=10)
     @patch("core.models.agent.OpenAI")

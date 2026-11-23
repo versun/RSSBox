@@ -108,6 +108,9 @@ class AgentAdminTest(TestCase):
         self.openai_agent.api_key = ""
         self.assertEqual(base_admin.masked_api_key(self.openai_agent), "")
 
+    def test_custom_headers_in_advanced_fieldset(self):
+        self.assertIn("custom_headers", self.admin.fieldsets[2][1]["fields"])
+
     def test_show_max_tokens(self):
         """Test show_max_tokens display logic."""
         self.openai_agent.max_tokens = 0
