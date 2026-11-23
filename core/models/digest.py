@@ -270,37 +270,69 @@ class Digest(models.Model):
 
         return entries
 
-    def get_digest_feed(self) -> Feed:
-        """获取或创建 Digest 专用 Feed"""
-        feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}"
-        subtitle = (self.description or "")[:255]
+    def _digest_feed_url(self) -> str:
+        return f"{settings.SITE_URL.rstrip('/')}/rss/digest/{self.slug}"
 
-        feeds = list(Feed.objects.filter(feed_url=feed_url).order_by("pk"))
-        if feeds:
-            # Prefer a row matching target_language if legacy duplicates exist;
-            # otherwise reuse the digest feed in place so changing target_language
-            # does not orphan old feeds and their entries.
-            feed = next(
-                (f for f in feeds if f.target_language == self.target_language),
-                feeds[0],
-            )
-            update_fields = []
-            if feed.name != self.name:
-                feed.name = self.name
-                update_fields.append("name")
-            if feed.subtitle != subtitle:
-                feed.subtitle = subtitle
-                update_fields.append("subtitle")
-            if feed.target_language != self.target_language:
-                feed.target_language = self.target_language
-                update_fields.append("target_language")
-            if feed.language != self.target_language:
-                feed.language = self.target_language
-                update_fields.append("language")
-            if update_fields:
-                feed.save(update_fields=update_fields)
+    def find_digest_feed(self) -> Feed | None:
+        """Return the digest's feed without creating or changing anything.
+
+        For read-only paths (the public digest page and feed): a GET must
+        not write to the database. Returns None before the first digest.
+        """
+        feeds = list(
+            Feed.objects.filter(feed_url=self._digest_feed_url()).order_by("pk")
+        )
+        if not feeds:
+            return None
+        # Prefer a row matching target_language if legacy duplicates exist;
+        # otherwise reuse the digest feed in place so changing target_language
+        # does not orphan old feeds and their entries.
+        return next(
+            (f for f in feeds if f.target_language == self.target_language),
+            feeds[0],
+        )
+
+    def sync_digest_feed(self) -> Feed | None:
+        """Copy name, description and language to an existing digest feed.
+
+        Does not create the feed. Returns it, or None if there is none yet.
+        """
+        feed = self.find_digest_feed()
+        if feed is not None:
+            self._sync_feed_fields(feed)
+        return feed
+
+    def _sync_feed_fields(self, feed: Feed) -> None:
+        subtitle = (self.description or "")[:255]
+        update_fields = []
+        if feed.name != self.name:
+            feed.name = self.name
+            update_fields.append("name")
+        if feed.subtitle != subtitle:
+            feed.subtitle = subtitle
+            update_fields.append("subtitle")
+        if feed.target_language != self.target_language:
+            feed.target_language = self.target_language
+            update_fields.append("target_language")
+        if feed.language != self.target_language:
+            feed.language = self.target_language
+            update_fields.append("language")
+        if update_fields:
+            feed.save(update_fields=update_fields)
+
+    def get_digest_feed(self) -> Feed:
+        """获取或创建 Digest 专用 Feed
+
+        Writes (creates the feed or syncs its fields), so only for digest
+        generation. Admin edits use sync_digest_feed(); read-only paths use
+        find_digest_feed().
+        """
+        feed = self.sync_digest_feed()
+        if feed is not None:
             return feed
 
+        feed_url = self._digest_feed_url()
+        subtitle = (self.description or "")[:255]
         defaults = {
             "name": self.name,
             "subtitle": subtitle,
@@ -332,8 +364,7 @@ def delete_associated_feed_and_entries(sender, instance: "Digest", **kwargs):
 
     bump_cache_versions_on_commit([("digest", instance.pk)])
     try:
-        feed_url = f"{settings.SITE_URL.rstrip('/')}/rss/digest/{instance.slug}"
-        Feed.objects.filter(feed_url=feed_url).delete()
+        Feed.objects.filter(feed_url=instance._digest_feed_url()).delete()
     except Exception:
         # 静默失败以避免阻断 Digest 删除流程；实际错误会在上层日志中体现
         pass

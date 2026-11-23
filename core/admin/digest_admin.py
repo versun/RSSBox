@@ -350,6 +350,9 @@ class DigestAdmin(admin.ModelAdmin):
         # rendered digest cache must be invalidated.
         super().save_related(request, form, formsets, change)
         if change and getattr(form, "changed_data", ()):
+            # The public digest feed no longer syncs on GET, so copy a new
+            # name/description/language to the existing feed row here.
+            form.instance.sync_digest_feed()
             from core.models.filter import bump_cache_versions_on_commit
 
             bump_cache_versions_on_commit([("digest", form.instance.pk)])
