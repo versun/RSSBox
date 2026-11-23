@@ -83,10 +83,29 @@ class EntrypointScriptTestCase(TestCase):
         if "REDIS_URL" in os.environ:
             del os.environ["REDIS_URL"]
 
-        # 验证默认值
-        default_redis_url = "redis://rssbox_redis:6379/0"
+        # 验证默认值（与 config/settings.py 一致）
+        default_redis_url = "redis://localhost:6379/1"
         self.assertEqual(
             os.environ.get("REDIS_URL", default_redis_url), default_redis_url
+        )
+
+    def test_entrypoint_script_aligns_with_settings_and_uses_venv_python(self):
+        """scripts/entrypoint.sh 的默认 REDIS_URL 应与 settings.py 一致且先等 Redis 再 init"""
+        repo_root = Path(__file__).resolve().parents[2]
+        entrypoint_text = (repo_root / "scripts" / "entrypoint.sh").read_text(
+            encoding="utf-8"
+        )
+        settings_text = (repo_root / "config" / "settings.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("REDIS_URL=${REDIS_URL:-redis://localhost:6379/1}", entrypoint_text)
+        self.assertIn('os.getenv("REDIS_URL", "redis://localhost:6379/1")', settings_text)
+        self.assertIn("/opt/venv/bin/python -c", entrypoint_text)
+        self.assertIn("os.environ['REDIS_URL']", entrypoint_text)
+        self.assertLess(
+            entrypoint_text.index("Waiting for Redis"),
+            entrypoint_text.index("scripts/init.py"),
         )
 
     def test_redis_connection_attempts_logic(self):
