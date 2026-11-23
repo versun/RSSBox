@@ -9,10 +9,15 @@ from django.utils.translation import gettext_lazy as _
 from config import settings as app_settings
 from openai import OpenAI
 from django.utils import timezone
-from encrypted_model_fields.fields import EncryptedCharField
+from encrypted_model_fields.fields import EncryptedCharField, EncryptedTextField
 import time
 import datetime
 from django.core.cache import cache
+from utils.http_headers import (
+    merge_headers,
+    parse_and_validate_headers,
+    serialize_headers,
+)
 from utils.text_handler import get_token_count, adaptive_chunking, chunk_html
 import deepl
 import json
@@ -104,6 +109,16 @@ class OpenAIAgent(Agent):
         default=openai_advanced_default,
         help_text=("Advanced OpenAI chat params as JSON."),
     )
+    custom_headers = EncryptedTextField(
+        _("Custom HTTP Headers"),
+        blank=True,
+        default="",
+        help_text=_(
+            "Optional custom HTTP headers sent with every API request (encrypted at rest). "
+            "Overrides default HTTP-Referer / X-Title headers if specified. "
+            "The Authorization header is not allowed."
+        ),
+    )
     max_tokens = models.IntegerField(
         default=0, help_text="0 means detect automatically"
     )
@@ -158,8 +173,33 @@ class OpenAIAgent(Agent):
             errors["request_timeout"] = _(
                 "Request timeout must be a finite number greater than 0."
             )
+        if isinstance(self.advanced_params, dict) and any(
+            str(key).lower() == "extra_headers" for key in self.advanced_params
+        ):
+            errors["advanced_params"] = _(
+                "Do not set 'extra_headers' in Advanced Params; "
+                "use Custom HTTP Headers instead."
+            )
+        try:
+            normalized_headers = parse_and_validate_headers(self.custom_headers)
+            self.custom_headers = serialize_headers(normalized_headers)
+        except ValidationError as exc:
+            errors["custom_headers"] = exc.messages
         if errors:
             raise ValidationError(errors)
+
+    def get_custom_headers(self) -> dict[str, str]:
+        if not self.custom_headers:
+            return {}
+        try:
+            return parse_and_validate_headers(self.custom_headers)
+        except ValidationError as exc:
+            logger.warning(
+                "Ignoring invalid stored custom_headers for OpenAIAgent id=%s: %s",
+                self.pk,
+                exc.messages,
+            )
+            return {}
 
     def effective_chunk_limit(self) -> int:
         """Per-call input token budget bounded by both max_tokens and max_chunk_tokens."""
@@ -188,6 +228,9 @@ class OpenAIAgent(Agent):
             base_url=self.base_url,
             timeout=timeout,
             max_retries=settings.OPENAI_API_MAX_RETRIES,
+            default_headers=merge_headers(
+                self.EXTRA_HEADERS, self.get_custom_headers()
+            ),
         )
 
     def validate(self) -> bool:
@@ -218,7 +261,6 @@ class OpenAIAgent(Agent):
                 res = client.with_options(
                     max_retries=settings.OPENAI_API_MAX_RETRIES
                 ).chat.completions.create(
-                    extra_headers=self.EXTRA_HEADERS,
                     model=self.model,
                     messages=messages,
                     # max_tokens=50,
@@ -268,7 +310,6 @@ class OpenAIAgent(Agent):
                 self._wait_for_rate_limit()
                 # 使用最小的测试内容减少token消耗
                 response = self._init().chat.completions.create(
-                    extra_headers=self.EXTRA_HEADERS,
                     model=self.model,
                     messages=[
                         {
@@ -693,6 +734,19 @@ class OpenAIAgent(Agent):
                 adv_params = {}
 
             call_kwargs = {**adv_params}
+            legacy_extra_header_keys = [
+                key
+                for key in call_kwargs
+                if str(key).lower() == "extra_headers"
+            ]
+            if legacy_extra_header_keys:
+                for key in legacy_extra_header_keys:
+                    call_kwargs.pop(key, None)
+                logger.warning(
+                    "[%s] Ignoring legacy 'extra_headers' in advanced_params; "
+                    "use custom_headers instead.",
+                    self.name,
+                )
             # 仅在未显式提供时设置安全的默认/限制
             if (
                 "max_completion_tokens" not in call_kwargs
@@ -704,7 +758,6 @@ class OpenAIAgent(Agent):
             res = client.with_options(
                 max_retries=settings.OPENAI_API_MAX_RETRIES
             ).chat.completions.create(
-                extra_headers=self.EXTRA_HEADERS,
                 model=self.model,
                 messages=messages,
                 **call_kwargs,

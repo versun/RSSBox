@@ -29,6 +29,10 @@
     border-color: #ddd;
     border-bottom: 1px solid #fff;
 }
+.tab-nav li.has-error {
+    color: var(--error-fg, #ba2121);
+    font-weight: 600;
+}
 .tab-content .tab-pane {
     display: none;
     padding: 20px;
@@ -61,9 +65,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // 默认激活第一个 Tab
+    // 标记包含校验错误的 Tab，并优先激活第一个报错 Tab
+    let firstErrorTab = -1;
+    tabPanes.forEach((pane, index) => {
+        if (pane.querySelector('.errorlist, .errors')) {
+            if (tabNavItems[index]) {
+                tabNavItems[index].classList.add('has-error');
+            }
+            if (firstErrorTab === -1) {
+                firstErrorTab = index;
+            }
+        }
+    });
+
     if (tabNavItems.length > 0) {
-        tabNavItems[0].click();
+        tabNavItems[firstErrorTab === -1 ? 0 : firstErrorTab].click();
     }
 });
 </script>

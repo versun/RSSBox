@@ -7,6 +7,7 @@ from django.utils.html import format_html, mark_safe
 from django.shortcuts import redirect
 from django.db import transaction, close_old_connections
 from core.models.agent import OpenAIAgent, DeepLAgent, LibreTranslateAgent, TestAgent
+from core.forms import OpenAIAgentForm
 from utils.modelAdmin_utils import status_icon
 from core.admin import core_admin_site
 from core.tasks.task_manager import task_manager
@@ -103,6 +104,7 @@ class AgentAdmin(admin.ModelAdmin):
 
 
 class OpenAIAgentAdmin(AgentAdmin):
+    form = OpenAIAgentForm
     change_form_template = "admin/change_form_with_tabs.html"
     list_display = [
         "name",
@@ -133,6 +135,7 @@ class OpenAIAgentAdmin(AgentAdmin):
             {
                 "fields": (
                     "advanced_params",
+                    "custom_headers",
                     "rate_limit_rpm",
                     # "show_max_tokens",
                     "max_tokens",

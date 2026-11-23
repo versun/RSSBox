@@ -1303,6 +1303,7 @@ class OpenAIAgentAdvancedTest(TestCase):
                 base_url=self.agent.base_url,
                 timeout=300.0,
                 max_retries=0,
+                default_headers=OpenAIAgent.EXTRA_HEADERS,
             )
 
     @patch("core.models.agent.OpenAI")

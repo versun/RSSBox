@@ -1,0 +1,294 @@
+{% load i18n %}
+<div class="kv-headers-widget" data-kv-headers-widget>
+  {{ textarea }}
+  <div class="kv-headers-editor" hidden>
+    <div class="kv-headers-rows" role="list"></div>
+    <p class="kv-headers-empty" hidden>{% translate "No custom headers configured." %}</p>
+    <div class="kv-headers-actions">
+      <button type="button" class="button kv-headers-add">+ {% translate "Add Header" %}</button>
+    </div>
+  </div>
+  <template class="kv-headers-row-tpl">
+    <div class="kv-headers-row" role="listitem">
+      <input type="text" class="kv-header-name vTextField" placeholder="{% translate 'Header name (e.g. CF-Access-Client-Id)' %}" autocomplete="off" spellcheck="false">
+      <input type="text" class="kv-header-value vTextField" placeholder="{% translate 'Header value' %}" autocomplete="off" spellcheck="false">
+      <button type="button" class="button kv-header-toggle"></button>
+      <button type="button" class="button kv-header-remove">{% translate "Remove" %}</button>
+    </div>
+  </template>
+</div>
+<style>
+.kv-headers-widget {
+  max-width: 760px;
+}
+.kv-headers-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.kv-headers-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.5fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.kv-headers-row input[type="text"],
+.kv-headers-row input[type="password"] {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+.kv-headers-row button {
+  white-space: nowrap;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.kv-headers-empty {
+  margin: 0 0 8px 0;
+  color: var(--body-quiet-color, #666);
+  font-size: 12px;
+}
+.kv-headers-actions {
+  margin-top: 4px;
+}
+@media (max-width: 767px) {
+  .kv-headers-row {
+    grid-template-columns: 1fr auto auto;
+  }
+  .kv-headers-row .kv-header-name {
+    grid-column: 1 / -1;
+  }
+}
+</style>
+<script>
+(function() {
+  const SENSITIVE_RE = /(secret|token|key|auth|cookie|pass|credential|signature)/i;
+  const LABELS = {
+    show: "{% filter escapejs %}{% translate 'Show' %}{% endfilter %}",
+    hide: "{% filter escapejs %}{% translate 'Hide' %}{% endfilter %}",
+  };
+
+  // Parse a flat JSON object of string-to-string pairs while preserving duplicate keys.
+  // Returns null for non-objects, non-string values, or malformed JSON.
+  function parseHeaderPairs(raw) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return [];
+    }
+    const len = trimmed.length;
+    let pos = 0;
+
+    function skipWs() {
+      while (
+        pos < len &&
+        (trimmed[pos] === " " ||
+          trimmed[pos] === "\t" ||
+          trimmed[pos] === "\r" ||
+          trimmed[pos] === "\n")
+      ) {
+        pos += 1;
+      }
+    }
+
+    function readJsonString() {
+      skipWs();
+      if (pos >= len || trimmed[pos] !== '"') {
+        return null;
+      }
+      const start = pos;
+      pos += 1;
+      while (pos < len) {
+        const ch = trimmed[pos];
+        if (ch === "\\") {
+          pos += 2;
+          continue;
+        }
+        if (ch === '"') {
+          pos += 1;
+          try {
+            const decoded = JSON.parse(trimmed.slice(start, pos));
+            return typeof decoded === "string" ? decoded : null;
+          } catch (_err) {
+            return null;
+          }
+        }
+        pos += 1;
+      }
+      return null;
+    }
+
+    if (trimmed[pos] !== "{") {
+      return null;
+    }
+    pos += 1;
+    skipWs();
+
+    const pairs = [];
+    if (pos < len && trimmed[pos] === "}") {
+      pos += 1;
+      return pos === len ? pairs : null;
+    }
+
+    while (pos < len) {
+      const key = readJsonString();
+      if (key === null) {
+        return null;
+      }
+      skipWs();
+      if (pos >= len || trimmed[pos] !== ":") {
+        return null;
+      }
+      pos += 1;
+
+      const value = readJsonString();
+      if (value === null) {
+        return null;
+      }
+      pairs.push([key, value]);
+
+      skipWs();
+      if (pos >= len) {
+        return null;
+      }
+      if (trimmed[pos] === ",") {
+        pos += 1;
+        continue;
+      }
+      if (trimmed[pos] === "}") {
+        pos += 1;
+        return pos === len ? pairs : null;
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  function initWidget(container) {
+    if (container.dataset.initialized === "1") {
+      return;
+    }
+    const textarea =
+      container.querySelector("textarea.kv-headers-source") ||
+      container.querySelector("textarea");
+    const editor = container.querySelector(".kv-headers-editor");
+    const rowsEl = container.querySelector(".kv-headers-rows");
+    const emptyEl = container.querySelector(".kv-headers-empty");
+    const addBtn = container.querySelector(".kv-headers-add");
+    const rowTpl = container.querySelector(".kv-headers-row-tpl");
+    if (!textarea || !editor || !rowsEl || !addBtn || !rowTpl) {
+      return;
+    }
+
+    const initialEntries = parseHeaderPairs(textarea.value || "");
+    if (initialEntries === null) {
+      // Keep raw textarea visible so user can fix malformed JSON.
+      return;
+    }
+
+    container.dataset.initialized = "1";
+    textarea.hidden = true;
+    editor.hidden = false;
+
+    function updateEmptyState() {
+      if (emptyEl) {
+        emptyEl.hidden = rowsEl.children.length > 0;
+      }
+    }
+
+    function syncToTextarea() {
+      const pairs = [];
+
+      rowsEl.querySelectorAll(".kv-headers-row").forEach((row) => {
+        const nameInput = row.querySelector(".kv-header-name");
+        const valueInput = row.querySelector(".kv-header-value");
+        const name = (nameInput ? nameInput.value : "").trim();
+        const value = valueInput ? valueInput.value : "";
+
+        if (!name && !value) {
+          return;
+        }
+        pairs.push([name, value]);
+      });
+
+      if (pairs.length === 0) {
+        textarea.value = "";
+      } else {
+        textarea.value =
+          "{" +
+          pairs.map(([k, v]) => JSON.stringify(k) + ":" + JSON.stringify(v)).join(",") +
+          "}";
+      }
+      updateEmptyState();
+    }
+
+    function setMasked(valueInput, toggleBtn, masked) {
+      valueInput.type = masked ? "password" : "text";
+      toggleBtn.textContent = masked ? LABELS.show : LABELS.hide;
+      toggleBtn.setAttribute("aria-pressed", masked ? "false" : "true");
+    }
+
+    function createRow(name, value, focusName) {
+      const row = rowTpl.content.firstElementChild.cloneNode(true);
+      const nameInput = row.querySelector(".kv-header-name");
+      const valueInput = row.querySelector(".kv-header-value");
+      const toggleBtn = row.querySelector(".kv-header-toggle");
+      const removeBtn = row.querySelector(".kv-header-remove");
+
+      nameInput.value = name || "";
+      valueInput.value = value || "";
+
+      const startMasked = Boolean(name && SENSITIVE_RE.test(name));
+      setMasked(valueInput, toggleBtn, startMasked);
+
+      nameInput.addEventListener("input", () => {
+        if (row.dataset.maskManual !== "1") {
+          setMasked(valueInput, toggleBtn, SENSITIVE_RE.test(nameInput.value));
+        }
+        syncToTextarea();
+      });
+      valueInput.addEventListener("input", syncToTextarea);
+
+      toggleBtn.addEventListener("click", () => {
+        row.dataset.maskManual = "1";
+        setMasked(valueInput, toggleBtn, valueInput.type !== "password");
+      });
+
+      removeBtn.addEventListener("click", () => {
+        row.remove();
+        syncToTextarea();
+      });
+
+      rowsEl.appendChild(row);
+
+      if (focusName) {
+        nameInput.focus();
+      }
+    }
+
+    initialEntries.forEach(([k, v]) => createRow(k, v, false));
+    syncToTextarea();
+
+    addBtn.addEventListener("click", () => {
+      createRow("", "", true);
+      syncToTextarea();
+    });
+
+    const form = container.closest("form");
+    if (form) {
+      form.addEventListener("submit", syncToTextarea);
+    }
+  }
+
+  function initAll() {
+    document.querySelectorAll("[data-kv-headers-widget]").forEach(initWidget);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAll);
+  } else {
+    initAll();
+  }
+})();
+</script>
