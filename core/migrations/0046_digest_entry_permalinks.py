@@ -37,10 +37,9 @@ def add_entry_ids(apps, schema_editor):
         # The cached feed and its ETag/Last-Modified only change with the
         # digest's cache version. Without a bump, readers keep the old links
         # (304) until the next digest is generated.
-        from core.models.filter import bump_cache_version
+        from core.models.filter import bump_cache_versions_on_commit
 
-        for pk in touched:
-            bump_cache_version("digest", pk)
+        bump_cache_versions_on_commit([("digest", pk) for pk in touched])
 
 
 class Migration(migrations.Migration):

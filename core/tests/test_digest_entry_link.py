@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from django.apps import apps
 from django.conf import settings
+from django.core.cache import cache
 from django.db import OperationalError
 from django.test import TestCase
 from django.urls import resolve
@@ -18,6 +19,8 @@ from core.tasks.generate_digests import DigestGenerator
 
 class DigestEntryLinkTests(TestCase):
     def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
         self.agent = OpenAIAgent.objects.create(
             name="Digest summarizer", api_key="unused", max_tokens=4096
         )
@@ -152,6 +155,8 @@ class DigestEntryPermalinkMigrationTests(TestCase):
     """Data migration 0046: existing digest entries get their own link."""
 
     def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
         self.migration = import_module("core.migrations.0046_digest_entry_permalinks")
         self.site = settings.SITE_URL.rstrip("/")
         agent = OpenAIAgent.objects.create(
@@ -176,7 +181,8 @@ class DigestEntryPermalinkMigrationTests(TestCase):
         )
 
     def _migrate(self):
-        self.migration.add_entry_ids(apps, None)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.migration.add_entry_ids(apps, None)
 
     def test_local_digest_entries_get_their_own_link(self):
         plain = self._entry(self.digest_feed, self.old_link)

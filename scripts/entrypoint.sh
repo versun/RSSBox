@@ -4,12 +4,6 @@
 echo "Exporting environment variables for cron..."
 printenv | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' >> /etc/environment
 
-echo "Running initialization script..."
-/opt/venv/bin/python $DockerHOME/scripts/init.py
-
-
-cron -n &
-
 # 等待Redis服务可用
 REDIS_URL=${REDIS_URL:-redis://rssbox_redis:6379/0}
 max_attempts=10
@@ -26,5 +20,11 @@ if [ $attempt -lt $max_attempts ]; then
 else
   echo "Failed to connect to Redis after $max_attempts attempts."
 fi
+
+echo "Running initialization script..."
+/opt/venv/bin/python $DockerHOME/scripts/init.py
+
+
+cron -n &
 
 exec "$@"
