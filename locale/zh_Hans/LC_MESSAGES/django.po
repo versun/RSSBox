@@ -809,6 +809,91 @@ msgstr " 禁用"
 msgid "filter"
 msgstr "过滤器"
 
+
+msgid "Global AI settings"
+msgstr "全局 AI 设置"
+
+msgid "Default request timeout (seconds)"
+msgstr "默认请求超时（秒）"
+
+msgid "Leave blank to inherit OPENAI_API_TIMEOUT. Per-agent overrides take precedence."
+msgstr "留空继承 OPENAI_API_TIMEOUT；翻译器单独设置的超时优先。"
+
+msgid "Maximum failed rounds before automatic pause"
+msgstr "自动暂停前允许的最大失败轮次"
+
+msgid "Includes the initial failed round; leave blank to inherit ENTRY_MAX_RETRY_ATTEMPTS."
+msgstr "包含首次失败轮次；留空继承 ENTRY_MAX_RETRY_ATTEMPTS。"
+
+msgid "Initial retry delay (seconds)"
+msgstr "首次重试等待间隔（秒）"
+
+msgid "Delay doubles after each failed round; leave blank to inherit ENTRY_RETRY_BASE_DELAY_SECONDS."
+msgstr "每失败一轮等待时间翻倍；留空继承 ENTRY_RETRY_BASE_DELAY_SECONDS。"
+
+msgid "Maximum retry delay (seconds)"
+msgstr "重试等待间隔上限（秒）"
+
+msgid "Leave blank to inherit ENTRY_RETRY_MAX_DELAY_SECONDS."
+msgstr "留空继承 ENTRY_RETRY_MAX_DELAY_SECONDS。"
+
+msgid "Show failures in attention view after this many failed rounds"
+msgstr "失败几轮后显示在待关注列表"
+
+msgid "All failures are recorded immediately. Paused and pending tasks are always visible; this only filters the attention view."
+msgstr "首次失败就记录；已暂停和待处理任务始终显示。此项仅影响待关注列表筛选，不影响重试。"
+
+msgid "Only one global AI configuration is allowed."
+msgstr "只允许保存一份全局 AI 配置。"
+
+msgid "Timeout must be finite."
+msgstr "超时时间必须为有限数值。"
+
+msgid "Maximum retry delay must not be less than the initial delay."
+msgstr "重试间隔上限不能小于首次等待间隔。"
+
+msgid "Currently effective settings"
+msgstr "当前生效设置"
+
+msgid "Timeout: %(timeout)s s; maximum failed rounds: %(attempts)s; retry delay: %(base)s s, doubling up to %(cap)s s."
+msgstr "超时：%(timeout)s 秒；最大失败轮次：%(attempts)s；重试间隔：%(base)s 秒起，翻倍至 %(cap)s 秒封顶。"
+
+msgid "Saved. Applies to new requests and future failure scheduling; running requests and existing retry timestamps are unchanged."
+msgstr "已保存。后续新请求和失败排期使用新设置；不会中断运行中的请求，也不会修改已安排的重试时间。"
+
+msgid "Task view"
+msgstr "任务视图"
+
+msgid "Needs attention"
+msgstr "待关注"
+
+msgid "All tasks"
+msgstr "全部任务"
+
+msgid "Request timed out"
+msgstr "请求超时"
+
+msgid "Output truncated"
+msgstr "输出被截断"
+
+msgid "Rate limited"
+msgstr "触发限流"
+
+msgid "Request or permission error"
+msgstr "请求参数或权限错误"
+
+msgid "Provider server error"
+msgstr "模型服务端错误"
+
+msgid "Empty response"
+msgstr "返回空内容"
+
+msgid "Other error"
+msgstr "其他错误"
+
+msgid "Optional per-agent timeout override in seconds (leave blank to inherit the global setting)."
+msgstr "单独设置此翻译器的请求超时秒数；留空时继承全局配置。"
+
 #~ msgid "Options"
 #~ msgstr "选项"
 

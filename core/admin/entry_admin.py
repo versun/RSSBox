@@ -2,6 +2,7 @@ import hashlib
 import logging
 from django.contrib import admin, messages
 from django.db import close_old_connections, transaction
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -258,6 +259,70 @@ def retry_entry_tasks_now(modeladmin, request, queryset):
     )
 
 
+ERROR_TYPE_LABELS = {
+    "timeout": _("Request timed out"),
+    "truncated": _("Output truncated"),
+    "rate_limit": _("Rate limited"),
+    "client_error": _("Request or permission error"),
+    "server_error": _("Provider server error"),
+    "empty_response": _("Empty response"),
+    "error": _("Other error"),
+}
+
+
+class TaskErrorTypeFilter(admin.SimpleListFilter):
+    title = _("Last Error Type")
+    parameter_name = "task_error"
+
+    def lookups(self, request, model_admin):
+        return tuple(ERROR_TYPE_LABELS.items())
+
+    def queryset(self, request, queryset):
+        if self.value() in ERROR_TYPE_LABELS:
+            return queryset.filter(last_error_type=self.value())
+        return queryset
+
+
+class TaskAttentionFilter(admin.SimpleListFilter):
+    title = _("Task view")
+    parameter_name = "task_view"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("attention", _("Needs attention")),
+            ("all", _("All tasks")),
+            ("succeeded", _("Succeeded")),
+        )
+
+    def choices(self, changelist):
+        # Omit Django's implicit "All" option: absence means attention, and
+        # successful tasks stay explicitly accessible through "All tasks".
+        value = self.value() or "attention"
+        for key, label in self.lookup_choices:
+            yield {
+                "selected": value == key,
+                "query_string": changelist.get_query_string({self.parameter_name: key}),
+                "display": label,
+            }
+
+    def queryset(self, request, queryset):
+        value = self.value() or "attention"
+        # Explicit standard status filters must not be hidden by the default.
+        if self.value() is None and "status__exact" in request.GET:
+            return queryset
+        if value == "all":
+            return queryset
+        if value == "succeeded":
+            return queryset.filter(status=EntryTaskState.STATUS_SUCCEEDED)
+        from core.runtime_policy import get_runtime_policy
+
+        threshold = get_runtime_policy().attention_after_attempts
+        return queryset.filter(
+            Q(status__in=[EntryTaskState.STATUS_PENDING, EntryTaskState.STATUS_PAUSED])
+            | Q(status=EntryTaskState.STATUS_FAILED, attempt_count__gte=threshold)
+        )
+
+
 class EntryTaskStateAdmin(admin.ModelAdmin):
     list_display = [
         "entry_link",
@@ -265,16 +330,17 @@ class EntryTaskStateAdmin(admin.ModelAdmin):
         "stage",
         "status",
         "attempt_count",
-        "last_error_type",
+        "error_type_label",
         "next_retry_at",
         "estimated_unbilled_tokens",
         "paused_manually",
         "updated_at",
     ]
     list_filter = [
+        TaskAttentionFilter,
         "status",
         "stage",
-        "last_error_type",
+        TaskErrorTypeFilter,
         "paused_manually",
         "entry__feed",
     ]
@@ -319,6 +385,10 @@ class EntryTaskStateAdmin(admin.ModelAdmin):
         feed = obj.entry.feed
         url = reverse("admin:core_feed_change", args=[feed.pk])
         return format_html("<a href='{}'>{}</a>", url, feed.name or feed.feed_url)
+
+    @admin.display(description=_("Last Error Type"), ordering="last_error_type")
+    def error_type_label(self, obj):
+        return ERROR_TYPE_LABELS.get(obj.last_error_type, obj.last_error_type)
 
 
 core_admin_site.register(EntryTaskState, EntryTaskStateAdmin)

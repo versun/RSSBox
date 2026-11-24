@@ -11,7 +11,7 @@ from utils.modelAdmin_utils import (
 )
 from django.shortcuts import redirect, render
 
-from core.models import Feed, Filter, Tag, Digest, EntryTaskState
+from core.models import Feed, Filter, Tag, Digest, EntryTaskState, RuntimeConfiguration
 
 
 class CoreAdminSite(AdminSite):
@@ -76,6 +76,19 @@ class CoreAdminSite(AdminSite):
                         },
                         "admin_url": "/core/digest/",
                         "add_url": "/core/digest/add/",
+                        "view_only": False,
+                    },
+                    {
+                        "model": RuntimeConfiguration,
+                        "name": _("Global AI settings"),
+                        "object_name": "RuntimeConfiguration",
+                        "perms": {
+                            "add": request.user.has_perm("core.add_runtimeconfiguration"),
+                            "change": request.user.has_perm("core.change_runtimeconfiguration"),
+                            "delete": False,
+                            "view": request.user.has_perm("core.view_runtimeconfiguration"),
+                        },
+                        "admin_url": "/core/runtimeconfiguration/",
                         "view_only": False,
                     },
                     {

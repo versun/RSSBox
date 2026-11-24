@@ -96,7 +96,8 @@ summary: RSSBox 所有可用的环境变量配置说明
 - **示例**: `300`
 - **说明**:
   - 长文章翻译可适当调高
-  - 超时后是否重试由 `OPENAI_API_MAX_RETRIES` 控制
+  - 翻译器 `Request Timeout (s)` 可单独覆盖；也可在后台[全局 AI 设置](runtime-settings.md)调整默认值，无需重建容器
+  - SDK 重试由 `OPENAI_API_MAX_RETRIES` 控制；RSSBox 轮内重试和跨轮失败退避是不同层级，SDK 重试为 0 不等于完全不重试
 
 ### OPENAI_API_MAX_RETRIES
 - **说明**: OpenAI 兼容接口的 SDK 自动重试次数

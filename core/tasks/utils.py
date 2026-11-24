@@ -3,7 +3,6 @@ import logging
 import time
 
 import httpx
-from django.conf import settings
 from django.db import DatabaseError, transaction
 from django.db.models import F
 from django.utils import timezone
@@ -271,11 +270,12 @@ def record_entry_stage_failure(
 
     now = timezone.now()
     error_type = classify_ai_error(error)
-    max_attempts = max(1, getattr(settings, "ENTRY_MAX_RETRY_ATTEMPTS", 3))
-    base_delay = max(0, getattr(settings, "ENTRY_RETRY_BASE_DELAY_SECONDS", 3600))
-    max_delay = max(
-        base_delay, getattr(settings, "ENTRY_RETRY_MAX_DELAY_SECONDS", 86400)
-    )
+    from core.runtime_policy import get_runtime_policy
+
+    policy = get_runtime_policy()
+    max_attempts = policy.max_attempts
+    base_delay = policy.retry_base_seconds
+    max_delay = policy.retry_max_seconds
 
     try:
         state, _ = EntryTaskState.objects.get_or_create(

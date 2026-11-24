@@ -52,7 +52,7 @@ class ActionsTestCase(TestCase):
         setattr(request, "_messages", FallbackStorage(request))
         # 添加用户属性以避免认证错误
         setattr(
-            request, "user", type("User", (), {"is_active": True, "is_staff": True})()
+            request, "user", type("User", (), {"is_active": True, "is_staff": True, "has_perm": lambda self, perm: False})()
         )
         return request
 

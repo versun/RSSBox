@@ -6,3 +6,5 @@ from core.admin.filter_admin import *
 from core.admin.tag_admin import *
 from core.admin.digest_admin import *
 from core.admin.entry_admin import *
+
+from core.admin.runtime_configuration_admin import *

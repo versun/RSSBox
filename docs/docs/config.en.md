@@ -96,7 +96,8 @@ This document lists all available environment variable configuration options for
 - **Example**: `300`
 - **Details**:
   - Increase this for long article translations
-  - Retry behavior after timeout is controlled by `OPENAI_API_MAX_RETRIES`
+  - Agent Request Timeout overrides the [global runtime setting](runtime-settings.md), which falls back to this environment default
+  - `OPENAI_API_MAX_RETRIES` controls SDK retries only; RSSBox in-round retries and persisted cross-round backoff are separate layers
 
 ### OPENAI_API_MAX_RETRIES
 - **Description**: SDK-level automatic retry count for OpenAI-compatible API requests

@@ -138,7 +138,7 @@ class OpenAIAgent(Agent):
         default=None,
         help_text=_(
             "Optional per-agent timeout override in seconds "
-            "(leave blank to use OPENAI_API_TIMEOUT)."
+            "(leave blank to inherit the global setting)."
         ),
     )
     rate_limit_rpm = models.IntegerField(
@@ -216,12 +216,14 @@ class OpenAIAgent(Agent):
         return self.effective_chunk_limit() * 0.9
 
     def _init(self):
+        from core.runtime_policy import get_runtime_policy
+
         timeout = (
             self.request_timeout
             if self.request_timeout is not None
             and math.isfinite(self.request_timeout)
             and self.request_timeout > 0
-            else settings.OPENAI_API_TIMEOUT
+            else get_runtime_policy().request_timeout
         )
         return OpenAI(
             api_key=self.api_key,
