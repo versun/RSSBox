@@ -5,7 +5,7 @@ import time
 import httpx
 from django.conf import settings
 from django.db import DatabaseError, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from openai import APIStatusError, APITimeoutError
 
@@ -189,6 +189,42 @@ def record_spent_tokens(obj, error) -> None:
         )
 
 
+def reconcile_completed_entry_task_states(qs) -> int:
+    """Repair stale task rows from persisted results, without another AI call.
+
+    Keep the last real attempt timestamp and timeout usage estimates for audit.
+    Do not create rows for entries that have never failed, or erase chunk usage.
+    """
+    from core.models import EntryTaskState
+
+    # Preserve the no-write fast path for healthy feeds and succeeded rows.
+    qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED)
+    if not qs.exists():
+        return 0
+
+    repaired = 0
+    for stage, field in (
+        ("title", "translated_title"),
+        ("content", "translated_content"),
+        ("summary", "ai_summary"),
+    ):
+        completed = qs.filter(stage=stage).exclude(
+            **{f"entry__{field}__isnull": True}
+        )
+        if stage != "summary":
+            completed = completed.exclude(**{f"entry__{field}": ""})
+        repaired += completed.exclude(status=EntryTaskState.STATUS_SUCCEEDED).update(
+            status=EntryTaskState.STATUS_SUCCEEDED,
+            attempt_count=0,
+            last_error_type="",
+            last_error="",
+            next_retry_at=None,
+            paused_manually=False,
+            updated_at=timezone.now(),
+        )
+    return repaired
+
+
 def get_entry_task_state_map(feed, stage: str, entry_ids=None) -> dict:
     """Return ``{entry_id: EntryTaskState}`` for existing state rows of a feed."""
     from core.models import EntryTaskState
@@ -198,6 +234,7 @@ def get_entry_task_state_map(feed, stage: str, entry_ids=None) -> dict:
     qs = EntryTaskState.objects.filter(entry__feed=feed, stage=stage)
     if entry_ids is not None:
         qs = qs.filter(entry_id__in=entry_ids)
+    reconcile_completed_entry_task_states(qs)
     return {state.entry_id: state for state in qs}
 
 
@@ -335,8 +372,22 @@ def reset_entry_task_states_queryset(
         qs = qs.filter(stage__in=stages)
     if not include_manual_pause:
         qs = qs.filter(paused_manually=False)
+    # Existing results are authoritative. Resetting a budget is not a force
+    # retranslation and must not turn an already completed stage into pending.
+    reconcile_completed_entry_task_states(qs)
     if exclude_succeeded:
         qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED)
+    else:
+        # A succeeded row whose result was explicitly cleared must be reset.
+        for stage, field in (
+            ("title", "translated_title"),
+            ("content", "translated_content"),
+            ("summary", "ai_summary"),
+        ):
+            completed = Q(stage=stage) & Q(**{f"entry__{field}__isnull": False})
+            if stage != "summary":
+                completed &= ~Q(**{f"entry__{field}": ""})
+            qs = qs.exclude(completed)
     updates = {
         "status": EntryTaskState.STATUS_PENDING,
         "attempt_count": 0,

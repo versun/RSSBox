@@ -14,7 +14,10 @@ from core.models.filter import bump_cache_version
 from core.tasks.summarize_feeds import summarize_feed
 from core.tasks.task_manager import task_manager
 from core.tasks.translate_feeds import translate_feed
-from core.tasks.utils import reset_entry_task_states_queryset
+from core.tasks.utils import (
+    reconcile_completed_entry_task_states,
+    reset_entry_task_states_queryset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -209,8 +212,16 @@ def resume_entry_tasks(modeladmin, request, queryset):
 
 @admin.action(description=_("Retry selected entry tasks now"))
 def retry_entry_tasks_now(modeladmin, request, queryset):
-    items = list(queryset.select_related("entry__feed"))
+    reconcile_completed_entry_task_states(queryset)
+    items = list(
+        queryset.exclude(status=EntryTaskState.STATUS_SUCCEEDED).select_related("entry__feed")
+    )
     if not items:
+        modeladmin.message_user(
+            request,
+            _("Selected tasks already have results; no AI requests submitted."),
+            messages.INFO,
+        )
         return
 
     ids = [item.pk for item in items]
@@ -295,6 +306,10 @@ class EntryTaskStateAdmin(admin.ModelAdmin):
         "updated_at",
     ]
     actions = [pause_entry_tasks, resume_entry_tasks, retry_entry_tasks_now]
+
+    def has_delete_permission(self, request, obj=None):
+        # Deleting a failure budget can silently re-enable expensive retries.
+        return False
     list_select_related = ["entry", "entry__feed"]
     list_per_page = 30
 

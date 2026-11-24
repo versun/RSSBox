@@ -874,3 +874,78 @@ msgstr "过滤器"
 
 #~ msgid "Total tokens used for AI summaries in this report"
 #~ msgstr "本报告中 AI 摘要所用代币总数"
+
+msgid "Entry Tasks"
+msgstr "文章任务"
+
+msgid "Entry Task State"
+msgstr "文章任务状态"
+
+msgid "Entry Task States"
+msgstr "文章任务状态"
+
+msgid "Pause selected entry tasks"
+msgstr "暂停选中的文章任务"
+
+msgid "Resume selected entry tasks (reset retry budget)"
+msgstr "恢复选中的文章任务（重置失败次数，等待下轮执行）"
+
+msgid "Retry selected entry tasks now"
+msgstr "立即补译选中的文章任务（保留已有译文）"
+
+msgid "Paused %(count)d entry task(s)."
+msgstr "已暂停 %(count)d 个文章任务。"
+
+msgid "Resumed %(count)d entry task(s). They will run on the next cycle."
+msgstr "已恢复 %(count)d 个文章任务，将在下一轮处理。"
+
+msgid "Submitted immediate retry for %(count)d entry task(s)."
+msgstr "已提交 %(count)d 个文章任务的立即补译请求（不代表执行成功）。"
+
+msgid "Selected tasks already have results; no AI requests submitted."
+msgstr "所选任务已有结果，已同步成功状态，未提交 AI 请求。"
+
+msgid "Stage"
+msgstr "处理阶段"
+
+msgid "Attempts"
+msgstr "累计失败轮次"
+
+msgid "Pending"
+msgstr "待处理"
+
+msgid "Failed (Waiting Retry)"
+msgstr "失败（等待重试）"
+
+msgid "Paused"
+msgstr "已暂停"
+
+msgid "Succeeded"
+msgstr "已成功"
+
+msgid "Last Error Type"
+msgstr "最近错误类型"
+
+msgid "Last Error"
+msgstr "最近错误详情"
+
+msgid "Next Retry At"
+msgstr "最早重试时间"
+
+msgid "Last Attempt At"
+msgstr "最近尝试时间"
+
+msgid "Paused Manually"
+msgstr "手动暂停"
+
+msgid "Estimated Unbilled Tokens (Timeout)"
+msgstr "超时请求估算输入 Token（上游可能已计费）"
+
+msgid "Estimated input tokens sent on timed-out requests where upstream usage was unavailable and may still have been billed."
+msgstr "超时请求已发送的估算输入 Token；上游未返回用量，但可能已经计费，并不表示免费。"
+
+msgid "Request Timeout (s)"
+msgstr "请求等待超时（秒）"
+
+msgid "Optional per-agent timeout override in seconds (leave blank to use OPENAI_API_TIMEOUT)."
+msgstr "单独设置此翻译器的请求超时秒数；留空时继承全局配置。"
