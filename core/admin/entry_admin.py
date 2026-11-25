@@ -15,6 +15,7 @@ from core.tasks.summarize_feeds import summarize_feed
 from core.tasks.task_manager import task_manager
 from core.tasks.translate_feeds import translate_feed
 from core.tasks.utils import (
+    _completed_entry_task_q,
     reconcile_completed_entry_task_states,
     reset_entry_task_states_queryset,
 )
@@ -202,6 +203,13 @@ def pause_entry_tasks(modeladmin, request, queryset):
 @admin.action(description=_("Resume selected entry tasks (reset retry budget)"))
 def resume_entry_tasks(modeladmin, request, queryset):
     updated = reset_entry_task_states_queryset(queryset, include_manual_pause=True)
+    if not updated:
+        modeladmin.message_user(
+            request,
+            _("Selected tasks already have results; no AI requests submitted."),
+            messages.INFO,
+        )
+        return
     modeladmin.message_user(
         request,
         _("Resumed %(count)d entry task(s). They will run on the next cycle.")
@@ -214,7 +222,7 @@ def resume_entry_tasks(modeladmin, request, queryset):
 def retry_entry_tasks_now(modeladmin, request, queryset):
     reconcile_completed_entry_task_states(queryset)
     items = list(
-        queryset.exclude(status=EntryTaskState.STATUS_SUCCEEDED).select_related("entry__feed")
+        queryset.exclude(_completed_entry_task_q()).select_related("entry__feed")
     )
     if not items:
         modeladmin.message_user(

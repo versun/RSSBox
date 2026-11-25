@@ -189,6 +189,22 @@ def record_spent_tokens(obj, error) -> None:
         )
 
 
+def _completed_entry_task_q() -> Q:
+    """Match persisted results using the same missing-value rules as workers."""
+    return (
+        (
+            Q(stage="title", entry__translated_title__isnull=False)
+            & ~Q(entry__translated_title="")
+        )
+        | (
+            Q(stage="content", entry__translated_content__isnull=False)
+            & ~Q(entry__translated_content="")
+        )
+        # Summary selection uses IS NULL, so an empty stored summary is complete.
+        | Q(stage="summary", entry__ai_summary__isnull=False)
+    )
+
+
 def reconcile_completed_entry_task_states(qs) -> int:
     """Repair stale task rows from persisted results, without another AI call.
 
@@ -197,32 +213,22 @@ def reconcile_completed_entry_task_states(qs) -> int:
     """
     from core.models import EntryTaskState
 
-    # Preserve the no-write fast path for healthy feeds and succeeded rows.
-    qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED)
-    if not qs.exists():
+    completed_qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED).filter(
+        _completed_entry_task_q()
+    )
+    # No writes or SQLite write locks when failures genuinely lack results.
+    if not completed_qs.exists():
         return 0
 
-    repaired = 0
-    for stage, field in (
-        ("title", "translated_title"),
-        ("content", "translated_content"),
-        ("summary", "ai_summary"),
-    ):
-        completed = qs.filter(stage=stage).exclude(
-            **{f"entry__{field}__isnull": True}
-        )
-        if stage != "summary":
-            completed = completed.exclude(**{f"entry__{field}": ""})
-        repaired += completed.exclude(status=EntryTaskState.STATUS_SUCCEEDED).update(
-            status=EntryTaskState.STATUS_SUCCEEDED,
-            attempt_count=0,
-            last_error_type="",
-            last_error="",
-            next_retry_at=None,
-            paused_manually=False,
-            updated_at=timezone.now(),
-        )
-    return repaired
+    return completed_qs.update(
+        status=EntryTaskState.STATUS_SUCCEEDED,
+        attempt_count=0,
+        last_error_type="",
+        last_error="",
+        next_retry_at=None,
+        paused_manually=False,
+        updated_at=timezone.now(),
+    )
 
 
 def get_entry_task_state_map(feed, stage: str, entry_ids=None) -> dict:
@@ -375,19 +381,10 @@ def reset_entry_task_states_queryset(
     # Existing results are authoritative. Resetting a budget is not a force
     # retranslation and must not turn an already completed stage into pending.
     reconcile_completed_entry_task_states(qs)
+    # A succeeded row whose result was explicitly cleared can still be reset.
+    qs = qs.exclude(_completed_entry_task_q())
     if exclude_succeeded:
         qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED)
-    else:
-        # A succeeded row whose result was explicitly cleared must be reset.
-        for stage, field in (
-            ("title", "translated_title"),
-            ("content", "translated_content"),
-            ("summary", "ai_summary"),
-        ):
-            completed = Q(stage=stage) & Q(**{f"entry__{field}__isnull": False})
-            if stage != "summary":
-                completed &= ~Q(**{f"entry__{field}": ""})
-            qs = qs.exclude(completed)
     updates = {
         "status": EntryTaskState.STATUS_PENDING,
         "attempt_count": 0,

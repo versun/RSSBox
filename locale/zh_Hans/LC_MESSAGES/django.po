@@ -948,4 +948,4 @@ msgid "Request Timeout (s)"
 msgstr "请求等待超时（秒）"
 
 msgid "Optional per-agent timeout override in seconds (leave blank to use OPENAI_API_TIMEOUT)."
-msgstr "单独设置此翻译器的请求超时秒数；留空时继承全局配置。"
+msgstr "单独设置此翻译器的请求超时秒数；留空时使用 OPENAI_API_TIMEOUT。"
