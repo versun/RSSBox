@@ -5,7 +5,7 @@ import time
 import httpx
 from django.conf import settings
 from django.db import DatabaseError, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from openai import APIStatusError, APITimeoutError
 
@@ -320,6 +320,19 @@ def record_entry_stage_failure(
         return None
 
 
+def entry_stage_done_q() -> Q:
+    """Match task rows whose stage result is already persisted on the entry.
+
+    Mirrors the workers' "needs work" checks: title/content are missing when
+    NULL or empty, the summary only when NULL.
+    """
+    return (
+        Q(stage="title", entry__translated_title__gt="")
+        | Q(stage="content", entry__translated_content__gt="")
+        | Q(stage="summary", entry__ai_summary__isnull=False)
+    )
+
+
 def reset_entry_task_states_queryset(
     qs,
     *,
@@ -335,6 +348,21 @@ def reset_entry_task_states_queryset(
         qs = qs.filter(stage__in=stages)
     if not include_manual_pause:
         qs = qs.filter(paused_manually=False)
+    # A stage whose result already exists has nothing left to retry: mark it
+    # succeeded instead of pending, which workers would skip and never clear.
+    now = timezone.now()
+    qs.filter(entry_stage_done_q()).exclude(
+        status=EntryTaskState.STATUS_SUCCEEDED
+    ).update(
+        status=EntryTaskState.STATUS_SUCCEEDED,
+        attempt_count=0,
+        last_error_type="",
+        last_error="",
+        next_retry_at=None,
+        paused_manually=False,
+        updated_at=now,
+    )
+    qs = qs.exclude(entry_stage_done_q())
     if exclude_succeeded:
         qs = qs.exclude(status=EntryTaskState.STATUS_SUCCEEDED)
     updates = {
@@ -344,7 +372,7 @@ def reset_entry_task_states_queryset(
         "last_error": "",
         "next_retry_at": None,
         "paused_manually": False,
-        "updated_at": timezone.now(),
+        "updated_at": now,
     }
     if clear_last_attempt:
         updates["last_attempt_at"] = None

@@ -14,7 +14,7 @@ from core.models.filter import bump_cache_version
 from core.tasks.summarize_feeds import summarize_feed
 from core.tasks.task_manager import task_manager
 from core.tasks.translate_feeds import translate_feed
-from core.tasks.utils import reset_entry_task_states_queryset
+from core.tasks.utils import entry_stage_done_q, reset_entry_task_states_queryset
 
 logger = logging.getLogger(__name__)
 
@@ -209,14 +209,16 @@ def resume_entry_tasks(modeladmin, request, queryset):
 
 @admin.action(description=_("Retry selected entry tasks now"))
 def retry_entry_tasks_now(modeladmin, request, queryset):
-    items = list(queryset.select_related("entry__feed"))
+    ids = list(queryset.values_list("pk", flat=True))
+    if not ids:
+        return
+    selected = EntryTaskState.objects.filter(pk__in=ids)
+    reset_entry_task_states_queryset(selected, include_manual_pause=True)
+    # Stages that already have results were just marked succeeded; don't
+    # spend a worker on them.
+    items = list(selected.exclude(entry_stage_done_q()).select_related("entry__feed"))
     if not items:
         return
-
-    ids = [item.pk for item in items]
-    reset_entry_task_states_queryset(
-        EntryTaskState.objects.filter(pk__in=ids), include_manual_pause=True
-    )
 
     # Group by feed_id (matching the per-feed flock granularity) so retrying
     # multiple stages of the same feed runs sequentially under one lock instead
