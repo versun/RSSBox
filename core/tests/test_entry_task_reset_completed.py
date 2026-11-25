@@ -7,11 +7,16 @@ present) and never cleared the state, so it stayed pending forever.
 
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from core.admin import core_admin_site
-from core.admin.entry_admin import EntryTaskStateAdmin, retry_entry_tasks_now
+from core.admin.entry_admin import (
+    EntryTaskStateAdmin,
+    resume_entry_tasks,
+    retry_entry_tasks_now,
+)
 from core.models import Entry, EntryTaskState, Feed, OpenAIAgent
 from core.tasks.utils import reset_entry_task_states_queryset
 
@@ -45,16 +50,16 @@ class ResetCompletedEntryTaskTests(TestCase):
             entry=self.entry, stage=stage, status=status, **kwargs
         )
 
-    def _retry_now(self):
+    def _retry_now(self, queryset=None):
         modeladmin = EntryTaskStateAdmin(EntryTaskState, core_admin_site)
+        if queryset is None:
+            queryset = EntryTaskState.objects.all()
         with (
             patch.object(modeladmin, "message_user"),
             patch("core.admin.entry_admin.task_manager.submit_task") as submit,
             self.captureOnCommitCallbacks(execute=True),
         ):
-            retry_entry_tasks_now(
-                modeladmin, RequestFactory().post("/"), EntryTaskState.objects.all()
-            )
+            retry_entry_tasks_now(modeladmin, RequestFactory().post("/"), queryset)
         return submit
 
     def test_reset_marks_stages_with_results_succeeded(self):
@@ -126,3 +131,106 @@ class ResetCompletedEntryTaskTests(TestCase):
         self.assertEqual(
             EntryTaskState.objects.get().status, EntryTaskState.STATUS_SUCCEEDED
         )
+
+    def test_retry_now_requeues_succeeded_row_when_result_cleared(self):
+        Entry.objects.filter(pk=self.entry.pk).update(
+            translated_title="", translated_content=None, ai_summary=None
+        )
+        for stage in STAGE_FIELDS:
+            self._state(stage, status=EntryTaskState.STATUS_SUCCEEDED)
+
+        submit = self._retry_now()
+
+        submit.assert_called_once()
+        self.assertEqual(
+            submit.call_args.args[2:],
+            (
+                self.feed.pk,
+                {
+                    "title": [self.entry.pk],
+                    "content": [self.entry.pk],
+                    "summary": [self.entry.pk],
+                },
+            ),
+        )
+        self.assertEqual(
+            dict(EntryTaskState.objects.values_list("stage", "status")),
+            {"title": "pending", "content": "pending", "summary": "pending"},
+        )
+
+    def test_retry_now_with_status_filtered_changelist_queryset(self):
+        Entry.objects.filter(pk=self.entry.pk).update(translated_title="你好")
+        self._state("title", status=EntryTaskState.STATUS_FAILED)
+        self._state("content", status=EntryTaskState.STATUS_FAILED)
+
+        modeladmin = EntryTaskStateAdmin(EntryTaskState, core_admin_site)
+        req = RequestFactory().get(
+            "/admin/core/entrytaskstate/",
+            {"status__exact": "failed", "q": "Hello", "o": "2"},
+        )
+        req.user = get_user_model()(username="u", is_staff=True, is_superuser=True)
+        changelist_qs = modeladmin.get_changelist_instance(req).get_queryset(req)
+
+        submit = self._retry_now(changelist_qs)
+
+        submit.assert_called_once()
+        self.assertEqual(
+            submit.call_args.args[2:], (self.feed.pk, {"content": [self.entry.pk]})
+        )
+        self.assertEqual(
+            dict(EntryTaskState.objects.values_list("stage", "status")),
+            {"title": "succeeded", "content": "pending"},
+        )
+
+    def test_reset_respects_manual_pause_exclude_succeeded_and_stages(self):
+        Entry.objects.filter(pk=self.entry.pk).update(
+            translated_title="你好", translated_content="<p>你好</p>", ai_summary=None
+        )
+        self._state("title", status="paused", paused_manually=True)
+        self._state("content", status="pending", paused_manually=False)
+        self._state("summary", status="succeeded")
+
+        # Stage filter scopes reconciliation so unselected stages stay untouched.
+        updated = reset_entry_task_states_queryset(
+            EntryTaskState.objects.all(),
+            stages=["summary"],
+            include_manual_pause=False,
+            exclude_succeeded=True,
+        )
+        self.assertEqual(updated, 0)
+        self.assertEqual(
+            dict(EntryTaskState.objects.values_list("stage", "status")),
+            {"title": "paused", "content": "pending", "summary": "succeeded"},
+        )
+
+        # Force-update / feed-admin flags keep manual pause intact, reconcile
+        # non-paused rows with existing results, and skip already-succeeded rows.
+        updated = reset_entry_task_states_queryset(
+            EntryTaskState.objects.all(),
+            include_manual_pause=False,
+            exclude_succeeded=True,
+        )
+        self.assertEqual(updated, 0)
+        self.assertEqual(
+            dict(EntryTaskState.objects.values_list("stage", "status")),
+            {"title": "paused", "content": "succeeded", "summary": "succeeded"},
+        )
+        self.assertTrue(EntryTaskState.objects.get(stage="title").paused_manually)
+
+    def test_resume_action_reconciles_completed_and_counts_only_requeued(self):
+        Entry.objects.filter(pk=self.entry.pk).update(translated_title="你好")
+        self._state("title", status="failed", attempt_count=2)
+        self._state("content", status="paused", paused_manually=True, attempt_count=3)
+
+        modeladmin = EntryTaskStateAdmin(EntryTaskState, core_admin_site)
+        with patch.object(modeladmin, "message_user") as message_user:
+            resume_entry_tasks(
+                modeladmin, RequestFactory().post("/"), EntryTaskState.objects.all()
+            )
+
+        self.assertEqual(
+            dict(EntryTaskState.objects.values_list("stage", "status")),
+            {"title": "succeeded", "content": "pending"},
+        )
+        message_user.assert_called_once()
+        self.assertIn("1", str(message_user.call_args.args[1]))
